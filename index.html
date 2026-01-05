@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Adelita Store System v6.3 (Stable Print & Share)</title>
+    
+    <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&family=Space+Mono:wght@400;700&family=Kaushan+Script&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, enableIndexedDbPersistence, updateDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDwuUYz-veTNMBrZQ_exfsw4C8OTEeaKOY",
+            authDomain: "adelitastoreapp.firebaseapp.com",
+            projectId: "adelitastoreapp",
+            storageBucket: "adelitastoreapp.firebasestorage.app",
+            messagingSenderId: "452277252634",
+            appId: "1:452277252634:web:b2aeae5aed1d23827097a3"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        enableIndexedDbPersistence(db).catch((err) => {
+            if (err.code == 'failed-precondition') {
+                console.log('Múltiples pestañas abiertas, persistencia solo en una.');
+            } else if (err.code == 'unimplemented') {
+                console.log('El navegador no soporta persistencia.');
+            }
+        });
+
+        window.db = db;
+        window.auth = auth;
+        window.fs = { collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc };
+        window.fbAuth = { signInWithEmailAndPassword, onAuthStateChanged, signOut };
+        
+        window.firebaseLoaded = true;
+        if(window.initReactApp) window.initReactApp();
+    </script>
+
+    <style>
+        body { 
+            -webkit-tap-highlight-color: transparent; 
+            background-color: #f0f2f5;
+            font-family: 'Montserrat', sans-serif;
+            margin: 0; padding: 0;
+        }
+        
+        .adelita-bg { background: linear-gradient(135deg, #fce7f3 0%, #e0e7ff 100%); }
+
+        /* --- CORRECCIÓN DE ÁREAS DE CLICK --- */
+        .date-icon-overlay {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            pointer-events: none; z-index: 0; font-size: 1.25rem;
+        }
+        .input-overlay-trigger {
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            opacity: 0; cursor: pointer; z-index: 10;
+        }
+
+        /* --- ESTILOS 3D (POS) --- */
+        .pos-card-3d {
+            background: white; border-radius: 24px;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05), inset 0 -2px 0 0 rgba(0,0,0,0.05);
+            border: 1px solid white; padding: 16px; margin-bottom: 16px;
+            animation: slideUp 0.4s ease-out forwards; opacity: 0; transform: translateY(20px);
+        }
+        .pos-label-giant {
+            font-size: 14px; font-weight: 900; color: #94a3b8; text-transform: uppercase;
+            letter-spacing: 0.1em; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+        }
+        .pos-input-modern {
+            width: 100%; font-size: 24px; padding: 12px; background: #f8fafc;
+            border: 2px solid #e2e8f0; border-radius: 18px; font-weight: 800; color: #1e293b;
+            text-align: center; outline: none; transition: all 0.2s; box-shadow: inset 0 2px 4px 0 rgba(0,0,0,0.03);
+        }
+        .pos-input-modern:focus { background: white; border-color: #ec4899; box-shadow: 0 0 0 4px rgba(236,72,153,0.15); }
+
+        .btn-3d {
+            position: relative; background: white; border: 1px solid #f1f5f9; border-radius: 16px;
+            color: #64748b; font-weight: 800; font-size: 16px; cursor: pointer;
+            box-shadow: 0 4px 0 #cbd5e1, 0 6px 6px rgba(0,0,0,0.1);
+            transition: all 0.1s ease; display: flex; align-items: center; justify-content: center;
+            width: 100%; height: 100%;
+        }
+        .btn-3d:active { transform: translateY(4px); box-shadow: 0 0 0 #cbd5e1; }
+        .btn-3d.active-pink { background: #db2777; color: white; border-color: #be185d; box-shadow: 0 4px 0 #9d174d; }
+        .btn-3d.active-pink:active { transform: translateY(4px); box-shadow: 0 0 0 #9d174d; }
+        .btn-3d.active-indigo { background: #4f46e5; color: white; border-color: #4338ca; box-shadow: 0 4px 0 #3730a3; }
+        .btn-3d.active-indigo:active { transform: translateY(4px); box-shadow: 0 0 0 #3730a3; }
+        .btn-3d.active-emerald { background: #059669; color: white; border-color: #047857; box-shadow: 0 4px 0 #065f46; }
+        .btn-3d.active-emerald:active { transform: translateY(4px); box-shadow: 0 0 0 #065f46; }
+
+        .pos-scroll-area {
+            display: flex; gap: 10px; overflow-x: auto; padding: 4px; padding-bottom: 10px;
+            margin-top: 8px; scrollbar-width: none;
+        }
+        .pos-scroll-area::-webkit-scrollbar { display: none; }
+        .btn-3d-wrapper { flex-shrink: 0; height: 55px; min-width: 75px; position: relative; }
+
+        @keyframes slideUp { to { opacity: 1; transform: translateY(0); } }
+        .delay-1 { animation-delay: 0.1s; } .delay-2 { animation-delay: 0.2s; } .delay-3 { animation-delay: 0.3s; }
+
+        @media (orientation: landscape) {
+            .pos-section { height: 100%; margin-bottom: 0; overflow: hidden; }
+            .pos-scroll-area {
+                display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+                padding: 4px 8px 12px 8px; overflow-y: auto; height: 100%; align-content: start;
+            }
+            .btn-3d-wrapper { width: 100%; height: 85px; font-size: 20px; }
+            .pos-input-modern { font-size: 28px; }
+        }
+
+        .touch-card:active { transform: scale(0.98); transition: transform 0.1s; }
+        .tab-active { border-bottom: 2px solid #4f46e5; color: #4f46e5; font-weight: bold; }
+        .tab-inactive { color: #64748b; }
+
+        /* =========================================
+           ESTILOS ESPECÍFICOS PARA FACTURA ADELITA 3D
+           ========================================= */
+        :root {
+            --gradient-header: linear-gradient(135deg, #FF9A9E 0%, #FECFEF 99%, #FECFEF 100%);
+            --gradient-brand: linear-gradient(to right, #b224ef, #7579ff);
+            --gradient-gold: linear-gradient(45deg, #FDC830, #F37335);
+            --shipping-gradient: linear-gradient(120deg, #89f7fe 0%, #66a6ff 100%);
+            --bg-body-invoice: rgba(32, 32, 37, 0.95); /* Fondo oscuro semitransparente */
+            --paper: #ffffff;
+            --shadow-deep: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Modal Flotante con Scroll Correcto */
+        .invoice-modal-container {
+            font-family: 'Montserrat', sans-serif;
+            background-color: var(--bg-body-invoice);
+            backdrop-filter: blur(5px);
+            position: fixed; inset: 0; z-index: 5000;
+            display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+            overflow-y: auto; /* PERMITE SCROLL */
+            padding: 20px;
+        }
+
+        /* Panel de controles flotante */
+        .controls-panel {
+            position: fixed; bottom: 30px; right: 20px;
+            display: flex; flex-direction: column; gap: 15px; z-index: 5001;
+        }
+        .btn-float {
+            width: 60px; height: 60px; border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.3); color: white; font-size: 22px;
+            cursor: pointer; box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+            transition: transform 0.2s; display: flex; align-items: center; justify-content: center;
+            background-color: #333; /* Fallback */
+        }
+        .btn-float:active { transform: scale(0.95); }
+        
+        .btn-add { background: linear-gradient(45deg, #11998e, #38ef7d); }
+        .btn-photo { background: linear-gradient(45deg, #FF416C, #FF4B2B); }
+        .btn-print { background: linear-gradient(45deg, #3a7bd5, #3a6073); } /* Nuevo botón imprimir */
+        .btn-close { background: linear-gradient(45deg, #2c3e50, #4ca1af); position: fixed; top: 20px; right: 20px; z-index: 5002; width: 45px; height: 45px; font-size: 20px; }
+
+        #receipt-wide {
+            width: 100%; max-width: 700px;
+            background-color: var(--paper);
+            box-shadow: var(--shadow-deep); 
+            position: relative; overflow: hidden; border-radius: 12px;
+            margin-top: 60px; margin-bottom: 120px; /* Margen para no chocar con botones */
+            transform-origin: top center;
+        }
+
+        .top-accent-bar { height: 12px; background: linear-gradient(90deg, #ff9a9e 0%, #fad0c4 99%, #fad0c4 100%); width: 100%; }
+        .header-wide { display: flex; justify-content: space-between; align-items: center; padding: 30px 50px 10px 50px; background: #fff; }
+
+        .brand-section h1 {
+            font-family: 'Kaushan Script', cursive; font-weight: 400; font-size: 48px; margin: 0;
+            background: var(--gradient-brand); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            filter: drop-shadow(2px 2px 0px rgba(0,0,0,0.1));
+        }
+        .brand-section span { color: #888; font-size: 10px; letter-spacing: 4px; text-transform: uppercase; font-weight: 800; display: block; margin-top: -5px; margin-left: 5px; }
+
+        .date-badge {
+            background: #f8f9fa; border: 1px solid #e9ecef; padding: 10px 20px; border-radius: 8px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05); text-align: right;
+        }
+
+        .info-container { padding: 20px 50px; display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; }
+        
+        @media (max-width: 600px) {
+            .header-wide { flex-direction: column; text-align: center; gap: 20px; padding: 20px; }
+            .info-container { grid-template-columns: 1fr; padding: 10px 20px; }
+            .brand-section h1 { font-size: 36px; }
+            .grid-header, .item-row { grid-template-columns: 40px 1fr 60px 60px; padding-left: 10px; padding-right: 10px; }
+            #receipt-wide { width: 95%; margin-top: 20px; }
+        }
+
+        .info-card {
+            background: white; padding: 15px; border-radius: 10px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+            border-left: 5px solid #ddd; transition: all 0.3s;
+        }
+
+        .card-client { border-left-color: #b224ef; }
+        .card-lives { border-left-color: #ff0050; background: #fff5f7; }
+
+        .label { font-size: 10px; color: #888; text-transform: uppercase; font-weight: 800; display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
+        .input-text { font-size: 16px; font-weight: 600; color: #333; width: 100%; outline: none; border-bottom: 1px dashed transparent; }
+        .input-text:focus { border-bottom: 1px dashed #ccc; }
+
+        .grid-header {
+            display: grid; grid-template-columns: 60px 1fr 100px 100px; padding: 12px 50px;
+            background: #2c3e50; color: white; font-size: 11px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 1px; margin-top: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+        .grid-header div { text-align: left; }
+        .grid-header div:last-child { text-align: right; } 
+        .grid-header div:nth-child(3) { text-align: right; } 
+        .grid-header div:first-child { text-align: center; }
+
+        .items-wrapper { padding: 10px 50px; background-color: #fff; min-height: 120px; }
+
+        .item-row {
+            display: grid; grid-template-columns: 60px 1fr 100px 100px; padding: 15px 0;
+            border-bottom: 1px solid #f0f0f0; align-items: center; transition: background 0.2s; position: relative;
+        }
+        .item-row:nth-child(even) { background-color: #fafafa; }
+
+        .col-qty { 
+            text-align: center; font-weight: 800; background: linear-gradient(135deg, #e0e0e0 0%, #f5f5f5 100%); 
+            border-radius: 50%; width: 30px; height: 30px; line-height: 30px; margin: 0 auto; font-size: 12px; color: #555; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .col-desc { padding-left: 15px; font-size: 14px; color: #444; font-weight: 500; }
+        .col-unit { text-align: right; font-family: 'Space Mono', monospace; color: #888; font-size: 13px; }
+        .col-total { text-align: right; font-family: 'Space Mono', monospace; font-weight: 700; color: #333; font-size: 15px; }
+
+        .delete-btn {
+            position: absolute; left: -30px; color: white; background: #ff6b6b; 
+            width: 25px; height: 25px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 12px; cursor: pointer; opacity: 0; box-shadow: 0 2px 5px rgba(255, 107, 107, 0.4); transition: 0.2s;
+        }
+        .item-row:hover .delete-btn { opacity: 1; left: -15px;}
+
+        .shipping-section-3d {
+            margin: 20px 50px; background: var(--shipping-gradient); padding: 2px;
+            border-radius: 12px; box-shadow: 0 8px 20px rgba(102, 166, 255, 0.25);
+            transform: perspective(500px) rotateX(2deg);
+        }
+        .shipping-inner { background: white; border-radius: 10px; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
+        .shipping-icon-box { background: #e3f2fd; color: #2196f3; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; margin-right: 15px; }
+        .shipping-price-tag { background: #2196f3; color: white; font-family: 'Space Mono', monospace; padding: 5px 15px; border-radius: 20px; font-weight: 700; box-shadow: 0 4px 10px rgba(33, 150, 243, 0.3); }
+
+        .footer-area { background: #fdfbf7; padding: 0 50px 30px 50px; position: relative; }
+        .divider-graphic { height: 4px; background: repeating-linear-gradient(45deg, #ddd, #ddd 5px, transparent 5px, transparent 10px); margin: 10px 0 20px 0; opacity: 0.5; }
+        .totals-flex { display: flex; justify-content: flex-end; }
+        .totals-card { width: 300px; background: #fff; padding: 20px; border-radius: 12px; border: 1px solid #eee; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+        .total-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; color: #666; }
+        .final-total { margin-top: 15px; padding-top: 15px; border-top: 2px dashed #eee; display: flex; justify-content: space-between; align-items: center; }
+        .final-label { font-size: 14px; font-weight: 800; color: #333; }
+        .final-amount { font-size: 26px; font-weight: 800; background: var(--gradient-gold); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+        .bank-footer { background: #333; color: #aaa; padding: 20px 50px; font-size: 11px; display: flex; justify-content: space-between; align-items: center; border-top: 4px solid #FDC830; }
+        .bank-info strong { color: white; font-size: 13px; display: block; margin-bottom: 3px; }
+
+        [contenteditable]:hover { background-color: rgba(255, 230, 0, 0.1); cursor: text; box-shadow: 0 0 0 2px rgba(255, 215, 0, 0.3); border-radius: 4px; }
+
+        /* --- ESTILOS DE IMPRESIÓN / PDF NATIVO --- */
+        @media print {
+            body * { visibility: hidden; } /* Ocultar todo el sitio */
+            .invoice-modal-container, .invoice-modal-container * {
+                visibility: visible; /* Mostrar solo el modal */
+            }
+            .invoice-modal-container {
+                position: absolute; left: 0; top: 0; width: 100%; height: auto;
+                background: white; overflow: visible; padding: 0; display: block;
+                backdrop-filter: none;
+            }
+            .controls-panel, .btn-close, .delete-btn, .no-print { 
+                display: none !important; /* Ocultar botones de control */
+            }
+            #receipt-wide {
+                box-shadow: none; margin: 0; width: 100%; max-width: 100%;
+                border: none; transform: none;
+            }
+        }
+    </style>
+</head>
+<body class="adelita-bg">
+
+<div id="root">
+    <div style="height: 100vh; display: flex; justify-content: center; align-items: center; color: #64748b; font-weight: bold;">
+        Cargando Sistema Cloud...
+    </div>
+</div>
+
+<script>
+    window.onerror = function() {
+        console.error("Error detectado, intentando recuperar...");
+    };
+</script>
+
+<script type="text/babel">
+
+    // --- ICONOS SVG ---
+    const Icon = {
+        Zap: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>,
+        Box: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>,
+        Users: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
+        Check: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>,
+        Alert: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>,
+        Search: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>,
+        Chart: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>,
+        Download: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>,
+        FileText: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
+        Printer: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>,
+        Info: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+        Close: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
+        Message: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>,
+        Copy: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 00-2-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>,
+        Tag: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>,
+        Hash: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" /></svg>,
+        Dollar: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+        Lock: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>,
+        List: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>,
+        Edit: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>,
+        Trash: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+    };
+
+    const { useState, useEffect, useMemo, useRef } = React;
+
+    // --- UTILIDADES ---
+    const generateSmartID = (fullName, currentCount) => {
+        const parts = fullName.trim().split(/\s+/);
+        let initials = "XX";
+        if (parts.length >= 2) initials = (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+        else if (parts.length === 1) initials = parts[0].substring(0, 2).toUpperCase();
+        return `${initials}${50 + currentCount}`;
+    };
+
+    const formatMoney = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
+    const capitalizeFirst = (str) => str.charAt(0).toUpperCase() + str.slice(1);
+    const getToday = () => new Date().toISOString().split('T')[0];
+
+    const safeISO = (dateStr) => {
+        try {
+            const d = new Date(dateStr || new Date());
+            if (isNaN(d.getTime())) return new Date().toISOString();
+            return new Date(d.getTime() + 12 * 60 * 60 * 1000).toISOString();
+        } catch (e) { return new Date().toISOString(); }
+    };
+    
+    const cleanDate = (dateStr) => {
+        try {
+            if (!dateStr) return new Date().toISOString();
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime())) return new Date().toISOString();
+            return d.toISOString();
+        } catch (e) { return new Date().toISOString(); }
+    };
+
+    const smartDate = (dateStr, lastShipmentDate = null) => {
+        try {
+            const selectedDate = new Date(dateStr || getToday());
+            let finalDate = new Date(selectedDate.getTime() + 12 * 60 * 60 * 1000); 
+            if (lastShipmentDate) {
+                const shipDate = new Date(cleanDate(lastShipmentDate));
+                if (!isNaN(shipDate.getTime())) {
+                    const shipDateStr = shipDate.toISOString().split('T')[0];
+                    if (dateStr === shipDateStr || (shipDate > finalDate)) {
+                        finalDate = new Date(shipDate.getTime() + 60 * 1000); 
+                    }
+                }
+            }
+            return finalDate.toISOString();
+        } catch (e) { return new Date().toISOString(); }
+    };
+    
+    const exportToCSV = (data, filename) => {
+        const csvContent = "\uFEFF" + data.map(e => e.join(",")).join("\n");
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url; link.download = filename;
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    };
+
+    const generatePDF = (reportData, groupBy, metrics) => {
+        if (!window.jspdf) { alert("Cargando motor PDF..."); return; }
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        doc.setFontSize(20); doc.text("Reporte Adelita Store", 14, 20);
+        doc.setFontSize(10); doc.text(`Generado: ${new Date().toLocaleDateString()}`, 14, 26);
+        doc.text(`Filtro: ${groupBy.toUpperCase()}`, 14, 31);
+
+        if (metrics) doc.autoTable({ startY: 35, head: [['Ingresos', 'Gastos', 'Utilidad']], body: [[formatMoney(metrics.totalIncome), formatMoney(metrics.totalExpenses), formatMoney(metrics.profit)]], theme: 'grid' });
+        
+        doc.text("Detalle Ventas", 14, doc.lastAutoTable.finalY + 10);
+        let rows = [];
+        Object.entries(reportData.groups).forEach(([key, data]) => {
+            rows.push([key.toUpperCase(), '', '', '']); 
+            data.items.forEach(item => rows.push(['', item.clientId, item.item, formatMoney(item.value)]));
+            rows.push(['TOTAL ' + key, '', '', formatMoney(data.total)]);
+        });
+        doc.autoTable({ startY: doc.lastAutoTable.finalY + 12, head: [['Fecha', 'Cliente', 'Prenda', 'Valor']], body: rows });
+        doc.save(`Adelita_Reporte_${getToday()}.pdf`);
+    };
+
+    // --- NUEVO COMPONENTE DE FACTURA 3D ULTIMATE ---
+    const Invoice3DModal = ({ client, cycle, onClose }) => {
+        const [items, setItems] = useState([]);
+
+        // LÓGICA DE AGRUPACIÓN INTELIGENTE (PUNTO 4)
+        useEffect(() => {
+            const grouped = {};
+            
+            // Agrupar items por nombre y precio
+            cycle.cycleSales.forEach(s => {
+                const key = `${s.item.trim().toLowerCase()}-${s.value}`;
+                if (!grouped[key]) {
+                    grouped[key] = { qty: 0, desc: s.item, unit: s.value, total: 0 };
+                }
+                grouped[key].qty += 1;
+                grouped[key].total += s.value;
+            });
+
+            // Convertir objeto agrupado a array
+            const loadedItems = Object.values(grouped);
+
+            if(loadedItems.length === 0) {
+                 setItems([{qty: 1, desc: "Prenda...", unit: 0, total: 0}]);
+            } else {
+                setItems(loadedItems);
+            }
+        }, [cycle]);
+
+        // MODO FOTO (HTML2CANVAS)
+        const handlePhotoDownload = () => {
+            const receipt = document.getElementById('receipt-wide');
+            const controls = document.querySelector('.controls-panel');
+            const btnClose = document.querySelector('.btn-close');
+            if (controls) controls.style.display = 'none';
+            if (btnClose) btnClose.style.display = 'none';
+            
+            window.html2canvas(receipt, {
+                scale: 2,
+                backgroundColor: null,
+                useCORS: true,
+                ignoreElements: (element) => element.classList.contains('delete-btn')
+            }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `Recibo_${client.name}_${new Date().toISOString().split('T')[0]}.png`;
+                link.href = canvas.toDataURL("image/png");
+                link.click();
+                if (controls) controls.style.display = 'flex';
+                if (btnClose) btnClose.style.display = 'flex';
+            }).catch(err => {
+                alert("Error generando imagen: " + err);
+                if (controls) controls.style.display = 'flex';
+                if (btnClose) btnClose.style.display = 'flex';
+            });
+        };
+
+        // MODO PDF / COMPARTIR / IMPRIMIR (NATIVO)
+        const handleNativeShare = () => {
+            window.print();
+        };
+
+        const addItem = () => { setItems([...items, {qty: 1, desc: "Nueva Prenda...", unit: 0, total: 0}]); };
+        const removeItem = (idx) => { const newItems = [...items]; newItems.splice(idx, 1); setItems(newItems); };
+
+        return (
+            <div className="invoice-modal-container">
+                <button className="btn-float btn-close" onClick={onClose} title="Cerrar"><i className="fas fa-times"></i></button>
+
+                <div className="controls-panel" data-html2canvas-ignore="true">
+                    <button className="btn-float btn-add" onClick={addItem} title="Añadir Prenda Manual"><i className="fas fa-plus"></i></button>
+                    <button className="btn-float btn-photo" onClick={handlePhotoDownload} title="Descargar como Foto (PNG)"><i className="fas fa-camera"></i></button>
+                    <button className="btn-float btn-print" onClick={handleNativeShare} title="PDF / Compartir / Imprimir"><i className="fas fa-file-pdf"></i></button>
+                </div>
+
+                <div id="receipt-wide">
+                    <div className="top-accent-bar"></div>
+                    <div className="header-wide">
+                        <div className="brand-section">
+                            <h1 contentEditable="true" suppressContentEditableWarning={true}>Adelita Store</h1>
+                            <span>PRENDITAS CON AMOR & ESTILO</span>
+                        </div>
+                        <div className="date-badge">
+                            <div className="label" style={{justifyContent: 'flex-end'}}>FECHA EMISIÓN</div>
+                            <div contentEditable="true" suppressContentEditableWarning={true} id="fecha-hoy" style={{fontWeight:'bold', fontSize: '16px', color:'#444'}}>{new Date().toLocaleDateString('es-ES')}</div>
+                            <div className="label" style={{justifyContent: 'flex-end', marginTop:'5px'}}>N° RECIBO</div>
+                            <div contentEditable="true" suppressContentEditableWarning={true} style={{fontWeight:'bold', color:'#b224ef'}}>#{Math.floor(Math.random() * 10000).toString().padStart(5, '0')}</div>
+                        </div>
+                    </div>
+                    <div className="info-container">
+                        <div className="info-card card-client">
+                            <span className="label"><i className="fas fa-user-circle"></i> CLIENTE VIP</span>
+                            <div className="input-text" contentEditable="true" suppressContentEditableWarning={true}>{client.name}</div>
+                        </div>
+                        <div className="info-card card-lives">
+                            <span className="label" style={{color:'#ff0050'}}><i className="fab fa-tiktok"></i> ACUMULADO / LIVES</span>
+                            <div className="input-text" contentEditable="true" suppressContentEditableWarning={true} style={{color: '#c41e3a'}}>{cycle.itemsCount} Prendas Acumuladas</div>
+                        </div>
+                    </div>
+                    <div className="grid-header"><div>#</div><div>DESCRIPCIÓN DE PRENDA</div><div>UNITARIO</div><div>TOTAL</div></div>
+                    <div className="items-wrapper" id="lista-productos">
+                        {items.map((item, idx) => (
+                            <div className="item-row" key={idx}>
+                                <i className="fas fa-trash delete-btn" onClick={() => removeItem(idx)} data-html2canvas-ignore="true"></i>
+                                <div className="col-qty" contentEditable="true" suppressContentEditableWarning={true}>{item.qty}</div>
+                                <div className="col-desc" contentEditable="true" suppressContentEditableWarning={true}>{item.desc}</div>
+                                <div className="col-unit" contentEditable="true" suppressContentEditableWarning={true}>${Number(item.unit).toFixed(2)}</div>
+                                <div className="col-total" contentEditable="true" suppressContentEditableWarning={true}>${Number(item.total).toFixed(2)}</div>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="shipping-section-3d">
+                        <div className="shipping-inner">
+                            <div style={{display:'flex', alignItems:'center'}}>
+                                <div className="shipping-icon-box"><i className="fas fa-truck-fast"></i></div>
+                                <div><div className="label" style={{color:'#2196f3', margin:0}}>LOGÍSTICA</div><div contentEditable="true" suppressContentEditableWarning={true} style={{fontWeight:600, fontSize:'14px'}}>{client.deliveryMethod ? client.deliveryMethod : 'Por Coordinar'}</div></div>
+                            </div>
+                            <div className="shipping-price-tag" contentEditable="true" suppressContentEditableWarning={true}>${client.shippingCost ? client.shippingCost.toFixed(2) : '0.00'}</div>
+                        </div>
+                    </div>
+                    <div className="footer-area">
+                        <div className="divider-graphic"></div>
+                        <div className="totals-flex">
+                            <div className="totals-card">
+                                <div className="total-row"><span>Subtotal Prendas</span><span contentEditable="true" suppressContentEditableWarning={true}>${cycle.totalSales.toFixed(2)}</span></div>
+                                <div className="total-row"><span>Descuento / Promo</span><span contentEditable="true" suppressContentEditableWarning={true} style={{color:'#27ae60'}}>-$0.00</span></div>
+                                <div className="total-row"><span>Abono Previo</span><span contentEditable="true" suppressContentEditableWarning={true} style={{color:'#e74c3c'}}>-${cycle.totalNormalPaid.toFixed(2)}</span></div>
+                                <div className="final-total"><span className="final-label">TOTAL A PAGAR</span><span className="final-amount" contentEditable="true" suppressContentEditableWarning={true}>${ (cycle.totalSales - cycle.totalNormalPaid + (Math.max(0, (client.shippingCost || 0) - cycle.totalShippingPaid))).toFixed(2) }</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="bank-footer">
+                        <div className="bank-info"><strong>TRANSFERENCIA BANCARIA</strong>Banco Pichincha • Cta Ahorros</div>
+                        <div className="bank-info" style={{textAlign: 'right'}}><strong>2205804691</strong>Katherine Vallejos</div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // --- LÓGICA DE NEGOCIO (CONECTADA A FIREBASE) ---
+    const useBusinessLogic = (user) => {
+        const [clients, setClients] = useState([]);
+        const [sales, setSales] = useState([]);
+        const [payments, setPayments] = useState([]);
+        const [shipments, setShipments] = useState([]);
+        const [expenses, setExpenses] = useState([]);
+
+        // Listeners en Tiempo Real (Firebase)
+        useEffect(() => {
+            if (!user) return;
+            const { onSnapshot, collection } = window.fs;
+            const db = window.db;
+
+            const unsubClients = onSnapshot(collection(db, 'clients'), (snap) => {
+                setClients(snap.docs.map(d => ({...d.data(), fireId: d.id})));
+            });
+            const unsubSales = onSnapshot(collection(db, 'sales'), (snap) => {
+                setSales(snap.docs.map(d => ({...d.data(), fireId: d.id})));
+            });
+            const unsubPayments = onSnapshot(collection(db, 'payments'), (snap) => {
+                setPayments(snap.docs.map(d => ({...d.data(), fireId: d.id})));
+            });
+            const unsubShipments = onSnapshot(collection(db, 'shipments'), (snap) => {
+                setShipments(snap.docs.map(d => ({...d.data(), fireId: d.id})));
+            });
+            const unsubExpenses = onSnapshot(collection(db, 'expenses'), (snap) => {
+                setExpenses(snap.docs.map(d => ({...d.data(), fireId: d.id})));
+            });
+
+            return () => {
+                unsubClients(); unsubSales(); unsubPayments(); unsubShipments(); unsubExpenses();
+            };
+        }, [user]);
+
+        const addPayment = (clientId, amount, detail, date) => {
+             window.fs.addDoc(window.fs.collection(window.db, 'payments'), { id: Date.now() + Math.random(), clientId, amount: parseFloat(amount), date, detail });
+        };
+        const addSale = (clientId, item, value, date) => {
+            window.fs.addDoc(window.fs.collection(window.db, 'sales'), { id: Date.now() + Math.random(), clientId, item, value: parseFloat(value), date });
+        };
+        const addBatchSales = (clientId, item, value, date, quantity) => {
+            const timestamp = Date.now();
+            for(let i=0; i < quantity; i++) { 
+                window.fs.addDoc(window.fs.collection(window.db, 'sales'), { id: timestamp + i + Math.random(), clientId, item, value: parseFloat(value), date });
+            }
+        };
+        const addExpense = (detail, amount, dateStr) => {
+            window.fs.addDoc(window.fs.collection(window.db, 'expenses'), { id: Date.now(), detail, amount: parseFloat(amount), date: safeISO(dateStr) });
+        };
+
+        const updateClientLocal = (clientId, updates) => {
+            const clientDoc = clients.find(c => c.id === clientId);
+            if (clientDoc && clientDoc.fireId) {
+                const docRef = window.fs.doc(window.db, "clients", clientDoc.fireId);
+                window.fs.updateDoc(docRef, updates);
+            }
+        };
+
+        // --- FUNCIONES DE GESTIÓN ---
+        const deleteClient = async (clientId) => {
+            const clientDoc = clients.find(c => c.id === clientId);
+            if(clientDoc && clientDoc.fireId) {
+                await window.fs.deleteDoc(window.fs.doc(window.db, "clients", clientDoc.fireId));
+            }
+        };
+
+        const deleteSale = async (saleFireId) => {
+            if(saleFireId) {
+                await window.fs.deleteDoc(window.fs.doc(window.db, "sales", saleFireId));
+            }
+        };
+
+        const getClientCycle = (clientId) => {
+            const clientShipments = shipments.filter(s => s.clientId === clientId).sort((a, b) => new Date(safeISO(b.date)) - new Date(safeISO(a.date)));
+            const lastShipmentDate = clientShipments.length > 0 ? new Date(safeISO(clientShipments[0].date)) : new Date(0);
+            const cycleSales = sales.filter(s => s.clientId === clientId && new Date(safeISO(s.date)) > lastShipmentDate);
+            const cyclePayments = payments.filter(p => p.clientId === clientId && new Date(safeISO(p.date)) > lastShipmentDate);
+            const allSales = sales.filter(s => s.clientId === clientId);
+            const allPayments = payments.filter(p => p.clientId === clientId);
+            const shippingPayments = cyclePayments.filter(p => p.detail && p.detail.includes("Pago Envío"));
+            const normalPayments = cyclePayments.filter(p => !p.detail || !p.detail.includes("Pago Envío"));
+            const totalSales = cycleSales.reduce((acc, s) => acc + s.value, 0);
+            const totalNormalPaid = normalPayments.reduce((acc, p) => acc + p.amount, 0);
+            const totalShippingPaid = shippingPayments.reduce((acc, p) => acc + p.amount, 0);
+            const clothingBalance = totalNormalPaid - totalSales; 
+            return { clothingBalance, totalSales, totalNormalPaid, totalShippingPaid, itemsCount: cycleSales.length, lastShipmentDate, cycleSales, cyclePayments, allSales, allPayments };
+        };
+
+        const getClientStatus = (client, cycleData) => {
+            const { clothingBalance, totalShippingPaid } = cycleData;
+            const shippingCost = client.shippingCost || 0;
+            const shippingBalance = totalShippingPaid - shippingCost;
+            if (clothingBalance < -0.01 && !client.forceAccumulate) return { code: 'DEBT', label: 'DEBE ROPA', color: 'bg-red-100 text-red-700 border-red-200' };
+            if (client.confirmShipping) {
+                if (shippingBalance >= -0.01) return { code: 'READY', label: 'LISTO ENVÍO', color: 'bg-indigo-600 text-white animate-pulse' };
+                else return { code: 'MISSING', label: 'FALTA PAGO ENVÍO', color: 'bg-orange-100 text-orange-700 border-orange-200' };
+            }
+            if (clothingBalance < 0 && client.forceAccumulate) return { code: 'ACC_AUTH', label: 'ACUMULANDO (AUT)', color: 'bg-amber-100 text-amber-700 border-amber-200' };
+            return { code: 'ACC_PAID', label: 'ACUMULANDO', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
+        };
+
+        const registerClient = (name, phone, initialAbono, dateStr, manualId) => {
+            if (manualId && clients.some(c => c.id.toLowerCase() === manualId.toLowerCase())) { alert("ID ya existe"); return null; }
+            const newId = manualId ? manualId.toUpperCase() : generateSmartID(name, clients.length);
+            const dateISO = safeISO(dateStr);
+            window.fs.addDoc(window.fs.collection(window.db, 'clients'), { id: newId, name, phone, registeredAt: dateISO, shippingCost: 0, deliveryMethod: '', confirmShipping: false, forceAccumulate: false });
+            if (initialAbono > 0) addPayment(newId, initialAbono, 'Abono Inicial', dateISO);
+            return newId;
+        };
+
+        const registerShipment = (clientId, guide, company, date) => {
+             window.fs.addDoc(window.fs.collection(window.db, 'shipments'), { id: Date.now() + 500, clientId, guide, company, date });
+        };
+
+        return { clients, sales, payments, shipments, expenses, setClients: updateClientLocal, getClientCycle, getClientStatus, registerClient, addSale, addBatchSales, addPayment, addExpense, registerShipment, deleteClient, deleteSale };
+    };
+
+    // --- COMPONENTES UI ---
+
+    const LoginView = ({ onLogin }) => {
+        const [email, setEmail] = useState("");
+        const [pass, setPass] = useState("");
+        const [error, setError] = useState("");
+
+        const handleLogin = (e) => {
+            e.preventDefault();
+            setError("");
+            window.fbAuth.signInWithEmailAndPassword(window.auth, email, pass)
+                .then(userCred => onLogin(userCred.user))
+                .catch(err => setError("Credenciales incorrectas"));
+        };
+
+        return (
+             <div className="fixed inset-0 z-[1000] bg-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-br from-pink-500 to-indigo-600 rounded-b-[50px] z-0"></div>
+                <div className="z-10 w-full max-w-sm">
+                    <div className="bg-white p-8 rounded-3xl shadow-2xl space-y-6">
+                        <div className="text-center">
+                            <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-indigo-600 tracking-tighter">ADELITA STORE</h1>
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Sistema Cloud v6.3</p>
+                        </div>
+                        <form onSubmit={handleLogin} className="space-y-4">
+                            <div className="space-y-1">
+                                <label className="text-xs font-bold text-slate-400 uppercase ml-1">Usuario</label>
+                                <input type="email" value={email} onChange={e=>setEmail(e.target.value)} className="pos-input-modern text-lg" placeholder="correo@ejemplo.com" required />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-bold text-slate-400 uppercase ml-1">Contraseña</label>
+                                <input type="password" value={pass} onChange={e=>setPass(e.target.value)} className="pos-input-modern text-lg" placeholder="••••••" required />
+                            </div>
+                            {error && <div className="text-red-500 text-xs font-bold text-center bg-red-50 p-2 rounded-lg">{error}</div>}
+                            <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-lg shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2">
+                                <Icon.Lock /> ENTRAR AL SISTEMA
+                            </button>
+                        </form>
+                    </div>
+                </div>
+             </div>
+        );
+    };
+
+    const ReportViewer = ({ logic, onClose, metrics }) => {
+        const [groupBy, setGroupBy] = useState('live'); const [showHelp, setShowHelp] = useState(false);
+        const reportData = useMemo(() => {
+            const groups = {}; const debtors = [];
+            logic.sales.forEach(sale => {
+                const date = new Date(safeISO(sale.date)); if (isNaN(date)) return;
+                let key = ""; if (groupBy === 'live') key = date.toLocaleDateString();
+                if (groupBy === 'week') { const startOfYear = new Date(date.getFullYear(), 0, 1); const week = Math.ceil((((date - startOfYear) / 86400000) + startOfYear.getDay() + 1) / 7); key = `Semana ${week} - ${date.getFullYear()}`; }
+                if (groupBy === 'month') key = date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }); if (groupBy === 'year') key = date.getFullYear().toString();
+                if (!groups[key]) groups[key] = { total: 0, items: [] }; groups[key].total += sale.value; groups[key].items.push(sale);
+            });
+            logic.clients.forEach(client => { const cycle = logic.getClientCycle(client.id); if (cycle.clothingBalance < -0.01) { debtors.push({ ...client, balance: cycle.clothingBalance }); } });
+            return { groups, debtors };
+        }, [logic.sales, logic.clients, groupBy]);
+        const handleDownloadPDF = () => { generatePDF(reportData, groupBy, metrics); }; const handlePrint = () => { window.print(); };
+
+        return (
+            <div className="fixed inset-0 bg-white z-[60] overflow-auto flex flex-col animate-in slide-in-from-bottom duration-300" id="printable-area">
+                {showHelp && (<div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-6" onClick={() => setShowHelp(false)}><div className="bg-white rounded-2xl p-6 max-w-sm text-center shadow-2xl" onClick={e => e.stopPropagation()}><div className="text-4xl mb-4">📄</div><h3 className="font-bold text-lg mb-2">Guardar PDF (iPad)</h3><ol className="text-left text-sm text-slate-600 space-y-2 mb-6 list-decimal pl-4"><li>Toca <b>"Imprimir"</b>.</li><li>Haz <b>Zoom</b> sobre la hoja previa.</li><li>Toca <b>"Compartir"</b> y <b>"Guardar en Archivos"</b>.</li></ol><button onClick={() => setShowHelp(false)} className="bg-slate-900 text-white w-full py-3 rounded-xl font-bold">¡Entendido!</button></div></div>)}
+                <div className="sticky top-0 bg-slate-900 text-white p-4 flex justify-between items-center no-print shadow-lg z-10"><div className="flex items-center gap-4"><h2 className="font-bold flex items-center gap-2 text-sm md:text-base"><Icon.FileText /> Reporte</h2><div className="flex bg-slate-800 rounded-lg p-1">{['live', 'week', 'month', 'year'].map(mode => (<button key={mode} onClick={() => setGroupBy(mode)} className={`px-2 md:px-3 py-1 rounded text-[10px] md:text-xs capitalize ${groupBy === mode ? 'bg-indigo-500 text-white font-bold' : 'text-slate-400 hover:text-white'}`}>{mode === 'live' ? 'Día' : mode === 'week' ? 'Sem' : mode}</button>))}</div></div><div className="flex gap-2"><button onClick={() => setShowHelp(true)} className="bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 px-3 py-2 rounded-lg font-bold text-xs transition-colors border border-amber-500/50 flex items-center gap-1"><Icon.Info /> PDF?</button><button onClick={handleDownloadPDF} className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg font-bold flex items-center gap-2 text-xs md:text-sm shadow-lg transition-colors"><Icon.Download /> Descargar</button><button onClick={handlePrint} className="bg-indigo-500 hover:bg-indigo-600 px-4 py-2 rounded-lg font-bold flex items-center gap-2 text-xs md:text-sm shadow-lg transition-colors"><Icon.Printer /> Imprimir</button><button onClick={onClose} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg font-bold text-xs md:text-sm transition-colors"><Icon.Close /></button></div></div>
+                <div className="p-4 md:p-8 max-w-5xl mx-auto w-full text-slate-800"><div className="text-center border-b-2 border-slate-900 pb-6 mb-8"><h1 className="text-2xl md:text-4xl font-extrabold text-slate-900 tracking-tight">Reporte ADELITA STORE</h1><p className="text-slate-500 mt-2 font-medium text-xs md:text-sm">Agrupado por: {groupBy.toUpperCase()} | Fecha: {new Date().toLocaleDateString()}</p></div><div className="grid grid-cols-3 gap-6 mb-10"><div className="p-4 bg-slate-50 rounded-xl text-center border"><div className="text-xs text-slate-400 uppercase font-bold">Ingresos</div><div className="text-xl font-bold text-emerald-600">{formatMoney(metrics.totalIncome)}</div></div><div className="p-4 bg-slate-50 rounded-xl text-center border"><div className="text-xs text-slate-400 uppercase font-bold">Gastos</div><div className="text-xl font-bold text-red-500">{formatMoney(metrics.totalExpenses)}</div></div><div className="p-4 bg-slate-50 rounded-xl text-center border"><div className="text-xs text-slate-400 uppercase font-bold">Utilidad</div><div className="text-xl font-bold text-indigo-900">{formatMoney(metrics.profit)}</div></div></div><h3 className="text-lg md:text-xl font-bold text-slate-900 mb-4 flex items-center gap-2"><Icon.Chart /> Ventas</h3><div className="space-y-4 mb-12">{Object.entries(reportData.groups).sort((a,b) => b[1].total - a[1].total).map(([key, data]) => (<details key={key} className="group bg-white border border-slate-200 rounded-xl overflow-hidden print:border-none print:break-inside-avoid"><summary className="flex justify-between items-center p-3 md:p-4 bg-slate-50 cursor-pointer hover:bg-slate-100 font-bold list-none text-sm md:text-base"><div className="flex items-center gap-2"><span className="text-indigo-600 group-open:rotate-90 transition-transform no-print">▶</span><span>{capitalizeFirst(key)}</span><span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-normal">{data.items.length} items</span></div><span className="text-emerald-700 text-lg">{formatMoney(data.total)}</span></summary><div className="p-4 bg-white border-t border-slate-100 text-xs md:text-sm"><table className="w-full"><thead className="text-xs text-slate-400 uppercase text-left"><tr><th>Cliente</th><th>Prenda</th><th className="text-right">Valor</th></tr></thead><tbody className="divide-y divide-slate-50">{data.items.map((sale, i) => (<tr key={i} className="hover:bg-slate-50"><td className="py-2 font-mono text-[10px] md:text-xs text-slate-500">{sale.clientId}</td><td className="py-2">{sale.item}</td><td className="py-2 text-right">{formatMoney(sale.value)}</td></tr>))}</tbody></table></div></details>))}</div><div className="break-inside-avoid page-break-before"><h3 className="text-lg md:text-xl font-bold text-red-700 mb-4 flex items-center gap-2 border-b-2 border-red-100 pb-2"><Icon.Alert /> Cuentas por Cobrar</h3>{reportData.debtors.length === 0 ? <p className="text-slate-400 italic">No hay deudores activos.</p> : (<table className="w-full text-left text-xs md:text-sm bg-red-50/30 rounded-xl overflow-hidden"><thead className="bg-red-100 text-red-800 uppercase text-[10px]"><tr><th className="p-3">Cliente</th><th className="p-3">Teléfono</th><th className="p-3 text-right">Deuda</th></tr></thead><tbody className="divide-y divide-red-100">{reportData.debtors.map(d => (<tr key={d.id}><td className="p-3 font-bold text-slate-700">{d.name}</td><td className="p-3 text-slate-500">{d.phone}</td><td className="p-3 text-right font-bold text-red-600">{formatMoney(d.balance)}</td></tr>))}</tbody></table>)}</div></div></div>
+        );
+    };
+
+    const AdminView = ({ logic, onClose }) => {
+        const [filter, setFilter] = useState('month'); const [expDetail, setExpDetail] = useState(""); const [expAmount, setExpAmount] = useState(""); const [expDate, setExpDate] = useState(getToday()); const [showExportMenu, setShowExportMenu] = useState(false); const [showPreview, setShowPreview] = useState(false);
+        const metrics = useMemo(() => {
+            const now = new Date(); const filterDate = new Date(); if (filter === 'week') filterDate.setDate(now.getDate() - 7); if (filter === 'month') filterDate.setMonth(now.getMonth() - 1); if (filter === 'all') filterDate.setFullYear(2000);
+            const filteredSales = logic.sales.filter(s => new Date(safeISO(s.date)) >= filterDate); const filteredExpenses = logic.expenses.filter(e => new Date(safeISO(e.date)) >= filterDate);
+            const totalIncome = filteredSales.reduce((acc, s) => acc + s.value, 0); const totalExpenses = filteredExpenses.reduce((acc, e) => acc + e.amount, 0);
+            const salesByDate = {}; filteredSales.forEach(s => { const dateKey = new Date(safeISO(s.date)).toLocaleDateString(); if (!salesByDate[dateKey]) salesByDate[dateKey] = 0; salesByDate[dateKey] += s.value; });
+            return { totalIncome, totalExpenses, profit: totalIncome - totalExpenses, salesByDate };
+        }, [logic.sales, logic.expenses, filter]);
+        const handleAddExpense = () => { if(!expDetail || !expAmount) return; logic.addExpense(expDetail, expAmount, expDate); setExpDetail(""); setExpAmount(""); alert("Gasto registrado"); };
+        const handleExportCSV = () => { const rows = [["Reporte"], ["Ingresos", metrics.totalIncome]]; Object.entries(metrics.salesByDate).forEach(([d, t]) => rows.push([d, t])); exportToCSV(rows, "Reporte.csv"); };
+
+        return (
+            <div className="flex flex-col h-full bg-slate-50 pb-20 landscape:pb-0 landscape:flex-row">
+                <div className="p-6 bg-slate-900 text-white shadow-lg landscape:w-1/3 landscape:flex landscape:flex-col landscape:justify-center"><h1 className="text-2xl font-bold flex items-center gap-2"><Icon.Chart /> Panel Gerencial</h1><div className="flex gap-2 mt-4 text-xs font-bold"><button onClick={() => setFilter('week')} className={`px-3 py-1 rounded-full ${filter === 'week' ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-slate-400'}`}>Semana</button><button onClick={() => setFilter('month')} className={`px-3 py-1 rounded-full ${filter === 'month' ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-slate-400'}`}>Mes</button><button onClick={() => setFilter('all')} className={`px-3 py-1 rounded-full ${filter === 'all' ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-slate-400'}`}>Todo</button></div>
+                <div className="mt-8 border-t border-slate-700 pt-4"><button onClick={() => window.fbAuth.signOut(window.auth)} className="text-red-400 text-xs font-bold border border-red-900 p-2 rounded hover:bg-red-900/50">Cerrar Sesión</button></div></div>
+                {showExportMenu && (<div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6 animate-in fade-in" onClick={() => setShowExportMenu(false)}><div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-4 shadow-2xl" onClick={e => e.stopPropagation()}><h3 className="font-bold text-xl text-center text-slate-800 mb-2">Generar Reporte</h3><button onClick={() => { handleExportCSV(); setShowExportMenu(false); }} className="w-full flex items-center gap-4 p-4 bg-emerald-50 text-emerald-800 rounded-2xl font-bold hover:bg-emerald-100 transition-colors border border-emerald-100"><div className="bg-white p-3 rounded-xl shadow-sm"><Icon.List /></div><div className="text-left"><div className="text-base">Excel / CSV</div><div className="text-[10px] opacity-60 font-normal">Datos crudos para editar</div></div></button><button onClick={() => { setShowPreview(true); setShowExportMenu(false); }} className="w-full flex items-center gap-4 p-4 bg-indigo-50 text-indigo-800 rounded-2xl font-bold hover:bg-indigo-100 transition-colors border border-indigo-100"><div className="bg-white p-3 rounded-xl shadow-sm"><Icon.FileText /></div><div className="text-left"><div className="text-base">Visualizar / PDF</div><div className="text-[10px] opacity-60 font-normal">Ver y guardar reporte</div></div></button><button onClick={() => setShowExportMenu(false)} className="w-full py-3 text-slate-400 font-bold text-sm hover:text-slate-600">Cancelar</button></div></div>)}
+                {showPreview && <ReportViewer logic={logic} metrics={metrics} onClose={() => setShowPreview(false)} />}
+                <div className="flex-1 overflow-y-auto p-4 space-y-6 landscape:w-2/3"><div className="grid grid-cols-2 gap-4"><div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100"><p className="text-xs text-slate-400 font-bold uppercase">Ingresos</p><p className="text-2xl font-bold text-emerald-600">{formatMoney(metrics.totalIncome)}</p></div><div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100"><p className="text-xs text-slate-400 font-bold uppercase">Gastos</p><p className="text-2xl font-bold text-red-500">{formatMoney(metrics.totalExpenses)}</p></div><div className="col-span-2 bg-indigo-600 text-white p-4 rounded-2xl shadow-lg flex justify-between items-center"><div><p className="text-xs font-bold uppercase opacity-75">Utilidad Neta</p><p className="text-3xl font-bold">{formatMoney(metrics.profit)}</p></div><button onClick={() => setShowExportMenu(true)} className="bg-white/20 p-2 px-4 rounded-lg hover:bg-white/30 flex items-center gap-2 font-bold text-sm transition-all"><Icon.Download /> Exportar</button></div></div><div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200"><h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2">📉 Registrar Gasto</h3><div className="space-y-3"><input value={expDetail} onChange={e => setExpDetail(e.target.value)} placeholder="Concepto (ej: Paca Americana)" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl" /><div className="flex gap-2"><input type="number" inputMode="decimal" step="0.01" value={expAmount} onChange={e => setExpAmount(e.target.value)} placeholder="$ Monto" className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-red-500" /><input type="date" value={expDate} onChange={e => setExpDate(e.target.value)} className="w-32 p-3 bg-slate-50 border border-slate-200 rounded-xl" /></div><button onClick={handleAddExpense} className="w-full bg-slate-800 text-white py-3 rounded-xl font-bold shadow-md hover:bg-slate-700">Guardar Gasto</button></div></div><div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"><div className="p-4 border-b border-slate-100 font-bold text-slate-700">Ventas por Fecha (Lives)</div>{Object.entries(metrics.salesByDate).length === 0 ? <p className="p-4 text-slate-400 text-sm">Sin datos en este periodo</p> : (Object.entries(metrics.salesByDate).sort((a,b) => b[1] - a[1]).map(([date, total]) => (<div key={date} className="flex justify-between p-4 border-b border-slate-50 last:border-0"><span className="font-medium text-slate-600">{date}</span><span className="font-bold text-emerald-600">{formatMoney(total)}</span></div>)))}</div></div>
+            </div>
+        );
+    };
+
+    const SalesListRenderer = ({ sales, viewMode, emptyMessage = "Sin registros", onDeleteSale }) => {
+        const groupedSales = useMemo(() => {
+            const groups = {};
+            sales.forEach(sale => {
+                const dateObj = new Date(safeISO(sale.date));
+                const dateKey = capitalizeFirst(dateObj.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' }));
+                if (!groups[dateKey]) groups[dateKey] = [];
+                groups[dateKey].push(sale);
+            });
+            return groups;
+        }, [sales]);
+
+        const handleDelete = (s) => {
+            if(confirm(`¿Eliminar ${s.item} ($${s.value})?`)) {
+                onDeleteSale(s.fireId);
+            }
+        };
+
+        if (sales.length === 0) return <div className="p-4 text-center text-slate-300 italic text-sm">{emptyMessage}</div>;
+        return (
+            <div className="bg-white border border-slate-100 rounded-xl overflow-hidden h-full">
+                {viewMode === 'grouped' && Object.entries(groupedSales).map(([dateKey, items], grpIdx) => (
+                    <div key={grpIdx}>
+                        <div className="bg-slate-50 px-4 py-2 text-[10px] font-bold text-indigo-600 uppercase border-b border-slate-100 flex justify-between"><span>📅 {dateKey}</span><span>{items.length} items</span></div>
+                        {items.map((s, idx) => (
+                            <div key={idx} className="flex justify-between items-center p-3 border-b border-slate-50 text-sm last:border-0 hover:bg-slate-50 group">
+                                <span className="flex-1">{s.item}</span>
+                                <span className="font-medium mr-3">${s.value}</span>
+                                <button onClick={() => handleDelete(s)} className="text-slate-300 hover:text-red-500 transition-colors p-1"><Icon.Trash /></button>
+                            </div>
+                        ))}
+                        <div className="bg-white px-4 py-1 border-b border-slate-200 text-right text-[10px] font-bold text-slate-500">Subtotal: ${items.reduce((acc, curr) => acc + curr.value, 0)}</div>
+                    </div>
+                ))}
+                {viewMode === 'list' && sales.map((s, idx) => (
+                    <div key={idx} className="flex justify-between items-center p-3 border-b border-slate-50 text-sm hover:bg-slate-50 group">
+                        <div className="flex-1"><span className="block">{s.item}</span><span className="text-[10px] text-slate-400">{new Date(safeISO(s.date)).toLocaleDateString()}</span></div>
+                        <span className="font-medium mr-3">${s.value}</span>
+                        <button onClick={() => handleDelete(s)} className="text-slate-300 hover:text-red-500 transition-colors p-1"><Icon.Trash /></button>
+                    </div>
+                ))}
+            </div>
+        );
+    };
+
+    const ClientDetailComponent = ({ activeClient, logic, onBack }) => {
+        const [payAmount, setPayAmount] = useState(""); const [payDate, setPayDate] = useState(getToday()); const [shipPayAmount, setShipPayAmount] = useState(""); const [shipPayDate, setShipPayDate] = useState(getToday()); const [orderViewMode, setOrderViewMode] = useState('grouped'); const [allHistoryViewMode, setAllHistoryViewMode] = useState('grouped'); const [tabView, setTabView] = useState('cycle'); const [showWaModal, setShowWaModal] = useState(false); 
+        const [showInvoice, setShowInvoice] = useState(false);
+        const [isEditing, setIsEditing] = useState(false);
+        
+        const [editName, setEditName] = useState(activeClient.name);
+        const [editPhone, setEditPhone] = useState(activeClient.phone);
+
+        const cycle = logic.getClientCycle(activeClient.id);
+        const status = logic.getClientStatus(activeClient, cycle);
+        const shippingCost = activeClient.shippingCost || 0;
+        const shippingPaid = cycle.totalShippingPaid;
+        const shippingPending = Math.max(0, shippingCost - shippingPaid);
+        const clothingDebt = Math.abs(Math.min(0, cycle.clothingBalance));
+        const shippingBalance = shippingPaid - shippingCost;
+
+        const handleUpdateClient = (updates) => { logic.setClients(activeClient.id, updates); };
+        
+        const saveEdit = () => {
+            handleUpdateClient({ name: editName, phone: editPhone });
+            setIsEditing(false);
+        };
+
+        const deleteThisClient = () => {
+            if(confirm("⚠ ¿ESTÁS SEGURO? Se borrará el cliente y su historial. Esta acción es irreversible.")) {
+                logic.deleteClient(activeClient.id);
+                onBack();
+            }
+        };
+
+        const handlePayment = () => { if(!payAmount) return; logic.addPayment(activeClient.id, payAmount, 'Abono Ropa', smartDate(payDate, cycle.lastShipmentDate)); setPayAmount(""); };
+        const handleShippingPayment = () => {
+            if (!shipPayAmount) return;
+            const amount = parseFloat(shipPayAmount); const dateISO = smartDate(shipPayDate, cycle.lastShipmentDate);
+            if (amount > shippingPending + 0.01 && shippingPending > 0) { logic.addPayment(activeClient.id, shippingPending, 'Pago Envío (Auto)', dateISO); setTimeout(() => logic.addPayment(activeClient.id, amount - shippingPending, 'Abono Ropa (Excedente Envío)', dateISO), 50); } 
+            else if (shippingPending <= 0.01) { logic.addPayment(activeClient.id, amount, 'Abono Ropa', dateISO); } 
+            else { logic.addPayment(activeClient.id, amount, 'Pago Envío', dateISO); }
+            setShipPayAmount("");
+        };
+        const handlePayWithBalance = () => { if (cycle.clothingBalance < shippingPending) return alert("Saldo insuficiente"); const dateISO = smartDate(getToday(), cycle.lastShipmentDate); logic.addPayment(activeClient.id, -shippingPending, 'Transferencia a Envío', dateISO); logic.addPayment(activeClient.id, shippingPending, 'Pago Envío (Saldo)', dateISO); alert("✅ Envío pagado con saldo"); };
+        const handleRouteSelect = (route) => { let cost = 0; if (route === 'Servientrega') cost = 5; if (route === 'Domicilio') cost = 3; if (route === 'Ibarra') cost = cycle.totalSales >= 25 ? 0 : 3; handleUpdateClient({ deliveryMethod: route, shippingCost: cost }); };
+        const cycleStartDateStr = cycle.lastShipmentDate.toLocaleDateString() === '12/31/1969' ? 'Inicio' : new Date(safeISO(cycle.lastShipmentDate)).toLocaleDateString();
+
+        const generateWaMessage = () => {
+            try {
+                const groups = {}; cycle.cycleSales.forEach(s => { const date = new Date(safeISO(s.date)); if(isNaN(date)) return; const d = date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'numeric' }); if (!groups[d]) groups[d] = { count: 0, total: 0 }; groups[d].count++; groups[d].total += s.value; });
+                let msg = `¡Hola! 👋 Aquí te adjunto la fotito de tus prendas separadas.\n\n`; Object.entries(groups).forEach(([d, v]) => msg += `Live ${d} 📸\n📝 RESUMEN: ${v.count} prendas\n💲 Subtotal: $${v.total.toFixed(2)}\n\n`);
+                const clothesPayments = cycle.cyclePayments.filter(p => !p.detail || !p.detail.includes("Pago Envío")); if (clothesPayments.length > 0) { msg += `💸 *ABONOS ROPA:*\n`; clothesPayments.forEach(p => msg += `✅ $${p.amount.toFixed(2)}\n`); msg += `\n`; }
+                msg += `📊 *RESUMEN DE CUENTA:*\nTotal Ropa: $${cycle.totalSales.toFixed(2)}\n(-) Total Abonos: $${cycle.totalNormalPaid.toFixed(2)}\n--------------------------\n`;
+                if (clothingDebt > 0.01) msg += `🔸 Ropa Pendiente: $${clothingDebt.toFixed(2)}\n`; else msg += `🔹 Ropa: PAGADA (Saldo a favor: $${cycle.clothingBalance.toFixed(2)})\n`;
+                if (activeClient.deliveryMethod) { if (shippingBalance < -0.01) msg += `🔸 Envío (${activeClient.deliveryMethod}): Pendiente $${Math.abs(shippingBalance).toFixed(2)}\n`; else msg += `🔹 Envío: CUBIERTO ✅\n`; }
+                const totalTotal = clothingDebt + Math.abs(Math.min(0, shippingBalance));
+                if (totalTotal > 0.01) { msg += `\n*🔴 TOTAL A TRANSFERIR: $${totalTotal.toFixed(2)}*\n\n🏦 *BANCO PICHINCHA*\n🔢 2204226498\n👤 Bryan David Suárez\n🆔 1003300751\n\n`; } else { msg += `\n*🟢 TODO PAGADO. ¡Gracias!*\n\n`; }
+                msg += `Responde:\n1️⃣ ACUMULAR\n2️⃣ ENVIAR`; return msg;
+            } catch(e) { return "Error generando mensaje."; }
+        };
+        const copyToClipboard = () => { navigator.clipboard.writeText(generateWaMessage()).then(() => alert("Copiado!"), () => alert("Error copiar")); };
+
+        return (
+            <div className="flex flex-col h-full bg-white">
+                <div className="p-4 border-b flex items-center justify-between sticky top-0 bg-white z-10"><button onClick={onBack} className="text-slate-500 font-bold">← Atrás</button><div className={`text-xs px-3 py-1 rounded-full border font-bold flex items-center gap-1 ${status.color}`}>{status.label}</div></div>
+                {showWaModal && (<div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6" onClick={() => setShowWaModal(false)}><div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}><h3 className="font-bold text-lg mb-4 flex items-center gap-2 text-emerald-600"><Icon.Message /> Mensaje de Cobro</h3><textarea readOnly className="w-full h-64 p-3 bg-slate-50 border rounded-xl text-sm font-mono mb-4 resize-none focus:outline-none" value={generateWaMessage()}></textarea><button onClick={copyToClipboard} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg hover:bg-emerald-700 active:scale-95 transition-all"><Icon.Copy /> Copiar Mensaje</button></div></div>)}
+                
+                {showInvoice && (
+                    <Invoice3DModal 
+                        client={activeClient} 
+                        cycle={cycle} 
+                        onClose={() => setShowInvoice(false)} 
+                    />
+                )}
+
+                <div className="flex-1 overflow-y-auto p-4 landscape:grid landscape:grid-cols-2 landscape:gap-6 landscape:overflow-hidden">
+                    <div className="space-y-6 landscape:overflow-y-auto landscape:pr-2">
+                        <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                                {isEditing ? (
+                                    <div className="space-y-2 mb-2 animate-in fade-in">
+                                        <input value={editName} onChange={e=>setEditName(e.target.value)} className="w-full border p-2 rounded" placeholder="Nombre" />
+                                        <input value={editPhone} onChange={e=>setEditPhone(e.target.value)} className="w-full border p-2 rounded" placeholder="Teléfono" />
+                                        <div className="flex gap-2">
+                                            <button onClick={saveEdit} className="bg-emerald-600 text-white px-3 py-1 rounded text-xs font-bold">Guardar</button>
+                                            <button onClick={() => setIsEditing(false)} className="bg-slate-300 text-slate-700 px-3 py-1 rounded text-xs font-bold">Cancelar</button>
+                                            <button onClick={deleteThisClient} className="bg-red-100 text-red-600 px-3 py-1 rounded text-xs font-bold ml-auto border border-red-200">Borrar Cliente</button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                                            {activeClient.name} 
+                                            <button onClick={() => setIsEditing(true)} className="text-slate-300 hover:text-slate-600 text-sm"><Icon.Edit /></button>
+                                        </h1>
+                                        <div className="flex gap-2 text-sm text-slate-500 mt-1"><span className="bg-slate-100 px-2 rounded">ID: {activeClient.id}</span><span>📞 {activeClient.phone}</span></div>
+                                    </>
+                                )}
+                            </div>
+                            <div className="flex gap-2 ml-4">
+                                <button onClick={() => setShowInvoice(true)} className="bg-indigo-100 text-indigo-700 p-2 rounded-xl hover:bg-indigo-200 transition-colors shadow-sm"><Icon.FileText /></button>
+                                <button onClick={() => setShowWaModal(true)} className="bg-emerald-100 text-emerald-700 p-2 rounded-xl hover:bg-emerald-200 transition-colors shadow-sm"><Icon.Message /></button>
+                            </div>
+                        </div>
+                        <div className="flex border-b border-slate-200 landscape:hidden"><button onClick={() => setTabView('cycle')} className={`flex-1 py-2 text-sm text-center ${tabView === 'cycle' ? 'tab-active' : 'tab-inactive'}`}>Ciclo Actual</button><button onClick={() => setTabView('all')} className={`flex-1 py-2 text-sm text-center ${tabView === 'all' ? 'tab-active' : 'tab-inactive'}`}>Historial</button></div>
+                        {(tabView === 'cycle' || window.innerWidth > 768) && (
+                            <>
+                                <div className={`p-5 rounded-3xl border-2 ${clothingDebt > 0 ? 'border-red-100 bg-red-50' : 'border-slate-100 bg-white shadow-sm'}`}><div className="flex justify-between mb-2"><div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Saldo Ropa</div><div className="text-[10px] bg-slate-100 px-2 py-1 rounded text-slate-500 font-bold">Ciclo: {cycleStartDateStr}</div></div><div className="flex justify-between items-end"><div className={`text-3xl font-bold ${cycle.clothingBalance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{formatMoney(cycle.clothingBalance)}</div><div className="text-right text-xs text-slate-500"><div>Ventas: -{formatMoney(cycle.totalSales)}</div><div>Abonos Ropa: +{formatMoney(cycle.totalNormalPaid)}</div></div></div><div className="mt-4 flex gap-2 items-center bg-white p-1 rounded-xl border border-slate-200"><div className="relative w-10 h-10"><input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} className="input-overlay-trigger" /><span className="date-icon-overlay text-xl">📅</span></div><input type="number" inputMode="decimal" step="0.01" value={payAmount} onChange={e => setPayAmount(e.target.value)} className="w-20 outline-none font-bold text-slate-700" placeholder="$0.00" /><button onClick={handlePayment} className="flex-1 bg-emerald-600 text-white rounded-lg font-bold text-xs py-2 shadow-sm">+ ABONO ROPA</button></div></div>
+                                <div className={`p-5 rounded-3xl border-2 space-y-4 ${shippingPending > 0.01 && activeClient.confirmShipping ? 'border-orange-200 bg-orange-50' : 'border-slate-200 bg-white'}`}><h3 className="font-bold text-slate-700 flex items-center gap-2"><Icon.Box /> Estado Envío</h3><div className="flex justify-between items-center text-sm"><span className="text-slate-500">Costo ({activeClient.deliveryMethod || '-'}):</span><span className="font-bold">${shippingCost.toFixed(2)}</span></div><div className="flex justify-between items-center text-sm border-b pb-2"><span className="text-slate-500">Pagado:</span><span className="font-bold text-emerald-600">${shippingPaid.toFixed(2)}</span></div><div className="bg-white p-3 rounded-xl border border-slate-200 mt-2"><label className="text-[10px] font-bold text-slate-400 uppercase">Pagar Envío (Divisor)</label><div className="flex gap-2 mt-1 items-center"><div className="relative w-8 h-8"><input type="date" value={shipPayDate} onChange={e => setShipPayDate(e.target.value)} className="input-overlay-trigger" /><span className="date-icon-overlay text-lg">📅</span></div><input type="number" inputMode="decimal" step="0.01" value={shipPayAmount} onChange={e => setShipPayAmount(e.target.value)} className="w-16 border border-slate-200 rounded-lg px-2 py-1 text-sm outline-none" placeholder="$" /><button onClick={handleShippingPayment} className="flex-1 bg-indigo-600 text-white rounded-lg font-bold text-xs py-1.5 shadow-sm hover:bg-indigo-700">PAGAR</button>{cycle.clothingBalance >= shippingPending && shippingPending > 0.01 && <button onClick={handlePayWithBalance} className="bg-emerald-600 text-white rounded-lg font-bold text-[10px] px-2 py-1.5 shadow-sm hover:bg-emerald-700 ml-1">USAR SALDO</button>}</div><div className="text-[10px] text-slate-400 mt-1">Si el monto sobra, se va a saldo de ropa.</div></div><div className="grid grid-cols-2 gap-3 pt-2"><div><label className="text-xs font-bold text-slate-400">Ruta</label><select className="w-full mt-1 p-2 rounded-xl border bg-white text-xs" value={activeClient.deliveryMethod} onChange={e => handleRouteSelect(e.target.value)}><option value="">-</option><option value="Servientrega">Servientrega</option><option value="Domicilio">Domicilio</option><option value="Cayambe">Cayambe</option><option value="Ibarra">Ibarra</option><option value="Retiro">Retiro</option></select></div><div><label className="text-xs font-bold text-slate-400">Costo Real</label><input type="number" inputMode="decimal" step="0.01" className="w-full mt-1 p-2 rounded-xl border bg-white text-xs" value={activeClient.shippingCost} onChange={e => handleUpdateClient({ shippingCost: parseFloat(e.target.value) })} /></div></div><div className="flex items-center justify-between pt-2 border-t"><span className="font-bold text-xs text-slate-700">Confirmar para Bodega</span><input type="checkbox" className="w-5 h-5" checked={activeClient.confirmShipping} onChange={e => handleUpdateClient({ confirmShipping: e.target.checked })} /></div></div>
+                            </>
+                        )}
+                    </div>
+                    <div className="landscape:block landscape:overflow-y-auto landscape:h-full">
+                        <div className="pb-4">
+                            <div className="flex justify-between items-end mb-3"><h3 className="text-xs font-bold text-slate-400 uppercase">Detalle Pedido</h3><div className="flex bg-slate-100 p-1 rounded-lg">
+                                <button onClick={() => setOrderViewMode('grouped')} className={`px-2 py-1 rounded-md text-[10px] flex items-center gap-1 ${orderViewMode==='grouped'?'bg-white shadow':''}`}>Lives</button>
+                                <button onClick={() => setOrderViewMode('list')} className={`px-2 py-1 rounded-md text-[10px] flex items-center gap-1 ${orderViewMode==='list'?'bg-white shadow':''}`}>Lista</button>
+                            </div></div>
+                            <SalesListRenderer sales={cycle.cycleSales} viewMode={orderViewMode} onDeleteSale={logic.deleteSale} />
+                        </div>
+                        <div className="hidden landscape:block pt-4 border-t border-slate-100 mt-4">
+                             <h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Historial de Pagos</h3>
+                             <div className="bg-white border border-slate-100 rounded-xl overflow-hidden">
+                                {cycle.allPayments.map((p, i) => (<div key={i} className="flex justify-between p-3 border-b border-slate-50 text-sm"><div><span className="block">{p.detail}</span><span className="text-[10px] text-slate-400">{new Date(safeISO(p.date)).toLocaleDateString()}</span></div><span className="font-bold text-emerald-600">+${p.amount}</span></div>))}
+                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const WarehouseView = ({ logic }) => {
+        const [guide, setGuide] = useState(""); const [dispatchDate, setDispatchDate] = useState(getToday()); const [selectedClient, setSelectedClient] = useState(null);
+        const readyClients = logic.clients.map(c => ({...c, cycle: logic.getClientCycle(c.id)})).map(c => ({...c, status: logic.getClientStatus(c, c.cycle)})).filter(c => c.status.code === 'READY');
+        const handleDispatch = () => {
+            if (!guide) return alert("Falta Guía");
+            const finalDate = smartDate(dispatchDate, logic.getClientCycle(selectedClient.id).lastShipmentDate);
+            const cycle = logic.getClientCycle(selectedClient.id); const clothingBalance = cycle.clothingBalance; const shippingBalance = cycle.totalShippingPaid - (selectedClient.shippingCost || 0);
+            if(selectedClient.shippingCost > 0) logic.addSale(selectedClient.id, `Envío (${selectedClient.deliveryMethod})`, selectedClient.shippingCost, new Date(new Date(finalDate).getTime() - 2000).toISOString());
+            if (clothingBalance > 0.01) logic.addPayment(selectedClient.id, clothingBalance, "Saldo a Favor Ropa (Arrastre)", new Date(new Date(finalDate).getTime() + 1000).toISOString());
+            if (shippingBalance > 0.01) logic.addPayment(selectedClient.id, shippingBalance, "Vuelto Envío (Arrastre)", new Date(new Date(finalDate).getTime() + 1000).toISOString());
+            logic.registerShipment(selectedClient.id, guide, selectedClient.deliveryMethod, finalDate);
+            logic.setClients(selectedClient.id, { confirmShipping: false, forceAccumulate: false });
+            alert("✅ Despachado Correctamente"); setSelectedClient(null); setGuide("");
+        };
+        if (selectedClient) return (<div className="p-6 h-full flex flex-col bg-slate-100"><button onClick={() => setSelectedClient(null)} className="mb-4 font-bold text-slate-500">← Volver</button><div className="bg-white p-6 rounded-3xl shadow-xl border-l-8 border-indigo-600"><h2 className="text-2xl font-bold mb-1">{selectedClient.name}</h2><p className="text-slate-500 mb-6">{selectedClient.deliveryMethod}</p><div className="space-y-4 mb-8"><div className="bg-slate-50 p-3 rounded-lg text-sm border"><div className="flex justify-between"><span>Ropa:</span><span className="text-emerald-600 font-bold">PAGADO</span></div><div className="flex justify-between"><span>Envío:</span><span className="text-emerald-600 font-bold">PAGADO</span></div></div><input value={guide} onChange={e => setGuide(e.target.value)} placeholder="Número de Guía / Tracking" className="w-full p-4 border-2 rounded-xl text-xl font-mono focus:border-indigo-600 outline-none" autoFocus /><div><label className="text-xs font-bold text-slate-400">Fecha Despacho</label><input type="date" value={dispatchDate} onChange={e => setDispatchDate(e.target.value)} className="w-full p-3 border rounded-xl" /></div></div><button onClick={handleDispatch} className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg text-lg flex items-center justify-center gap-2"><Icon.Check /> CONFIRMAR SALIDA</button></div></div>);
+        return (<div className="p-4 pb-24"><h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-700"><Icon.Box /> Listos para Enviar ({readyClients.length})</h2><div className="space-y-3">{readyClients.length === 0 && <div className="text-center py-12 text-slate-400 border border-dashed rounded-3xl">No hay paquetes listos</div>}{readyClients.map(c => (<div key={c.id} onClick={() => setSelectedClient(c)} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center touch-card cursor-pointer"><div><div className="font-bold text-slate-800">{c.name}</div><div className={`inline-block px-2 py-0.5 mt-1 rounded text-[10px] font-bold border ${c.status.color}`}>{c.status.label}</div></div><button className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm">DESPACHAR</button></div>))}</div></div>);
+    };
+
+    const LiveView = ({ logic }) => {
+        const [search, setSearch] = useState(""); const [found, setFound] = useState(null); const [item, setItem] = useState(""); const [price, setPrice] = useState(""); const [qty, setQty] = useState(1); const [msg, setMsg] = useState(null); const [suggestions, setSuggestions] = useState([]); const [saleDate, setSaleDate] = useState(getToday());
+        const ITEMS_COMMON = ["Blusa", "Pantalón", "Vestido", "Camiseta", "Falda", "Short", "Chaqueta"];
+        const QTY_OPTIONS = [1, 2, 3, 4, 5, 10]; const PRICE_OPTIONS = ["0.25", "0.50", "1.00", "1.25", "1.50", "1.75", "2.00"];
+
+        useEffect(() => {
+            if (search.length > 0) { const matches = logic.clients.filter(c => c.id.toLowerCase().startsWith(search.toLowerCase()) || c.name.toLowerCase().includes(search.toLowerCase())).slice(0, 3); setSuggestions(matches); } else { setSuggestions([]); }
+            const exactMatch = logic.clients.find(c => c.id.toLowerCase() === search.toLowerCase()); setFound(exactMatch || null);
+        }, [search, logic.clients]);
+
+        const selectSuggestion = (client) => { setSearch(client.id); setFound(client); setSuggestions([]); };
+        const handleSubmit = (e) => {
+            e.preventDefault(); if (!found || !item || !price) return; const quantity = parseInt(qty) || 1; const finalDate = smartDate(saleDate, logic.getClientCycle(found.id).lastShipmentDate); 
+            logic.addBatchSales(found.id, item, price, finalDate, quantity); setMsg(`Venta: ${quantity} x ${item} ($${price} c/u)`); setTimeout(() => setMsg(null), 2000); setItem(""); setPrice(""); setSearch(""); setFound(null); setSuggestions([]); setQty(1);
+        };
+
+        return (
+            <div className="h-full flex flex-col bg-[#f0f2f5]">
+                <div className="bg-white p-4 shadow-sm z-30 border-b border-slate-100 rounded-b-[30px] mb-2">
+                    <div className="flex justify-between items-center mb-4"><div className="flex flex-col"><h2 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-indigo-600 tracking-tighter">ADELITA STORE</h2><span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase ml-0.5">Live Sale System</span></div><div className="flex flex-col items-end"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Fecha Venta</label><input type="date" value={saleDate} onChange={e => setSaleDate(e.target.value)} className="bg-slate-50 text-slate-700 font-bold text-xs p-2 rounded-xl border border-slate-200 outline-none w-28 text-center shadow-sm" /></div></div>
+                    <div className="relative"><input value={search} onChange={e => setSearch(e.target.value)} className="w-full text-center text-xl font-mono uppercase bg-slate-50 border-2 border-slate-200 rounded-2xl p-4 focus:border-pink-500 outline-none transition-all font-bold text-slate-700 placeholder:text-slate-300 shadow-inner" placeholder="BUSCAR CLIENTE (ID / NOMBRE)" autoFocus />{suggestions.length > 0 && !found && (<div className="absolute top-full left-0 w-full mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl z-40 overflow-hidden">{suggestions.map(s => (<div key={s.id} onClick={() => selectSuggestion(s)} className="p-4 border-b border-slate-50 hover:bg-slate-50 flex justify-between items-center cursor-pointer"><span className="font-bold text-slate-800 text-lg">{s.id}</span><span className="text-sm text-slate-500 font-medium">{s.name}</span></div>))}</div>)}</div>
+                    {found && (<div className="mt-3 bg-gradient-to-r from-emerald-500 to-teal-500 p-3 rounded-2xl text-center shadow-lg animate-in fade-in slide-in-from-top-4 mb-1 transform transition-all"><div className="font-black text-white text-xl tracking-tight">{found.name}</div><div className="text-white/80 text-xs font-bold tracking-widest">{found.id}</div></div>)}
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 pt-2">
+                    {msg && <div className="bg-emerald-600 text-white p-4 rounded-2xl mb-6 text-center font-bold animate-bounce shadow-xl mx-2 border-2 border-emerald-400">{msg}</div>}
+                    <div className="grid grid-cols-1 landscape:grid-cols-3 gap-4 h-full">
+                        <div className="pos-card-3d delay-1"><label className="pos-label-giant"><Icon.Tag /> Prenda</label><input value={item} onChange={e => setItem(e.target.value)} className="pos-input-modern mb-4" placeholder="NOMBRE..." /><div className="pos-scroll-area">{ITEMS_COMMON.map(it => (<div key={it} className="btn-3d-wrapper"><button onClick={() => setItem(it)} className={`btn-3d w-full h-full ${item === it ? 'active-pink' : ''}`}>{it}</button></div>))}</div></div>
+                        <div className="pos-card-3d delay-2"><label className="pos-label-giant"><Icon.Hash /> Cantidad</label><input type="number" inputMode="numeric" pattern="[0-9]*" value={qty} onChange={e => setQty(parseInt(e.target.value) || '')} className="pos-input-modern mb-4" placeholder="#" /><div className="pos-scroll-area">{QTY_OPTIONS.map(q => (<div key={q} className="btn-3d-wrapper"><button onClick={() => setQty(q)} className={`btn-3d w-full h-full ${qty === q ? 'active-indigo' : ''}`}>{q}</button></div>))}</div></div>
+                        <div className="pos-card-3d delay-3"><label className="pos-label-giant"><Icon.Dollar /> Precio Unitario</label><input type="number" inputMode="decimal" step="0.01" value={price} onChange={e => setPrice(e.target.value)} className="pos-input-modern mb-4 text-emerald-600" placeholder="$0.00" /><div className="pos-scroll-area">{PRICE_OPTIONS.map(p => (<div key={p} className="btn-3d-wrapper"><button onClick={() => setPrice(p)} className={`btn-3d w-full h-full ${price === p ? 'active-emerald' : ''}`}>${p}</button></div>))}</div></div>
+                    </div>
+                </div>
+                <div className="p-4 bg-white border-t border-slate-200 z-20 pb-6 md:pb-4 rounded-t-[30px] shadow-[0_-10px_20px_rgba(0,0,0,0.05)]"><button onClick={handleSubmit} disabled={!found || !item || !price} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xl shadow-2xl disabled:opacity-50 touch-card active:scale-95 transition-all flex items-center justify-center gap-3 tracking-wide"><span>CONFIRMAR VENTA</span><div className="bg-white/20 p-1.5 rounded-full"><Icon.Check /></div></button></div>
+            </div>
+        );
+    };
+
+    const ClientsView = ({ logic }) => {
+        const [view, setView] = useState('list'); const [activeClient, setActiveClient] = useState(null); const [filter, setFilter] = useState(""); const [newName, setNewName] = useState(""); const [newPhone, setNewPhone] = useState(""); const [newAbono, setNewAbono] = useState(""); const [regDate, setRegDate] = useState(getToday()); const [manualId, setManualId] = useState("");
+        const handleRegister = () => { if (!newName) return; const res = logic.registerClient(newName, newPhone, newAbono, regDate, manualId); if(res) { setNewName(""); setNewPhone(""); setNewAbono(""); setManualId(""); setView('list'); } };
+        if (view === 'detail' && activeClient) { const clientData = logic.clients.find(c => c.id === activeClient.id) || activeClient; return <ClientDetailComponent key={clientData.id} activeClient={clientData} logic={logic} onBack={() => setView('list')} />; }
+        const filteredList = logic.clients.filter(c => c.name.toLowerCase().includes(filter.toLowerCase()) || c.id.toLowerCase().includes(filter.toLowerCase()));
+        return (
+            <div className="flex flex-col h-full pb-20 landscape:pb-0"><div className="p-4 bg-white sticky top-0 z-10 space-y-3 shadow-sm"><div className="flex gap-2"><div className="flex-1 bg-slate-100 rounded-xl flex items-center px-3"><Icon.Search /><input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Buscar cliente..." className="bg-transparent w-full p-3 outline-none" /></div><button onClick={() => setView(view === 'new' ? 'list' : 'new')} className="bg-slate-900 text-white w-12 rounded-xl font-bold text-xl">{view === 'new' ? '×' : '+'}</button></div>{view === 'new' && (<div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 animate-in slide-in-from-top duration-300"><h3 className="font-bold mb-3">Nuevo Registro</h3><div className="space-y-3"><input value={manualId} onChange={e => setManualId(e.target.value)} placeholder="ID Personalizado (Opcional)" className="w-full p-3 bg-indigo-50 border-indigo-100 border rounded-xl font-mono text-sm placeholder:text-indigo-300" /><input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nombre Completo" className="w-full p-3 bg-white rounded-xl border" /><input value={newPhone} onChange={e => setNewPhone(e.target.value)} placeholder="Celular" type="tel" className="w-full p-3 bg-white rounded-xl border" /><div className="flex gap-2"><input value={newAbono} onChange={e => setNewAbono(e.target.value)} placeholder="Abono ($)" type="number" inputMode="decimal" step="0.01" className="flex-1 p-3 bg-white rounded-xl border" /><div className="flex flex-col w-32 relative"><label className="text-[10px] uppercase font-bold text-slate-400">Fecha Reg</label><div className="relative w-full h-10"><input type="date" value={regDate} onChange={e => setRegDate(e.target.value)} className="input-overlay-trigger" /><div className="date-icon-overlay">📅</div></div></div></div><button onClick={handleRegister} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg">Guardar Cliente</button></div></div>)}</div><div className="flex-1 overflow-y-auto p-4 space-y-2 landscape:grid landscape:grid-cols-2 landscape:gap-4 landscape:content-start">{filteredList.map(c => { const status = logic.getClientStatus(c, logic.getClientCycle(c.id)); return (<div key={c.id} onClick={() => { setActiveClient(c); setView('detail'); }} className="bg-white p-4 rounded-2xl border border-slate-100 flex justify-between items-center touch-card shadow-sm h-full"><div><div className="font-bold text-slate-800">{c.name}</div><span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">{c.id}</span></div><div className={`px-2 py-1 rounded text-[10px] font-bold border ${status.color}`}>{status.label}</div></div>); })}</div></div>
+        );
+    };
+
+    const App = () => {
+        const [user, setUser] = useState(null);
+        const [loading, setLoading] = useState(true);
+        const [tab, setTab] = useState('live'); 
+
+        useEffect(() => {
+            if(window.fbAuth) {
+                window.fbAuth.onAuthStateChanged(window.auth, (u) => {
+                    setUser(u);
+                    setLoading(false);
+                });
+            } else {
+                 setTimeout(() => setLoading(false), 2000);
+            }
+        }, []);
+
+        const logic = useBusinessLogic(user);
+
+        if (loading) return <div className="h-screen flex items-center justify-center text-slate-400 font-bold">Cargando...</div>;
+        if (!user) return <LoginView onLogin={setUser} />;
+
+        return (
+            <div className="h-screen flex flex-col landscape:flex-row bg-[#f0f2f5] overflow-hidden font-sans">
+                <div className="flex-1 overflow-hidden relative order-1 landscape:order-2">{tab === 'live' && <LiveView logic={logic} />}{tab === 'warehouse' && <WarehouseView logic={logic} />}{tab === 'clients' && <ClientsView logic={logic} />}{tab === 'admin' && <AdminView logic={logic} onClose={() => setTab('live')} />}</div>
+                <div className="bg-white border-t landscape:border-t-0 landscape:border-r border-slate-200 px-6 py-2 pb-6 md:pb-2 flex landscape:flex-col justify-around items-center z-50 shadow-2xl order-2 landscape:order-1 landscape:w-24 landscape:py-4 landscape:h-full">
+                    <button onClick={() => setTab('live')} className={`flex flex-col items-center p-3 rounded-2xl transition-all duration-300 ${tab === 'live' ? 'text-pink-600 bg-pink-50 scale-110 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}><Icon.Zap /><span className="text-[10px] font-black mt-1 tracking-wider">LIVE</span></button>
+                    <button onClick={() => setTab('warehouse')} className={`flex flex-col items-center p-3 rounded-2xl transition-all duration-300 ${tab === 'warehouse' ? 'text-indigo-600 bg-indigo-50 scale-110 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}><Icon.Box /><span className="text-[10px] font-black mt-1 tracking-wider">BODEGA</span></button>
+                    <button onClick={() => setTab('clients')} className={`flex flex-col items-center p-3 rounded-2xl transition-all duration-300 ${tab === 'clients' ? 'text-emerald-600 bg-emerald-50 scale-110 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}><Icon.Users /><span className="text-[10px] font-black mt-1 tracking-wider">CLIENTES</span></button>
+                    <button onClick={() => setTab('admin')} className={`flex flex-col items-center p-3 rounded-2xl transition-all duration-300 ${tab === 'admin' ? 'text-slate-800 bg-slate-100 scale-110 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}><Icon.Chart /><span className="text-[10px] font-black mt-1 tracking-wider">GERENCIA</span></button>
+                </div>
+            </div>
+        );
+    };
+
+    window.initReactApp = () => {
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    };
+
+    if(window.firebaseLoaded) window.initReactApp();
+
+</script>
+</body>
+</html>
