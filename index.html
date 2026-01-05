@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Adelita Store System v6.4 (Fixed Scroll & Navigation)</title>
+    <title>Adelita Store System v6.5 (Stable Rescue)</title>
     
     <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
@@ -35,13 +35,12 @@
         const db = getFirestore(app);
         const auth = getAuth(app);
 
-        enableIndexedDbPersistence(db).catch((err) => {
-            if (err.code == 'failed-precondition') {
-                console.log('Múltiples pestañas abiertas, persistencia solo en una.');
-            } else if (err.code == 'unimplemented') {
-                console.log('El navegador no soporta persistencia.');
-            }
-        });
+        // Intento de persistencia (puede fallar en pestañas múltiples, no es crítico)
+        try {
+            enableIndexedDbPersistence(db).catch((err) => {
+                console.log('Persistencia no habilitada (probablemente modo incógnito o múltiples pestañas)');
+            });
+        } catch(e) { console.log(e); }
 
         window.db = db;
         window.auth = auth;
@@ -58,7 +57,7 @@
             background-color: #f0f2f5;
             font-family: 'Montserrat', sans-serif;
             margin: 0; padding: 0;
-            overflow: hidden; /* Evitar doble scroll en body */
+            overflow: hidden; /* Evitar doble scroll en body principal */
         }
         
         .adelita-bg { background: linear-gradient(135deg, #fce7f3 0%, #e0e7ff 100%); }
@@ -143,7 +142,7 @@
             --shadow-deep: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
         }
 
-        /* --- CLASE MAESTRA DEL OVERLAY (SOLUCIÓN SCROLL) --- */
+        /* --- CLASE MAESTRA DEL OVERLAY (SOLUCIÓN SCROLL DEFINITIVA) --- */
         .modal-overlay-scroll {
             position: fixed; 
             top: 0; 
@@ -153,13 +152,21 @@
             z-index: 5000; 
             background: var(--bg-body-invoice);
             backdrop-filter: blur(5px);
-            overflow-y: scroll; /* Scroll obligatorio */
-            -webkit-overflow-scrolling: touch; /* Suavidad en iOS */
-            padding-top: 20px;
-            padding-bottom: 150px; /* Espacio extra abajo para que no se corte */
+            overflow-y: auto !important; /* FORZAR SCROLL */
+            -webkit-overflow-scrolling: touch;
+            padding: 20px 0; /* Padding vertical para scroll */
+            display: block; /* Importante para que el scroll funcione bien en móvil */
+        }
+
+        /* Wrapper interno para centrar el contenido en el modal con scroll */
+        .modal-scroll-inner {
             display: flex;
             flex-direction: column;
             align-items: center;
+            justify-content: flex-start;
+            min-height: 100%;
+            width: 100%;
+            padding-bottom: 120px; /* Espacio para que el botón flotante no tape el final */
         }
 
         /* Panel de controles flotante */
@@ -173,14 +180,14 @@
             border: 2px solid rgba(255,255,255,0.3); color: white; font-size: 22px;
             cursor: pointer; box-shadow: 0 8px 16px rgba(0,0,0,0.4);
             transition: transform 0.2s; display: flex; align-items: center; justify-content: center;
-            background-color: #333; pointer-events: auto; /* Asegurar click */
+            background-color: #333; pointer-events: auto;
         }
         .btn-float:active { transform: scale(0.95); }
         
         .btn-add { background: linear-gradient(45deg, #11998e, #38ef7d); }
         .btn-photo { background: linear-gradient(45deg, #FF416C, #FF4B2B); }
         .btn-print { background: linear-gradient(45deg, #3a7bd5, #3a6073); } 
-        /* Botón cerrar fijo en pantalla, no en el flujo del documento */
+        
         .btn-close-fixed { 
             background: linear-gradient(45deg, #2c3e50, #4ca1af); 
             position: fixed; top: 20px; right: 20px; z-index: 5002; 
@@ -188,6 +195,7 @@
             border-radius: 50%; color: white; border: 2px solid white;
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
             display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
         }
 
         #receipt-wide {
@@ -195,9 +203,9 @@
             background-color: var(--paper);
             box-shadow: var(--shadow-deep); 
             position: relative; overflow: hidden; border-radius: 12px;
-            margin-top: 40px; 
+            margin-top: 60px; /* Margen superior para no chocar con boton cerrar */
             transform-origin: top center;
-            flex-shrink: 0; /* No encoger */
+            flex-shrink: 0; 
         }
 
         .top-accent-bar { height: 12px; background: linear-gradient(90deg, #ff9a9e 0%, #fad0c4 99%, #fad0c4 100%); width: 100%; }
@@ -310,8 +318,8 @@
             .controls-panel, .btn-close-fixed, .delete-btn, .no-print { 
                 display: none !important; /* Esconder botones */
             }
-            #receipt-wide {
-                box-shadow: none; margin: 0; width: 100%; max-width: 100%;
+            #receipt-wide, .printable-modal {
+                box-shadow: none; margin: 0; width: 100% !important; max-width: 100% !important;
                 border: none; transform: none;
             }
         }
@@ -326,8 +334,13 @@
 </div>
 
 <script>
-    window.onerror = function() {
-        console.error("Error detectado, intentando recuperar...");
+    window.onerror = function(msg, url, line) {
+        console.error("Error global detectado: " + msg);
+        // Si hay error crítico, intentamos no bloquear la pantalla en blanco
+        const root = document.getElementById('root');
+        if(root && root.innerHTML === "") {
+            root.innerHTML = '<div style="padding:20px; text-align:center;"><h3>Se ha producido un error</h3><button onclick="location.reload()" style="padding:10px; background:#333; color:white; border-radius:8px;">Recargar</button></div>';
+        }
     };
 </script>
 
@@ -344,7 +357,7 @@
         Chart: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>,
         Download: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>,
         FileText: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
-        Printer: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>,
+        Printer: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>,
         Info: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
         Close: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
         Message: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>,
@@ -416,31 +429,12 @@
         document.body.appendChild(link); link.click(); document.body.removeChild(link);
     };
 
-    const generatePDF = (reportData, groupBy, metrics) => {
-        if (!window.jspdf) { alert("Cargando motor PDF..."); return; }
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
-        
-        doc.setFontSize(20); doc.text("Reporte Adelita Store", 14, 20);
-        doc.setFontSize(10); doc.text(`Generado: ${new Date().toLocaleDateString()}`, 14, 26);
-        doc.text(`Filtro: ${groupBy.toUpperCase()}`, 14, 31);
-
-        if (metrics) doc.autoTable({ startY: 35, head: [['Ingresos', 'Gastos', 'Utilidad']], body: [[formatMoney(metrics.totalIncome), formatMoney(metrics.totalExpenses), formatMoney(metrics.profit)]], theme: 'grid' });
-        
-        doc.text("Detalle Ventas", 14, doc.lastAutoTable.finalY + 10);
-        let rows = [];
-        Object.entries(reportData.groups).forEach(([key, data]) => {
-            rows.push([key.toUpperCase(), '', '', '']); 
-            data.items.forEach(item => rows.push(['', item.clientId, item.item, formatMoney(item.value)]));
-            rows.push(['TOTAL ' + key, '', '', formatMoney(data.total)]);
-        });
-        doc.autoTable({ startY: doc.lastAutoTable.finalY + 12, head: [['Fecha', 'Cliente', 'Prenda', 'Valor']], body: rows });
-        doc.save(`Adelita_Reporte_${getToday()}.pdf`);
-    };
-
     // --- NUEVO COMPONENTE DE FACTURA 3D ULTIMATE ---
     const Invoice3DModal = ({ client, cycle, onClose }) => {
         const [items, setItems] = useState([]);
+
+        // PROTECCIÓN CONTRA PANTALLA BLANCA
+        if (!client || !cycle) return null;
 
         // LÓGICA DE AGRUPACIÓN INTELIGENTE
         useEffect(() => {
@@ -499,229 +493,70 @@
                     <button className="btn-float btn-print" onClick={handleNativeShare} title="PDF / Compartir / Imprimir"><i className="fas fa-file-pdf"></i></button>
                 </div>
 
-                <div id="receipt-wide">
-                    <div className="top-accent-bar"></div>
-                    <div className="header-wide">
-                        <div className="brand-section">
-                            <h1 contentEditable="true" suppressContentEditableWarning={true}>Adelita Store</h1>
-                            <span>PRENDITAS CON AMOR & ESTILO</span>
-                        </div>
-                        <div className="date-badge">
-                            <div className="label" style={{justifyContent: 'flex-end'}}>FECHA EMISIÓN</div>
-                            <div contentEditable="true" suppressContentEditableWarning={true} id="fecha-hoy" style={{fontWeight:'bold', fontSize: '16px', color:'#444'}}>{new Date().toLocaleDateString('es-ES')}</div>
-                            <div className="label" style={{justifyContent: 'flex-end', marginTop:'5px'}}>N° RECIBO</div>
-                            <div contentEditable="true" suppressContentEditableWarning={true} style={{fontWeight:'bold', color:'#b224ef'}}>#{Math.floor(Math.random() * 10000).toString().padStart(5, '0')}</div>
-                        </div>
-                    </div>
-                    <div className="info-container">
-                        <div className="info-card card-client">
-                            <span className="label"><i className="fas fa-user-circle"></i> CLIENTE VIP</span>
-                            <div className="input-text" contentEditable="true" suppressContentEditableWarning={true}>{client.name} <span style={{fontWeight:'bold', color:'#b224ef'}}>({client.id})</span></div>
-                        </div>
-                        <div className="info-card card-lives">
-                            <span className="label" style={{color:'#ff0050'}}><i className="fab fa-tiktok"></i> ACUMULADO / LIVES</span>
-                            <div className="input-text" contentEditable="true" suppressContentEditableWarning={true} style={{color: '#c41e3a'}}>{cycle.itemsCount} Prendas Acumuladas</div>
-                        </div>
-                    </div>
-                    <div className="grid-header"><div>#</div><div>DESCRIPCIÓN DE PRENDA</div><div>UNITARIO</div><div>TOTAL</div></div>
-                    <div className="items-wrapper" id="lista-productos">
-                        {items.map((item, idx) => (
-                            <div className="item-row" key={idx}>
-                                <i className="fas fa-trash delete-btn" onClick={() => removeItem(idx)} data-html2canvas-ignore="true"></i>
-                                <div className="col-qty" contentEditable="true" suppressContentEditableWarning={true}>{item.qty}</div>
-                                <div className="col-desc" contentEditable="true" suppressContentEditableWarning={true}>{item.desc}</div>
-                                <div className="col-unit" contentEditable="true" suppressContentEditableWarning={true}>${Number(item.unit).toFixed(2)}</div>
-                                <div className="col-total" contentEditable="true" suppressContentEditableWarning={true}>${Number(item.total).toFixed(2)}</div>
+                <div className="modal-scroll-inner">
+                    <div id="receipt-wide">
+                        <div className="top-accent-bar"></div>
+                        <div className="header-wide">
+                            <div className="brand-section">
+                                <h1 contentEditable="true" suppressContentEditableWarning={true}>Adelita Store</h1>
+                                <span>PRENDITAS CON AMOR & ESTILO</span>
                             </div>
-                        ))}
-                    </div>
-                    <div className="shipping-section-3d">
-                        <div className="shipping-inner">
-                            <div style={{display:'flex', alignItems:'center'}}>
-                                <div className="shipping-icon-box"><i className="fas fa-truck-fast"></i></div>
-                                <div><div className="label" style={{color:'#2196f3', margin:0}}>LOGÍSTICA</div><div contentEditable="true" suppressContentEditableWarning={true} style={{fontWeight:600, fontSize:'14px'}}>{client.deliveryMethod ? client.deliveryMethod : 'Por Coordinar'}</div></div>
-                            </div>
-                            <div className="shipping-price-tag" contentEditable="true" suppressContentEditableWarning={true}>${client.shippingCost ? client.shippingCost.toFixed(2) : '0.00'}</div>
-                        </div>
-                    </div>
-                    <div className="footer-area">
-                        <div className="divider-graphic"></div>
-                        <div className="totals-flex">
-                            <div className="totals-card">
-                                <div className="total-row"><span>Subtotal Prendas</span><span contentEditable="true" suppressContentEditableWarning={true}>${cycle.totalSales.toFixed(2)}</span></div>
-                                <div className="total-row"><span>Descuento / Promo</span><span contentEditable="true" suppressContentEditableWarning={true} style={{color:'#27ae60'}}>-$0.00</span></div>
-                                <div className="total-row"><span>Abono Previo</span><span contentEditable="true" suppressContentEditableWarning={true} style={{color:'#e74c3c'}}>-${cycle.totalNormalPaid.toFixed(2)}</span></div>
-                                <div className="final-total"><span className="final-label">TOTAL A PAGAR</span><span className="final-amount" contentEditable="true" suppressContentEditableWarning={true}>${ (cycle.totalSales - cycle.totalNormalPaid + (Math.max(0, (client.shippingCost || 0) - cycle.totalShippingPaid))).toFixed(2) }</span></div>
+                            <div className="date-badge">
+                                <div className="label" style={{justifyContent: 'flex-end'}}>FECHA EMISIÓN</div>
+                                <div contentEditable="true" suppressContentEditableWarning={true} id="fecha-hoy" style={{fontWeight:'bold', fontSize: '16px', color:'#444'}}>{new Date().toLocaleDateString('es-ES')}</div>
+                                <div className="label" style={{justifyContent: 'flex-end', marginTop:'5px'}}>N° RECIBO</div>
+                                <div contentEditable="true" suppressContentEditableWarning={true} style={{fontWeight:'bold', color:'#b224ef'}}>#{Math.floor(Math.random() * 10000).toString().padStart(5, '0')}</div>
                             </div>
                         </div>
-                    </div>
-                    <div className="bank-footer">
-                        <div className="bank-info"><strong>TRANSFERENCIA BANCARIA</strong>Banco Pichincha • Cta Ahorros</div>
-                        <div className="bank-info" style={{textAlign: 'right'}}><strong>2205804691</strong>Katherine Vallejos</div>
+                        <div className="info-container">
+                            <div className="info-card card-client">
+                                <span className="label"><i className="fas fa-user-circle"></i> CLIENTE VIP</span>
+                                <div className="input-text" contentEditable="true" suppressContentEditableWarning={true}>{client.name} <span style={{fontWeight:'bold', color:'#b224ef'}}>({client.id})</span></div>
+                            </div>
+                            <div className="info-card card-lives">
+                                <span className="label" style={{color:'#ff0050'}}><i className="fab fa-tiktok"></i> ACUMULADO / LIVES</span>
+                                <div className="input-text" contentEditable="true" suppressContentEditableWarning={true} style={{color: '#c41e3a'}}>{cycle.itemsCount} Prendas Acumuladas</div>
+                            </div>
+                        </div>
+                        <div className="grid-header"><div>#</div><div>DESCRIPCIÓN DE PRENDA</div><div>UNITARIO</div><div>TOTAL</div></div>
+                        <div className="items-wrapper" id="lista-productos">
+                            {items.map((item, idx) => (
+                                <div className="item-row" key={idx}>
+                                    <i className="fas fa-trash delete-btn" onClick={() => removeItem(idx)} data-html2canvas-ignore="true"></i>
+                                    <div className="col-qty" contentEditable="true" suppressContentEditableWarning={true}>{item.qty}</div>
+                                    <div className="col-desc" contentEditable="true" suppressContentEditableWarning={true}>{item.desc}</div>
+                                    <div className="col-unit" contentEditable="true" suppressContentEditableWarning={true}>${Number(item.unit).toFixed(2)}</div>
+                                    <div className="col-total" contentEditable="true" suppressContentEditableWarning={true}>${Number(item.total).toFixed(2)}</div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="shipping-section-3d">
+                            <div className="shipping-inner">
+                                <div style={{display:'flex', alignItems:'center'}}>
+                                    <div className="shipping-icon-box"><i className="fas fa-truck-fast"></i></div>
+                                    <div><div className="label" style={{color:'#2196f3', margin:0}}>LOGÍSTICA</div><div contentEditable="true" suppressContentEditableWarning={true} style={{fontWeight:600, fontSize:'14px'}}>{client.deliveryMethod ? client.deliveryMethod : 'Por Coordinar'}</div></div>
+                                </div>
+                                <div className="shipping-price-tag" contentEditable="true" suppressContentEditableWarning={true}>${client.shippingCost ? client.shippingCost.toFixed(2) : '0.00'}</div>
+                            </div>
+                        </div>
+                        <div className="footer-area">
+                            <div className="divider-graphic"></div>
+                            <div className="totals-flex">
+                                <div className="totals-card">
+                                    <div className="total-row"><span>Subtotal Prendas</span><span contentEditable="true" suppressContentEditableWarning={true}>${cycle.totalSales.toFixed(2)}</span></div>
+                                    <div className="total-row"><span>Descuento / Promo</span><span contentEditable="true" suppressContentEditableWarning={true} style={{color:'#27ae60'}}>-$0.00</span></div>
+                                    <div className="total-row"><span>Abono Previo</span><span contentEditable="true" suppressContentEditableWarning={true} style={{color:'#e74c3c'}}>-${cycle.totalNormalPaid.toFixed(2)}</span></div>
+                                    <div className="final-total"><span className="final-label">TOTAL A PAGAR</span><span className="final-amount" contentEditable="true" suppressContentEditableWarning={true}>${ (cycle.totalSales - cycle.totalNormalPaid + (Math.max(0, (client.shippingCost || 0) - cycle.totalShippingPaid))).toFixed(2) }</span></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bank-footer">
+                            <div className="bank-info"><strong>TRANSFERENCIA BANCARIA</strong>Banco Pichincha • Cta Ahorros</div>
+                            <div className="bank-info" style={{textAlign: 'right'}}><strong>2205804691</strong>Katherine Vallejos</div>
+                        </div>
                     </div>
                 </div>
             </div>
-        );
-    };
-
-    // --- LÓGICA DE NEGOCIO (CONECTADA A FIREBASE) ---
-    const useBusinessLogic = (user) => {
-        const [clients, setClients] = useState([]);
-        const [sales, setSales] = useState([]);
-        const [payments, setPayments] = useState([]);
-        const [shipments, setShipments] = useState([]);
-        const [expenses, setExpenses] = useState([]);
-
-        // Listeners en Tiempo Real (Firebase)
-        useEffect(() => {
-            if (!user) return;
-            const { onSnapshot, collection } = window.fs;
-            const db = window.db;
-
-            const unsubClients = onSnapshot(collection(db, 'clients'), (snap) => {
-                setClients(snap.docs.map(d => ({...d.data(), fireId: d.id})));
-            });
-            const unsubSales = onSnapshot(collection(db, 'sales'), (snap) => {
-                setSales(snap.docs.map(d => ({...d.data(), fireId: d.id})));
-            });
-            const unsubPayments = onSnapshot(collection(db, 'payments'), (snap) => {
-                setPayments(snap.docs.map(d => ({...d.data(), fireId: d.id})));
-            });
-            const unsubShipments = onSnapshot(collection(db, 'shipments'), (snap) => {
-                setShipments(snap.docs.map(d => ({...d.data(), fireId: d.id})));
-            });
-            const unsubExpenses = onSnapshot(collection(db, 'expenses'), (snap) => {
-                setExpenses(snap.docs.map(d => ({...d.data(), fireId: d.id})));
-            });
-
-            return () => {
-                unsubClients(); unsubSales(); unsubPayments(); unsubShipments(); unsubExpenses();
-            };
-        }, [user]);
-
-        const addPayment = (clientId, amount, detail, date) => {
-             window.fs.addDoc(window.fs.collection(window.db, 'payments'), { id: Date.now() + Math.random(), clientId, amount: parseFloat(amount), date, detail });
-        };
-        const addSale = (clientId, item, value, date) => {
-            window.fs.addDoc(window.fs.collection(window.db, 'sales'), { id: Date.now() + Math.random(), clientId, item, value: parseFloat(value), date });
-        };
-        const addBatchSales = (clientId, item, value, date, quantity) => {
-            const timestamp = Date.now();
-            for(let i=0; i < quantity; i++) { 
-                window.fs.addDoc(window.fs.collection(window.db, 'sales'), { id: timestamp + i + Math.random(), clientId, item, value: parseFloat(value), date });
-            }
-        };
-        const addExpense = (detail, amount, dateStr) => {
-            window.fs.addDoc(window.fs.collection(window.db, 'expenses'), { id: Date.now(), detail, amount: parseFloat(amount), date: safeISO(dateStr) });
-        };
-
-        const updateClientLocal = (clientId, updates) => {
-            const clientDoc = clients.find(c => c.id === clientId);
-            if (clientDoc && clientDoc.fireId) {
-                const docRef = window.fs.doc(window.db, "clients", clientDoc.fireId);
-                window.fs.updateDoc(docRef, updates);
-            }
-        };
-
-        const deleteClient = async (clientId) => {
-            const clientDoc = clients.find(c => c.id === clientId);
-            if(clientDoc && clientDoc.fireId) {
-                await window.fs.deleteDoc(window.fs.doc(window.db, "clients", clientDoc.fireId));
-            }
-        };
-
-        const deleteSale = async (saleFireId) => {
-            if(saleFireId) {
-                await window.fs.deleteDoc(window.fs.doc(window.db, "sales", saleFireId));
-            }
-        };
-
-        const getClientCycle = (clientId) => {
-            const clientShipments = shipments.filter(s => s.clientId === clientId).sort((a, b) => new Date(safeISO(b.date)) - new Date(safeISO(a.date)));
-            const lastShipmentDate = clientShipments.length > 0 ? new Date(safeISO(clientShipments[0].date)) : new Date(0);
-            const cycleSales = sales.filter(s => s.clientId === clientId && new Date(safeISO(s.date)) > lastShipmentDate);
-            const cyclePayments = payments.filter(p => p.clientId === clientId && new Date(safeISO(p.date)) > lastShipmentDate);
-            const allSales = sales.filter(s => s.clientId === clientId);
-            const allPayments = payments.filter(p => p.clientId === clientId);
-            const shippingPayments = cyclePayments.filter(p => p.detail && p.detail.includes("Pago Envío"));
-            const normalPayments = cyclePayments.filter(p => !p.detail || !p.detail.includes("Pago Envío"));
-            const totalSales = cycleSales.reduce((acc, s) => acc + s.value, 0);
-            const totalNormalPaid = normalPayments.reduce((acc, p) => acc + p.amount, 0);
-            const totalShippingPaid = shippingPayments.reduce((acc, p) => acc + p.amount, 0);
-            const clothingBalance = totalNormalPaid - totalSales; 
-            return { clothingBalance, totalSales, totalNormalPaid, totalShippingPaid, itemsCount: cycleSales.length, lastShipmentDate, cycleSales, cyclePayments, allSales, allPayments };
-        };
-
-        const getClientStatus = (client, cycleData) => {
-            const { clothingBalance, totalShippingPaid } = cycleData;
-            const shippingCost = client.shippingCost || 0;
-            const shippingBalance = totalShippingPaid - shippingCost;
-            if (clothingBalance < -0.01 && !client.forceAccumulate) return { code: 'DEBT', label: 'DEBE ROPA', color: 'bg-red-100 text-red-700 border-red-200' };
-            if (client.confirmShipping) {
-                if (shippingBalance >= -0.01) return { code: 'READY', label: 'LISTO ENVÍO', color: 'bg-indigo-600 text-white animate-pulse' };
-                else return { code: 'MISSING', label: 'FALTA PAGO ENVÍO', color: 'bg-orange-100 text-orange-700 border-orange-200' };
-            }
-            if (clothingBalance < 0 && client.forceAccumulate) return { code: 'ACC_AUTH', label: 'ACUMULANDO (AUT)', color: 'bg-amber-100 text-amber-700 border-amber-200' };
-            return { code: 'ACC_PAID', label: 'ACUMULANDO', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
-        };
-
-        const registerClient = (name, phone, initialAbono, dateStr, manualId) => {
-            if (manualId && clients.some(c => c.id.toLowerCase() === manualId.toLowerCase())) { alert("ID ya existe"); return null; }
-            const newId = manualId ? manualId.toUpperCase() : generateSmartID(name, clients.length);
-            const dateISO = safeISO(dateStr);
-            window.fs.addDoc(window.fs.collection(window.db, 'clients'), { id: newId, name, phone, registeredAt: dateISO, shippingCost: 0, deliveryMethod: '', confirmShipping: false, forceAccumulate: false });
-            if (initialAbono > 0) addPayment(newId, initialAbono, 'Abono Inicial', dateISO);
-            return newId;
-        };
-
-        const registerShipment = (clientId, guide, company, date) => {
-             window.fs.addDoc(window.fs.collection(window.db, 'shipments'), { id: Date.now() + 500, clientId, guide, company, date });
-        };
-
-        return { clients, sales, payments, shipments, expenses, setClients: updateClientLocal, getClientCycle, getClientStatus, registerClient, addSale, addBatchSales, addPayment, addExpense, registerShipment, deleteClient, deleteSale };
-    };
-
-    // --- COMPONENTES UI ---
-
-    const LoginView = ({ onLogin }) => {
-        const [email, setEmail] = useState("");
-        const [pass, setPass] = useState("");
-        const [error, setError] = useState("");
-
-        const handleLogin = (e) => {
-            e.preventDefault();
-            setError("");
-            window.fbAuth.signInWithEmailAndPassword(window.auth, email, pass)
-                .then(userCred => onLogin(userCred.user))
-                .catch(err => setError("Credenciales incorrectas"));
-        };
-
-        return (
-             <div className="fixed inset-0 z-[1000] bg-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-br from-pink-500 to-indigo-600 rounded-b-[50px] z-0"></div>
-                <div className="z-10 w-full max-w-sm">
-                    <div className="bg-white p-8 rounded-3xl shadow-2xl space-y-6">
-                        <div className="text-center">
-                            <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-indigo-600 tracking-tighter">ADELITA STORE</h1>
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Sistema Cloud v6.4</p>
-                        </div>
-                        <form onSubmit={handleLogin} className="space-y-4">
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-slate-400 uppercase ml-1">Usuario</label>
-                                <input type="email" value={email} onChange={e=>setEmail(e.target.value)} className="pos-input-modern text-lg" placeholder="correo@ejemplo.com" required />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-slate-400 uppercase ml-1">Contraseña</label>
-                                <input type="password" value={pass} onChange={e=>setPass(e.target.value)} className="pos-input-modern text-lg" placeholder="••••••" required />
-                            </div>
-                            {error && <div className="text-red-500 text-xs font-bold text-center bg-red-50 p-2 rounded-lg">{error}</div>}
-                            <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-lg shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2">
-                                <Icon.Lock /> ENTRAR AL SISTEMA
-                            </button>
-                        </form>
-                    </div>
-                </div>
-             </div>
         );
     };
 
@@ -751,44 +586,46 @@
                     <button className="btn-float btn-print" onClick={handleNativeShare} title="PDF / Compartir / Imprimir"><i className="fas fa-file-pdf"></i></button>
                 </div>
 
-                <div className="p-8 max-w-5xl mx-auto w-full bg-white rounded-3xl shadow-xl min-h-[90vh] printable-modal" id="printable-area">
-                    <div className="text-center border-b-2 border-slate-900 pb-6 mb-8">
-                        <h1 className="text-2xl md:text-4xl font-extrabold text-slate-900 tracking-tight">Reporte ADELITA STORE</h1>
-                        <p className="text-slate-500 mt-2 font-medium text-xs md:text-sm">Agrupado por: {groupBy.toUpperCase()} | Fecha: {new Date().toLocaleDateString()}</p>
-                        <div className="flex justify-center gap-2 mt-4 no-print">
-                            {['live', 'week', 'month', 'year'].map(mode => (<button key={mode} onClick={() => setGroupBy(mode)} className={`px-3 py-1 rounded-full text-xs font-bold ${groupBy === mode ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{mode.toUpperCase()}</button>))}
+                <div className="modal-scroll-inner">
+                    <div className="p-8 max-w-5xl mx-auto w-full bg-white rounded-3xl shadow-xl min-h-[90vh] printable-modal" id="printable-area">
+                        <div className="text-center border-b-2 border-slate-900 pb-6 mb-8">
+                            <h1 className="text-2xl md:text-4xl font-extrabold text-slate-900 tracking-tight">Reporte ADELITA STORE</h1>
+                            <p className="text-slate-500 mt-2 font-medium text-xs md:text-sm">Agrupado por: {groupBy.toUpperCase()} | Fecha: {new Date().toLocaleDateString()}</p>
+                            <div className="flex justify-center gap-2 mt-4 no-print">
+                                {['live', 'week', 'month', 'year'].map(mode => (<button key={mode} onClick={() => setGroupBy(mode)} className={`px-3 py-1 rounded-full text-xs font-bold ${groupBy === mode ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{mode.toUpperCase()}</button>))}
+                            </div>
                         </div>
-                    </div>
 
-                    <div className="grid grid-cols-3 gap-6 mb-10">
-                        <div className="p-4 bg-slate-50 rounded-xl text-center border"><div className="text-xs text-slate-400 uppercase font-bold">Ingresos</div><div className="text-xl font-bold text-emerald-600">{formatMoney(metrics.totalIncome)}</div></div>
-                        <div className="p-4 bg-slate-50 rounded-xl text-center border"><div className="text-xs text-slate-400 uppercase font-bold">Gastos</div><div className="text-xl font-bold text-red-500">{formatMoney(metrics.totalExpenses)}</div></div>
-                        <div className="p-4 bg-slate-50 rounded-xl text-center border"><div className="text-xs text-slate-400 uppercase font-bold">Utilidad</div><div className="text-xl font-bold text-indigo-900">{formatMoney(metrics.profit)}</div></div>
-                    </div>
+                        <div className="grid grid-cols-3 gap-6 mb-10">
+                            <div className="p-4 bg-slate-50 rounded-xl text-center border"><div className="text-xs text-slate-400 uppercase font-bold">Ingresos</div><div className="text-xl font-bold text-emerald-600">{formatMoney(metrics.totalIncome)}</div></div>
+                            <div className="p-4 bg-slate-50 rounded-xl text-center border"><div className="text-xs text-slate-400 uppercase font-bold">Gastos</div><div className="text-xl font-bold text-red-500">{formatMoney(metrics.totalExpenses)}</div></div>
+                            <div className="p-4 bg-slate-50 rounded-xl text-center border"><div className="text-xs text-slate-400 uppercase font-bold">Utilidad</div><div className="text-xl font-bold text-indigo-900">{formatMoney(metrics.profit)}</div></div>
+                        </div>
 
-                    <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-4 flex items-center gap-2"><Icon.Chart /> Ventas</h3>
-                    <div className="space-y-4 mb-12">
-                        {Object.entries(reportData.groups).sort((a,b) => b[1].total - a[1].total).map(([key, data]) => (
-                            <details key={key} className="group bg-white border border-slate-200 rounded-xl overflow-hidden print:border-none print:break-inside-avoid" open>
-                                <summary className="flex justify-between items-center p-3 md:p-4 bg-slate-50 cursor-pointer hover:bg-slate-100 font-bold list-none text-sm md:text-base">
-                                    <div className="flex items-center gap-2"><span className="text-indigo-600 group-open:rotate-90 transition-transform no-print">▶</span><span>{capitalizeFirst(key)}</span><span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-normal">{data.items.length} items</span></div>
-                                    <span className="text-emerald-700 text-lg">{formatMoney(data.total)}</span>
-                                </summary>
-                                <div className="p-4 bg-white border-t border-slate-100 text-xs md:text-sm">
-                                    <table className="w-full">
-                                        <thead className="text-xs text-slate-400 uppercase text-left"><tr><th>Cliente</th><th>Prenda</th><th className="text-right">Valor</th></tr></thead>
-                                        <tbody className="divide-y divide-slate-50">
-                                            {data.items.map((sale, i) => (<tr key={i} className="hover:bg-slate-50"><td className="py-2 font-mono text-[10px] md:text-xs text-slate-500">{sale.clientId}</td><td className="py-2">{sale.item}</td><td className="py-2 text-right">{formatMoney(sale.value)}</td></tr>))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </details>
-                        ))}
-                    </div>
+                        <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-4 flex items-center gap-2"><Icon.Chart /> Ventas</h3>
+                        <div className="space-y-4 mb-12">
+                            {Object.entries(reportData.groups).sort((a,b) => b[1].total - a[1].total).map(([key, data]) => (
+                                <details key={key} className="group bg-white border border-slate-200 rounded-xl overflow-hidden print:border-none print:break-inside-avoid" open>
+                                    <summary className="flex justify-between items-center p-3 md:p-4 bg-slate-50 cursor-pointer hover:bg-slate-100 font-bold list-none text-sm md:text-base">
+                                        <div className="flex items-center gap-2"><span className="text-indigo-600 group-open:rotate-90 transition-transform no-print">▶</span><span>{capitalizeFirst(key)}</span><span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-normal">{data.items.length} items</span></div>
+                                        <span className="text-emerald-700 text-lg">{formatMoney(data.total)}</span>
+                                    </summary>
+                                    <div className="p-4 bg-white border-t border-slate-100 text-xs md:text-sm">
+                                        <table className="w-full">
+                                            <thead className="text-xs text-slate-400 uppercase text-left"><tr><th>Cliente</th><th>Prenda</th><th className="text-right">Valor</th></tr></thead>
+                                            <tbody className="divide-y divide-slate-50">
+                                                {data.items.map((sale, i) => (<tr key={i} className="hover:bg-slate-50"><td className="py-2 font-mono text-[10px] md:text-xs text-slate-500">{sale.clientId}</td><td className="py-2">{sale.item}</td><td className="py-2 text-right">{formatMoney(sale.value)}</td></tr>))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </details>
+                            ))}
+                        </div>
 
-                    <div className="break-inside-avoid page-break-before">
-                        <h3 className="text-lg md:text-xl font-bold text-red-700 mb-4 flex items-center gap-2 border-b-2 border-red-100 pb-2"><Icon.Alert /> Cuentas por Cobrar</h3>
-                        {reportData.debtors.length === 0 ? <p className="text-slate-400 italic">No hay deudores activos.</p> : (<table className="w-full text-left text-xs md:text-sm bg-red-50/30 rounded-xl overflow-hidden"><thead className="bg-red-100 text-red-800 uppercase text-[10px]"><tr><th className="p-3">Cliente</th><th className="p-3">Teléfono</th><th className="p-3 text-right">Deuda</th></tr></thead><tbody className="divide-y divide-red-100">{reportData.debtors.map(d => (<tr key={d.id}><td className="p-3 font-bold text-slate-700">{d.name}</td><td className="p-3 text-slate-500">{d.phone}</td><td className="p-3 text-right font-bold text-red-600">{formatMoney(d.balance)}</td></tr>))}</tbody></table>)}
+                        <div className="break-inside-avoid page-break-before">
+                            <h3 className="text-lg md:text-xl font-bold text-red-700 mb-4 flex items-center gap-2 border-b-2 border-red-100 pb-2"><Icon.Alert /> Cuentas por Cobrar</h3>
+                            {reportData.debtors.length === 0 ? <p className="text-slate-400 italic">No hay deudores activos.</p> : (<table className="w-full text-left text-xs md:text-sm bg-red-50/30 rounded-xl overflow-hidden"><thead className="bg-red-100 text-red-800 uppercase text-[10px]"><tr><th className="p-3">Cliente</th><th className="p-3">Teléfono</th><th className="p-3 text-right">Deuda</th></tr></thead><tbody className="divide-y divide-red-100">{reportData.debtors.map(d => (<tr key={d.id}><td className="p-3 font-bold text-slate-700">{d.name}</td><td className="p-3 text-slate-500">{d.phone}</td><td className="p-3 text-right font-bold text-red-600">{formatMoney(d.balance)}</td></tr>))}</tbody></table>)}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -991,6 +828,70 @@
         );
     };
 
+    const WarehouseView = ({ logic }) => {
+        const [guide, setGuide] = useState(""); const [dispatchDate, setDispatchDate] = useState(getToday()); const [selectedClient, setSelectedClient] = useState(null);
+        const readyClients = logic.clients.map(c => ({...c, cycle: logic.getClientCycle(c.id)})).map(c => ({...c, status: logic.getClientStatus(c, c.cycle)})).filter(c => c.status.code === 'READY');
+        const handleDispatch = () => {
+            if (!guide) return alert("Falta Guía");
+            const finalDate = smartDate(dispatchDate, logic.getClientCycle(selectedClient.id).lastShipmentDate);
+            const cycle = logic.getClientCycle(selectedClient.id); const clothingBalance = cycle.clothingBalance; const shippingBalance = cycle.totalShippingPaid - (selectedClient.shippingCost || 0);
+            if(selectedClient.shippingCost > 0) logic.addSale(selectedClient.id, `Envío (${selectedClient.deliveryMethod})`, selectedClient.shippingCost, new Date(new Date(finalDate).getTime() - 2000).toISOString());
+            if (clothingBalance > 0.01) logic.addPayment(selectedClient.id, clothingBalance, "Saldo a Favor Ropa (Arrastre)", new Date(new Date(finalDate).getTime() + 1000).toISOString());
+            if (shippingBalance > 0.01) logic.addPayment(selectedClient.id, shippingBalance, "Vuelto Envío (Arrastre)", new Date(new Date(finalDate).getTime() + 1000).toISOString());
+            logic.registerShipment(selectedClient.id, guide, selectedClient.deliveryMethod, finalDate);
+            logic.setClients(selectedClient.id, { confirmShipping: false, forceAccumulate: false });
+            alert("✅ Despachado Correctamente"); setSelectedClient(null); setGuide("");
+        };
+        if (selectedClient) return (<div className="p-6 h-full flex flex-col bg-slate-100"><button onClick={() => setSelectedClient(null)} className="mb-4 font-bold text-slate-500">← Volver</button><div className="bg-white p-6 rounded-3xl shadow-xl border-l-8 border-indigo-600"><h2 className="text-2xl font-bold mb-1">{selectedClient.name}</h2><p className="text-slate-500 mb-6">{selectedClient.deliveryMethod}</p><div className="space-y-4 mb-8"><div className="bg-slate-50 p-3 rounded-lg text-sm border"><div className="flex justify-between"><span>Ropa:</span><span className="text-emerald-600 font-bold">PAGADO</span></div><div className="flex justify-between"><span>Envío:</span><span className="text-emerald-600 font-bold">PAGADO</span></div></div><input value={guide} onChange={e => setGuide(e.target.value)} placeholder="Número de Guía / Tracking" className="w-full p-4 border-2 rounded-xl text-xl font-mono focus:border-indigo-600 outline-none" autoFocus /><div><label className="text-xs font-bold text-slate-400">Fecha Despacho</label><input type="date" value={dispatchDate} onChange={e => setDispatchDate(e.target.value)} className="w-full p-3 border rounded-xl" /></div></div><button onClick={handleDispatch} className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg text-lg flex items-center justify-center gap-2"><Icon.Check /> CONFIRMAR SALIDA</button></div></div>);
+        return (<div className="p-4 pb-24"><h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-700"><Icon.Box /> Listos para Enviar ({readyClients.length})</h2><div className="space-y-3">{readyClients.length === 0 && <div className="text-center py-12 text-slate-400 border border-dashed rounded-3xl">No hay paquetes listos</div>}{readyClients.map(c => (<div key={c.id} onClick={() => setSelectedClient(c)} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center touch-card cursor-pointer"><div><div className="font-bold text-slate-800">{c.name}</div><div className={`inline-block px-2 py-0.5 mt-1 rounded text-[10px] font-bold border ${c.status.color}`}>{c.status.label}</div></div><button className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm">DESPACHAR</button></div>))}</div></div>);
+    };
+
+    const LiveView = ({ logic }) => {
+        const [search, setSearch] = useState(""); const [found, setFound] = useState(null); const [item, setItem] = useState(""); const [price, setPrice] = useState(""); const [qty, setQty] = useState(1); const [msg, setMsg] = useState(null); const [suggestions, setSuggestions] = useState([]); const [saleDate, setSaleDate] = useState(getToday());
+        const ITEMS_COMMON = ["Blusa", "Pantalón", "Vestido", "Camiseta", "Falda", "Short", "Chaqueta"];
+        const QTY_OPTIONS = [1, 2, 3, 4, 5, 10]; const PRICE_OPTIONS = ["0.25", "0.50", "1.00", "1.25", "1.50", "1.75", "2.00"];
+
+        useEffect(() => {
+            if (search.length > 0) { const matches = logic.clients.filter(c => c.id.toLowerCase().startsWith(search.toLowerCase()) || c.name.toLowerCase().includes(search.toLowerCase())).slice(0, 3); setSuggestions(matches); } else { setSuggestions([]); }
+            const exactMatch = logic.clients.find(c => c.id.toLowerCase() === search.toLowerCase()); setFound(exactMatch || null);
+        }, [search, logic.clients]);
+
+        const selectSuggestion = (client) => { setSearch(client.id); setFound(client); setSuggestions([]); };
+        const handleSubmit = (e) => {
+            e.preventDefault(); if (!found || !item || !price) return; const quantity = parseInt(qty) || 1; const finalDate = smartDate(saleDate, logic.getClientCycle(found.id).lastShipmentDate); 
+            logic.addBatchSales(found.id, item, price, finalDate, quantity); setMsg(`Venta: ${quantity} x ${item} ($${price} c/u)`); setTimeout(() => setMsg(null), 2000); setItem(""); setPrice(""); setSearch(""); setFound(null); setSuggestions([]); setQty(1);
+        };
+
+        return (
+            <div className="h-full flex flex-col bg-[#f0f2f5]">
+                <div className="bg-white p-4 shadow-sm z-30 border-b border-slate-100 rounded-b-[30px] mb-2">
+                    <div className="flex justify-between items-center mb-4"><div className="flex flex-col"><h2 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-indigo-600 tracking-tighter">ADELITA STORE</h2><span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase ml-0.5">Live Sale System</span></div><div className="flex flex-col items-end"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Fecha Venta</label><input type="date" value={saleDate} onChange={e => setSaleDate(e.target.value)} className="bg-slate-50 text-slate-700 font-bold text-xs p-2 rounded-xl border border-slate-200 outline-none w-28 text-center shadow-sm" /></div></div>
+                    <div className="relative"><input value={search} onChange={e => setSearch(e.target.value)} className="w-full text-center text-xl font-mono uppercase bg-slate-50 border-2 border-slate-200 rounded-2xl p-4 focus:border-pink-500 outline-none transition-all font-bold text-slate-700 placeholder:text-slate-300 shadow-inner" placeholder="BUSCAR CLIENTE (ID / NOMBRE)" autoFocus />{suggestions.length > 0 && !found && (<div className="absolute top-full left-0 w-full mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl z-40 overflow-hidden">{suggestions.map(s => (<div key={s.id} onClick={() => selectSuggestion(s)} className="p-4 border-b border-slate-50 hover:bg-slate-50 flex justify-between items-center cursor-pointer"><span className="font-bold text-slate-800 text-lg">{s.id}</span><span className="text-sm text-slate-500 font-medium">{s.name}</span></div>))}</div>)}</div>
+                    {found && (<div className="mt-3 bg-gradient-to-r from-emerald-500 to-teal-500 p-3 rounded-2xl text-center shadow-lg animate-in fade-in slide-in-from-top-4 mb-1 transform transition-all"><div className="font-black text-white text-xl tracking-tight">{found.name}</div><div className="text-white/80 text-xs font-bold tracking-widest">{found.id}</div></div>)}
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 pt-2">
+                    {msg && <div className="bg-emerald-600 text-white p-4 rounded-2xl mb-6 text-center font-bold animate-bounce shadow-xl mx-2 border-2 border-emerald-400">{msg}</div>}
+                    <div className="grid grid-cols-1 landscape:grid-cols-3 gap-4 h-full">
+                        <div className="pos-card-3d delay-1"><label className="pos-label-giant"><Icon.Tag /> Prenda</label><input value={item} onChange={e => setItem(e.target.value)} className="pos-input-modern mb-4" placeholder="NOMBRE..." /><div className="pos-scroll-area">{ITEMS_COMMON.map(it => (<div key={it} className="btn-3d-wrapper"><button onClick={() => setItem(it)} className={`btn-3d w-full h-full ${item === it ? 'active-pink' : ''}`}>{it}</button></div>))}</div></div>
+                        <div className="pos-card-3d delay-2"><label className="pos-label-giant"><Icon.Hash /> Cantidad</label><input type="number" inputMode="numeric" pattern="[0-9]*" value={qty} onChange={e => setQty(parseInt(e.target.value) || '')} className="pos-input-modern mb-4" placeholder="#" /><div className="pos-scroll-area">{QTY_OPTIONS.map(q => (<div key={q} className="btn-3d-wrapper"><button onClick={() => setQty(q)} className={`btn-3d w-full h-full ${qty === q ? 'active-indigo' : ''}`}>{q}</button></div>))}</div></div>
+                        <div className="pos-card-3d delay-3"><label className="pos-label-giant"><Icon.Dollar /> Precio Unitario</label><input type="number" inputMode="decimal" step="0.01" value={price} onChange={e => setPrice(e.target.value)} className="pos-input-modern mb-4 text-emerald-600" placeholder="$0.00" /><div className="pos-scroll-area">{PRICE_OPTIONS.map(p => (<div key={p} className="btn-3d-wrapper"><button onClick={() => setPrice(p)} className={`btn-3d w-full h-full ${price === p ? 'active-emerald' : ''}`}>${p}</button></div>))}</div></div>
+                    </div>
+                </div>
+                <div className="p-4 bg-white border-t border-slate-200 z-20 pb-6 md:pb-4 rounded-t-[30px] shadow-[0_-10px_20px_rgba(0,0,0,0.05)]"><button onClick={handleSubmit} disabled={!found || !item || !price} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xl shadow-2xl disabled:opacity-50 touch-card active:scale-95 transition-all flex items-center justify-center gap-3 tracking-wide"><span>CONFIRMAR VENTA</span><div className="bg-white/20 p-1.5 rounded-full"><Icon.Check /></div></button></div>
+            </div>
+        );
+    };
+
+    const ClientsView = ({ logic }) => {
+        const [view, setView] = useState('list'); const [activeClient, setActiveClient] = useState(null); const [filter, setFilter] = useState(""); const [newName, setNewName] = useState(""); const [newPhone, setNewPhone] = useState(""); const [newAbono, setNewAbono] = useState(""); const [regDate, setRegDate] = useState(getToday()); const [manualId, setManualId] = useState("");
+        const handleRegister = () => { if (!newName) return; const res = logic.registerClient(newName, newPhone, newAbono, regDate, manualId); if(res) { setNewName(""); setNewPhone(""); setNewAbono(""); setManualId(""); setView('list'); } };
+        if (view === 'detail' && activeClient) { const clientData = logic.clients.find(c => c.id === activeClient.id) || activeClient; return <ClientDetailComponent key={clientData.id} activeClient={clientData} logic={logic} onBack={() => setView('list')} />; }
+        const filteredList = logic.clients.filter(c => c.name.toLowerCase().includes(filter.toLowerCase()) || c.id.toLowerCase().includes(filter.toLowerCase()));
+        return (
+            <div className="flex flex-col h-full pb-20 landscape:pb-0"><div className="p-4 bg-white sticky top-0 z-10 space-y-3 shadow-sm"><div className="flex gap-2"><div className="flex-1 bg-slate-100 rounded-xl flex items-center px-3"><Icon.Search /><input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Buscar cliente..." className="bg-transparent w-full p-3 outline-none" /></div><button onClick={() => setView(view === 'new' ? 'list' : 'new')} className="bg-slate-900 text-white w-12 rounded-xl font-bold text-xl">{view === 'new' ? '×' : '+'}</button></div>{view === 'new' && (<div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 animate-in slide-in-from-top duration-300"><h3 className="font-bold mb-3">Nuevo Registro</h3><div className="space-y-3"><input value={manualId} onChange={e => setManualId(e.target.value)} placeholder="ID Personalizado (Opcional)" className="w-full p-3 bg-indigo-50 border-indigo-100 border rounded-xl font-mono text-sm placeholder:text-indigo-300" /><input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nombre Completo" className="w-full p-3 bg-white rounded-xl border" /><input value={newPhone} onChange={e => setNewPhone(e.target.value)} placeholder="Celular" type="tel" className="w-full p-3 bg-white rounded-xl border" /><div className="flex gap-2"><input value={newAbono} onChange={e => setNewAbono(e.target.value)} placeholder="Abono ($)" type="number" inputMode="decimal" step="0.01" className="flex-1 p-3 bg-white rounded-xl border" /><div className="flex flex-col w-32 relative"><label className="text-[10px] uppercase font-bold text-slate-400">Fecha Reg</label><div className="relative w-full h-10"><input type="date" value={regDate} onChange={e => setRegDate(e.target.value)} className="input-overlay-trigger" /><div className="date-icon-overlay">📅</div></div></div></div><button onClick={handleRegister} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg">Guardar Cliente</button></div></div>)}</div><div className="flex-1 overflow-y-auto p-4 space-y-2 landscape:grid landscape:grid-cols-2 landscape:gap-4 landscape:content-start">{filteredList.map(c => { const status = logic.getClientStatus(c, logic.getClientCycle(c.id)); return (<div key={c.id} onClick={() => { setActiveClient(c); setView('detail'); }} className="bg-white p-4 rounded-2xl border border-slate-100 flex justify-between items-center touch-card shadow-sm h-full"><div><div className="font-bold text-slate-800">{c.name}</div><span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">{c.id}</span></div><div className={`px-2 py-1 rounded text-[10px] font-bold border ${status.color}`}>{status.label}</div></div>); })}</div></div>
+        );
+    };
+
     const App = () => {
         const [user, setUser] = useState(null);
         const [loading, setLoading] = useState(true);
@@ -1035,4 +936,3 @@
 </script>
 </body>
 </html>
-
