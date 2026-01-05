@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Adelita Store System v6.4 (Fixed Scroll & Navigation)</title>
+    <title>Adelita Store System v6.6 (Final Stable)</title>
     
     <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
@@ -13,7 +13,6 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&family=Space+Mono:wght@400;700&family=Kaushan+Script&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 
@@ -35,13 +34,12 @@
         const db = getFirestore(app);
         const auth = getAuth(app);
 
-        enableIndexedDbPersistence(db).catch((err) => {
-            if (err.code == 'failed-precondition') {
-                console.log('Múltiples pestañas abiertas, persistencia solo en una.');
-            } else if (err.code == 'unimplemented') {
-                console.log('El navegador no soporta persistencia.');
-            }
-        });
+        // Intentar persistencia offline sin bloquear si falla
+        try {
+            enableIndexedDbPersistence(db).catch((err) => {
+                console.log('Persistencia no disponible en este entorno.');
+            });
+        } catch (e) { console.log(e); }
 
         window.db = db;
         window.auth = auth;
@@ -58,12 +56,12 @@
             background-color: #f0f2f5;
             font-family: 'Montserrat', sans-serif;
             margin: 0; padding: 0;
-            overflow: hidden; /* Evitar doble scroll en body */
+            overflow: hidden; /* El scroll lo manejan los contenedores internos */
         }
         
         .adelita-bg { background: linear-gradient(135deg, #fce7f3 0%, #e0e7ff 100%); }
 
-        /* --- CORRECCIÓN DE ÁREAS DE CLICK --- */
+        /* --- CLASES DE UTILIDAD PARA CLICKS --- */
         .date-icon-overlay {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             pointer-events: none; z-index: 0; font-size: 1.25rem;
@@ -131,41 +129,39 @@
         .tab-inactive { color: #64748b; }
 
         /* =========================================
-           ESTILOS ESPECÍFICOS PARA FACTURA ADELITA 3D
+           ESTILOS ESPECÍFICOS PARA FACTURA (Estilo 3D Ultimate)
            ========================================= */
         :root {
             --gradient-header: linear-gradient(135deg, #FF9A9E 0%, #FECFEF 99%, #FECFEF 100%);
             --gradient-brand: linear-gradient(to right, #b224ef, #7579ff);
             --gradient-gold: linear-gradient(45deg, #FDC830, #F37335);
             --shipping-gradient: linear-gradient(120deg, #89f7fe 0%, #66a6ff 100%);
-            --bg-body-invoice: rgba(32, 32, 37, 0.98);
+            --bg-body-invoice: rgba(0, 0, 0, 0.85); /* Fondo oscuro para el modal */
             --paper: #ffffff;
             --shadow-deep: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
         }
 
-        /* --- CLASE MAESTRA DEL OVERLAY (SOLUCIÓN SCROLL) --- */
-        .modal-overlay-scroll {
-            position: fixed; 
-            top: 0; 
-            left: 0; 
-            width: 100%; 
-            height: 100%;
-            z-index: 5000; 
-            background: var(--bg-body-invoice);
-            backdrop-filter: blur(5px);
-            overflow-y: scroll; /* Scroll obligatorio */
-            -webkit-overflow-scrolling: touch; /* Suavidad en iOS */
-            padding-top: 20px;
-            padding-bottom: 150px; /* Espacio extra abajo para que no se corte */
+        /* --- CONTENEDOR MODAL FLOTANTE (ESTILO ADMIN) --- */
+        /* Esta clase garantiza el scroll y el z-index correcto */
+        .full-screen-modal {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--bg-body-invoice);
+            z-index: 9999; /* Máxima prioridad */
+            overflow-y: auto; /* Permite scroll vertical */
+            -webkit-overflow-scrolling: touch; /* Suavidad en iPad */
+            padding: 20px;
             display: flex;
             flex-direction: column;
             align-items: center;
+            justify-content: flex-start;
+            backdrop-filter: blur(5px);
         }
 
-        /* Panel de controles flotante */
+        /* Panel de botones flotantes (derecha abajo) */
         .controls-panel {
             position: fixed; bottom: 30px; right: 20px;
-            display: flex; flex-direction: column; gap: 15px; z-index: 5001;
+            display: flex; flex-direction: column; gap: 15px; z-index: 10000;
         }
         
         .btn-float {
@@ -173,113 +169,68 @@
             border: 2px solid rgba(255,255,255,0.3); color: white; font-size: 22px;
             cursor: pointer; box-shadow: 0 8px 16px rgba(0,0,0,0.4);
             transition: transform 0.2s; display: flex; align-items: center; justify-content: center;
-            background-color: #333; pointer-events: auto; /* Asegurar click */
+            background-color: #333;
         }
         .btn-float:active { transform: scale(0.95); }
-        
         .btn-add { background: linear-gradient(45deg, #11998e, #38ef7d); }
         .btn-photo { background: linear-gradient(45deg, #FF416C, #FF4B2B); }
         .btn-print { background: linear-gradient(45deg, #3a7bd5, #3a6073); } 
-        /* Botón cerrar fijo en pantalla, no en el flujo del documento */
+        
+        /* Botón cerrar flotante fijo */
         .btn-close-fixed { 
             background: linear-gradient(45deg, #2c3e50, #4ca1af); 
-            position: fixed; top: 20px; right: 20px; z-index: 5002; 
+            position: fixed; top: 20px; right: 20px; z-index: 10001; 
             width: 45px; height: 45px; font-size: 20px; 
             border-radius: 50%; color: white; border: 2px solid white;
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
             display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
         }
 
+        /* Papel de la factura */
         #receipt-wide {
-            width: 95%; max-width: 700px;
+            width: 100%; max-width: 700px;
             background-color: var(--paper);
             box-shadow: var(--shadow-deep); 
             position: relative; overflow: hidden; border-radius: 12px;
-            margin-top: 40px; 
+            margin-top: 60px; margin-bottom: 120px; /* Espacio para scroll y botones */
             transform-origin: top center;
-            flex-shrink: 0; /* No encoger */
+            flex-shrink: 0; 
         }
 
+        /* Estilos internos de la factura */
         .top-accent-bar { height: 12px; background: linear-gradient(90deg, #ff9a9e 0%, #fad0c4 99%, #fad0c4 100%); width: 100%; }
         .header-wide { display: flex; justify-content: space-between; align-items: center; padding: 30px 50px 10px 50px; background: #fff; }
-
-        .brand-section h1 {
-            font-family: 'Kaushan Script', cursive; font-weight: 400; font-size: 48px; margin: 0;
-            background: var(--gradient-brand); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-            filter: drop-shadow(2px 2px 0px rgba(0,0,0,0.1));
-        }
+        .brand-section h1 { font-family: 'Kaushan Script', cursive; font-weight: 400; font-size: 48px; margin: 0; background: var(--gradient-brand); -webkit-background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(2px 2px 0px rgba(0,0,0,0.1)); }
         .brand-section span { color: #888; font-size: 10px; letter-spacing: 4px; text-transform: uppercase; font-weight: 800; display: block; margin-top: -5px; margin-left: 5px; }
-
-        .date-badge {
-            background: #f8f9fa; border: 1px solid #e9ecef; padding: 10px 20px; border-radius: 8px;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05); text-align: right;
-        }
-
+        .date-badge { background: #f8f9fa; border: 1px solid #e9ecef; padding: 10px 20px; border-radius: 8px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05); text-align: right; }
         .info-container { padding: 20px 50px; display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; }
-        
         @media (max-width: 600px) {
             .header-wide { flex-direction: column; text-align: center; gap: 20px; padding: 20px; }
             .info-container { grid-template-columns: 1fr; padding: 10px 20px; }
             .brand-section h1 { font-size: 36px; }
             .grid-header, .item-row { grid-template-columns: 40px 1fr 60px 60px; padding-left: 10px; padding-right: 10px; }
         }
-
-        .info-card {
-            background: white; padding: 15px; border-radius: 10px;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
-            border-left: 5px solid #ddd; transition: all 0.3s;
-        }
-
+        .info-card { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); border-left: 5px solid #ddd; transition: all 0.3s; }
         .card-client { border-left-color: #b224ef; }
         .card-lives { border-left-color: #ff0050; background: #fff5f7; }
-
         .label { font-size: 10px; color: #888; text-transform: uppercase; font-weight: 800; display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
         .input-text { font-size: 16px; font-weight: 600; color: #333; width: 100%; outline: none; border-bottom: 1px dashed transparent; }
-        .input-text:focus { border-bottom: 1px dashed #ccc; }
-
-        .grid-header {
-            display: grid; grid-template-columns: 60px 1fr 100px 100px; padding: 12px 50px;
-            background: #2c3e50; color: white; font-size: 11px; font-weight: 700; text-transform: uppercase;
-            letter-spacing: 1px; margin-top: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-        }
-        .grid-header div { text-align: left; }
-        .grid-header div:last-child { text-align: right; } 
-        .grid-header div:nth-child(3) { text-align: right; } 
-        .grid-header div:first-child { text-align: center; }
-
+        .grid-header { display: grid; grid-template-columns: 60px 1fr 100px 100px; padding: 12px 50px; background: #2c3e50; color: white; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-top: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
+        .grid-header div { text-align: left; } .grid-header div:last-child, .grid-header div:nth-child(3) { text-align: right; } .grid-header div:first-child { text-align: center; }
         .items-wrapper { padding: 10px 50px; background-color: #fff; min-height: 120px; }
-
-        .item-row {
-            display: grid; grid-template-columns: 60px 1fr 100px 100px; padding: 15px 0;
-            border-bottom: 1px solid #f0f0f0; align-items: center; transition: background 0.2s; position: relative;
-        }
+        .item-row { display: grid; grid-template-columns: 60px 1fr 100px 100px; padding: 15px 0; border-bottom: 1px solid #f0f0f0; align-items: center; transition: background 0.2s; position: relative; }
         .item-row:nth-child(even) { background-color: #fafafa; }
-
-        .col-qty { 
-            text-align: center; font-weight: 800; background: linear-gradient(135deg, #e0e0e0 0%, #f5f5f5 100%); 
-            border-radius: 50%; width: 30px; height: 30px; line-height: 30px; margin: 0 auto; font-size: 12px; color: #555; 
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
+        .col-qty { text-align: center; font-weight: 800; background: linear-gradient(135deg, #e0e0e0 0%, #f5f5f5 100%); border-radius: 50%; width: 30px; height: 30px; line-height: 30px; margin: 0 auto; font-size: 12px; color: #555; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         .col-desc { padding-left: 15px; font-size: 14px; color: #444; font-weight: 500; }
         .col-unit { text-align: right; font-family: 'Space Mono', monospace; color: #888; font-size: 13px; }
         .col-total { text-align: right; font-family: 'Space Mono', monospace; font-weight: 700; color: #333; font-size: 15px; }
-
-        .delete-btn {
-            position: absolute; left: -30px; color: white; background: #ff6b6b; 
-            width: 25px; height: 25px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            font-size: 12px; cursor: pointer; opacity: 0; box-shadow: 0 2px 5px rgba(255, 107, 107, 0.4); transition: 0.2s;
-        }
+        .delete-btn { position: absolute; left: -30px; color: white; background: #ff6b6b; width: 25px; height: 25px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; opacity: 0; transition: 0.2s; }
         .item-row:hover .delete-btn { opacity: 1; left: -15px;}
-
-        .shipping-section-3d {
-            margin: 20px 50px; background: var(--shipping-gradient); padding: 2px;
-            border-radius: 12px; box-shadow: 0 8px 20px rgba(102, 166, 255, 0.25);
-            transform: perspective(500px) rotateX(2deg);
-        }
+        .shipping-section-3d { margin: 20px 50px; background: var(--shipping-gradient); padding: 2px; border-radius: 12px; box-shadow: 0 8px 20px rgba(102, 166, 255, 0.25); transform: perspective(500px) rotateX(2deg); }
         .shipping-inner { background: white; border-radius: 10px; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
         .shipping-icon-box { background: #e3f2fd; color: #2196f3; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; margin-right: 15px; }
         .shipping-price-tag { background: #2196f3; color: white; font-family: 'Space Mono', monospace; padding: 5px 15px; border-radius: 20px; font-weight: 700; box-shadow: 0 4px 10px rgba(33, 150, 243, 0.3); }
-
         .footer-area { background: #fdfbf7; padding: 0 50px 30px 50px; position: relative; }
         .divider-graphic { height: 4px; background: repeating-linear-gradient(45deg, #ddd, #ddd 5px, transparent 5px, transparent 10px); margin: 10px 0 20px 0; opacity: 0.5; }
         .totals-flex { display: flex; justify-content: flex-end; }
@@ -288,32 +239,22 @@
         .final-total { margin-top: 15px; padding-top: 15px; border-top: 2px dashed #eee; display: flex; justify-content: space-between; align-items: center; }
         .final-label { font-size: 14px; font-weight: 800; color: #333; }
         .final-amount { font-size: 26px; font-weight: 800; background: var(--gradient-gold); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-
         .bank-footer { background: #333; color: #aaa; padding: 20px 50px; font-size: 11px; display: flex; justify-content: space-between; align-items: center; border-top: 4px solid #FDC830; }
         .bank-info strong { color: white; font-size: 13px; display: block; margin-bottom: 3px; }
-
         [contenteditable]:hover { background-color: rgba(255, 230, 0, 0.1); cursor: text; box-shadow: 0 0 0 2px rgba(255, 215, 0, 0.3); border-radius: 4px; }
 
-        /* --- ESTILOS DE IMPRESIÓN / PDF NATIVO --- */
+        /* --- IMPRESIÓN / PDF NATIVO --- */
         @media print {
             body * { visibility: hidden; } /* Ocultar todo */
-            /* Mostrar solo el modal actual (ya sea factura o reporte admin) */
-            .modal-overlay-scroll, .modal-overlay-scroll * {
-                visibility: visible;
-            }
-            .modal-overlay-scroll {
+            /* Mostrar solo el modal */
+            .full-screen-modal, .full-screen-modal * { visibility: visible; }
+            .full-screen-modal {
                 position: absolute; left: 0; top: 0; width: 100%; height: auto;
                 background: white; overflow: visible; padding: 0; display: block;
-                backdrop-filter: none;
-                z-index: 9999;
+                backdrop-filter: none; z-index: 9999;
             }
-            .controls-panel, .btn-close-fixed, .delete-btn, .no-print { 
-                display: none !important; /* Esconder botones */
-            }
-            #receipt-wide {
-                box-shadow: none; margin: 0; width: 100%; max-width: 100%;
-                border: none; transform: none;
-            }
+            .controls-panel, .btn-close-fixed, .delete-btn, .no-print { display: none !important; }
+            #receipt-wide, .printable-modal { box-shadow: none; margin: 0; width: 100% !important; max-width: 100% !important; border: none; transform: none; }
         }
     </style>
 </head>
@@ -326,8 +267,16 @@
 </div>
 
 <script>
-    window.onerror = function() {
-        console.error("Error detectado, intentando recuperar...");
+    // Recuperación de Errores Globales
+    window.onerror = function(msg, url, line) {
+        console.error("Error detectado: " + msg);
+        const root = document.getElementById('root');
+        // Si la pantalla está blanca, mostrar botón de recarga
+        if(root && root.innerHTML.trim() === "Cargando Sistema Cloud...") {
+            root.innerHTML = '<div style="height:100vh; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:20px;">' +
+                '<h3 style="margin-bottom:20px; font-family:sans-serif; color:#666;">Se ha producido un error momentáneo</h3>' +
+                '<button onclick="location.reload()" style="padding:15px 30px; background:#333; color:white; border:none; border-radius:12px; font-weight:bold; cursor:pointer;">RECARGAR APLICACIÓN</button></div>';
+        }
     };
 </script>
 
@@ -344,7 +293,7 @@
         Chart: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>,
         Download: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>,
         FileText: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
-        Printer: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>,
+        Printer: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>,
         Info: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
         Close: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
         Message: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>,
@@ -438,21 +387,23 @@
         doc.save(`Adelita_Reporte_${getToday()}.pdf`);
     };
 
-    // --- NUEVO COMPONENTE DE FACTURA 3D ULTIMATE ---
+    // --- COMPONENTE FACTURA 3D (ARQUITECTURA DE VENTANA MODAL FLOTANTE) ---
     const Invoice3DModal = ({ client, cycle, onClose }) => {
         const [items, setItems] = useState([]);
 
-        // LÓGICA DE AGRUPACIÓN INTELIGENTE
+        // PROTECCIÓN CONTRA CAÍDAS: Si no hay cliente, no renderiza nada (evita pantalla blanca)
+        if (!client || !cycle) return null;
+
         useEffect(() => {
             const grouped = {};
-            cycle.cycleSales.forEach(s => {
-                const key = `${s.item.trim().toLowerCase()}-${s.value}`;
-                if (!grouped[key]) {
-                    grouped[key] = { qty: 0, desc: s.item, unit: s.value, total: 0 };
-                }
-                grouped[key].qty += 1;
-                grouped[key].total += s.value;
-            });
+            if(cycle && cycle.cycleSales) {
+                cycle.cycleSales.forEach(s => {
+                    const key = `${s.item.trim().toLowerCase()}-${s.value}`;
+                    if (!grouped[key]) grouped[key] = { qty: 0, desc: s.item, unit: s.value, total: 0 };
+                    grouped[key].qty += 1;
+                    grouped[key].total += s.value;
+                });
+            }
             const loadedItems = Object.values(grouped);
             if(loadedItems.length === 0) setItems([{qty: 1, desc: "Prenda...", unit: 0, total: 0}]);
             else setItems(loadedItems);
@@ -482,21 +433,18 @@
             });
         };
 
-        const handleNativeShare = () => {
-            window.print();
-        };
-
+        const handleNativeShare = () => { window.print(); };
         const addItem = () => { setItems([...items, {qty: 1, desc: "Nueva Prenda...", unit: 0, total: 0}]); };
         const removeItem = (idx) => { const newItems = [...items]; newItems.splice(idx, 1); setItems(newItems); };
 
         return (
-            <div className="modal-overlay-scroll">
+            <div className="full-screen-modal">
                 <button className="btn-close-fixed" onClick={onClose} title="Cerrar"><i className="fas fa-times"></i></button>
 
                 <div className="controls-panel" data-html2canvas-ignore="true">
-                    <button className="btn-float btn-add" onClick={addItem} title="Añadir Prenda Manual"><i className="fas fa-plus"></i></button>
-                    <button className="btn-float btn-photo" onClick={handlePhotoDownload} title="Descargar como Foto (PNG)"><i className="fas fa-camera"></i></button>
-                    <button className="btn-float btn-print" onClick={handleNativeShare} title="PDF / Compartir / Imprimir"><i className="fas fa-file-pdf"></i></button>
+                    <button className="btn-float btn-add" onClick={addItem} title="Añadir Manual"><i className="fas fa-plus"></i></button>
+                    <button className="btn-float btn-photo" onClick={handlePhotoDownload} title="Descargar Foto"><i className="fas fa-camera"></i></button>
+                    <button className="btn-float btn-print" onClick={handleNativeShare} title="PDF / Imprimir"><i className="fas fa-file-pdf"></i></button>
                 </div>
 
                 <div id="receipt-wide">
@@ -516,7 +464,9 @@
                     <div className="info-container">
                         <div className="info-card card-client">
                             <span className="label"><i className="fas fa-user-circle"></i> CLIENTE VIP</span>
-                            <div className="input-text" contentEditable="true" suppressContentEditableWarning={true}>{client.name} <span style={{fontWeight:'bold', color:'#b224ef'}}>({client.id})</span></div>
+                            <div className="input-text" contentEditable="true" suppressContentEditableWarning={true}>
+                                {client.name} <span style={{fontWeight:'bold', color:'#b224ef'}}>({client.id})</span>
+                            </div>
                         </div>
                         <div className="info-card card-lives">
                             <span className="label" style={{color:'#ff0050'}}><i className="fab fa-tiktok"></i> ACUMULADO / LIVES</span>
@@ -572,7 +522,6 @@
         const [shipments, setShipments] = useState([]);
         const [expenses, setExpenses] = useState([]);
 
-        // Listeners en Tiempo Real (Firebase)
         useEffect(() => {
             if (!user) return;
             const { onSnapshot, collection } = window.fs;
@@ -703,7 +652,7 @@
                     <div className="bg-white p-8 rounded-3xl shadow-2xl space-y-6">
                         <div className="text-center">
                             <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-indigo-600 tracking-tighter">ADELITA STORE</h1>
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Sistema Cloud v6.4</p>
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Sistema Cloud v6.6</p>
                         </div>
                         <form onSubmit={handleLogin} className="space-y-4">
                             <div className="space-y-1">
@@ -740,17 +689,14 @@
             return { groups, debtors };
         }, [logic.sales, logic.clients, groupBy]);
         
-        // --- NATIVE SHARE / PRINT ---
         const handleNativeShare = () => { window.print(); };
 
         return (
-            <div className="modal-overlay-scroll">
+            <div className="full-screen-modal">
                 <button className="btn-close-fixed" onClick={onClose} title="Cerrar"><i className="fas fa-times"></i></button>
-                
                 <div className="controls-panel" data-html2canvas-ignore="true">
                     <button className="btn-float btn-print" onClick={handleNativeShare} title="PDF / Compartir / Imprimir"><i className="fas fa-file-pdf"></i></button>
                 </div>
-
                 <div className="p-8 max-w-5xl mx-auto w-full bg-white rounded-3xl shadow-xl min-h-[90vh] printable-modal" id="printable-area">
                     <div className="text-center border-b-2 border-slate-900 pb-6 mb-8">
                         <h1 className="text-2xl md:text-4xl font-extrabold text-slate-900 tracking-tight">Reporte ADELITA STORE</h1>
@@ -759,13 +705,11 @@
                             {['live', 'week', 'month', 'year'].map(mode => (<button key={mode} onClick={() => setGroupBy(mode)} className={`px-3 py-1 rounded-full text-xs font-bold ${groupBy === mode ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{mode.toUpperCase()}</button>))}
                         </div>
                     </div>
-
                     <div className="grid grid-cols-3 gap-6 mb-10">
                         <div className="p-4 bg-slate-50 rounded-xl text-center border"><div className="text-xs text-slate-400 uppercase font-bold">Ingresos</div><div className="text-xl font-bold text-emerald-600">{formatMoney(metrics.totalIncome)}</div></div>
                         <div className="p-4 bg-slate-50 rounded-xl text-center border"><div className="text-xs text-slate-400 uppercase font-bold">Gastos</div><div className="text-xl font-bold text-red-500">{formatMoney(metrics.totalExpenses)}</div></div>
                         <div className="p-4 bg-slate-50 rounded-xl text-center border"><div className="text-xs text-slate-400 uppercase font-bold">Utilidad</div><div className="text-xl font-bold text-indigo-900">{formatMoney(metrics.profit)}</div></div>
                     </div>
-
                     <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-4 flex items-center gap-2"><Icon.Chart /> Ventas</h3>
                     <div className="space-y-4 mb-12">
                         {Object.entries(reportData.groups).sort((a,b) => b[1].total - a[1].total).map(([key, data]) => (
@@ -785,7 +729,6 @@
                             </details>
                         ))}
                     </div>
-
                     <div className="break-inside-avoid page-break-before">
                         <h3 className="text-lg md:text-xl font-bold text-red-700 mb-4 flex items-center gap-2 border-b-2 border-red-100 pb-2"><Icon.Alert /> Cuentas por Cobrar</h3>
                         {reportData.debtors.length === 0 ? <p className="text-slate-400 italic">No hay deudores activos.</p> : (<table className="w-full text-left text-xs md:text-sm bg-red-50/30 rounded-xl overflow-hidden"><thead className="bg-red-100 text-red-800 uppercase text-[10px]"><tr><th className="p-3">Cliente</th><th className="p-3">Teléfono</th><th className="p-3 text-right">Deuda</th></tr></thead><tbody className="divide-y divide-red-100">{reportData.debtors.map(d => (<tr key={d.id}><td className="p-3 font-bold text-slate-700">{d.name}</td><td className="p-3 text-slate-500">{d.phone}</td><td className="p-3 text-right font-bold text-red-600">{formatMoney(d.balance)}</td></tr>))}</tbody></table>)}
@@ -988,6 +931,70 @@
                     </div>
                 </div>
             </div>
+        );
+    };
+
+    const WarehouseView = ({ logic }) => {
+        const [guide, setGuide] = useState(""); const [dispatchDate, setDispatchDate] = useState(getToday()); const [selectedClient, setSelectedClient] = useState(null);
+        const readyClients = logic.clients.map(c => ({...c, cycle: logic.getClientCycle(c.id)})).map(c => ({...c, status: logic.getClientStatus(c, c.cycle)})).filter(c => c.status.code === 'READY');
+        const handleDispatch = () => {
+            if (!guide) return alert("Falta Guía");
+            const finalDate = smartDate(dispatchDate, logic.getClientCycle(selectedClient.id).lastShipmentDate);
+            const cycle = logic.getClientCycle(selectedClient.id); const clothingBalance = cycle.clothingBalance; const shippingBalance = cycle.totalShippingPaid - (selectedClient.shippingCost || 0);
+            if(selectedClient.shippingCost > 0) logic.addSale(selectedClient.id, `Envío (${selectedClient.deliveryMethod})`, selectedClient.shippingCost, new Date(new Date(finalDate).getTime() - 2000).toISOString());
+            if (clothingBalance > 0.01) logic.addPayment(selectedClient.id, clothingBalance, "Saldo a Favor Ropa (Arrastre)", new Date(new Date(finalDate).getTime() + 1000).toISOString());
+            if (shippingBalance > 0.01) logic.addPayment(selectedClient.id, shippingBalance, "Vuelto Envío (Arrastre)", new Date(new Date(finalDate).getTime() + 1000).toISOString());
+            logic.registerShipment(selectedClient.id, guide, selectedClient.deliveryMethod, finalDate);
+            logic.setClients(selectedClient.id, { confirmShipping: false, forceAccumulate: false });
+            alert("✅ Despachado Correctamente"); setSelectedClient(null); setGuide("");
+        };
+        if (selectedClient) return (<div className="p-6 h-full flex flex-col bg-slate-100"><button onClick={() => setSelectedClient(null)} className="mb-4 font-bold text-slate-500">← Volver</button><div className="bg-white p-6 rounded-3xl shadow-xl border-l-8 border-indigo-600"><h2 className="text-2xl font-bold mb-1">{selectedClient.name}</h2><p className="text-slate-500 mb-6">{selectedClient.deliveryMethod}</p><div className="space-y-4 mb-8"><div className="bg-slate-50 p-3 rounded-lg text-sm border"><div className="flex justify-between"><span>Ropa:</span><span className="text-emerald-600 font-bold">PAGADO</span></div><div className="flex justify-between"><span>Envío:</span><span className="text-emerald-600 font-bold">PAGADO</span></div></div><input value={guide} onChange={e => setGuide(e.target.value)} placeholder="Número de Guía / Tracking" className="w-full p-4 border-2 rounded-xl text-xl font-mono focus:border-indigo-600 outline-none" autoFocus /><div><label className="text-xs font-bold text-slate-400">Fecha Despacho</label><input type="date" value={dispatchDate} onChange={e => setDispatchDate(e.target.value)} className="w-full p-3 border rounded-xl" /></div></div><button onClick={handleDispatch} className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg text-lg flex items-center justify-center gap-2"><Icon.Check /> CONFIRMAR SALIDA</button></div></div>);
+        return (<div className="p-4 pb-24"><h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-700"><Icon.Box /> Listos para Enviar ({readyClients.length})</h2><div className="space-y-3">{readyClients.length === 0 && <div className="text-center py-12 text-slate-400 border border-dashed rounded-3xl">No hay paquetes listos</div>}{readyClients.map(c => (<div key={c.id} onClick={() => setSelectedClient(c)} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center touch-card cursor-pointer"><div><div className="font-bold text-slate-800">{c.name}</div><div className={`inline-block px-2 py-0.5 mt-1 rounded text-[10px] font-bold border ${c.status.color}`}>{c.status.label}</div></div><button className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm">DESPACHAR</button></div>))}</div></div>);
+    };
+
+    const LiveView = ({ logic }) => {
+        const [search, setSearch] = useState(""); const [found, setFound] = useState(null); const [item, setItem] = useState(""); const [price, setPrice] = useState(""); const [qty, setQty] = useState(1); const [msg, setMsg] = useState(null); const [suggestions, setSuggestions] = useState([]); const [saleDate, setSaleDate] = useState(getToday());
+        const ITEMS_COMMON = ["Blusa", "Pantalón", "Vestido", "Camiseta", "Falda", "Short", "Chaqueta"];
+        const QTY_OPTIONS = [1, 2, 3, 4, 5, 10]; const PRICE_OPTIONS = ["0.25", "0.50", "1.00", "1.25", "1.50", "1.75", "2.00"];
+
+        useEffect(() => {
+            if (search.length > 0) { const matches = logic.clients.filter(c => c.id.toLowerCase().startsWith(search.toLowerCase()) || c.name.toLowerCase().includes(search.toLowerCase())).slice(0, 3); setSuggestions(matches); } else { setSuggestions([]); }
+            const exactMatch = logic.clients.find(c => c.id.toLowerCase() === search.toLowerCase()); setFound(exactMatch || null);
+        }, [search, logic.clients]);
+
+        const selectSuggestion = (client) => { setSearch(client.id); setFound(client); setSuggestions([]); };
+        const handleSubmit = (e) => {
+            e.preventDefault(); if (!found || !item || !price) return; const quantity = parseInt(qty) || 1; const finalDate = smartDate(saleDate, logic.getClientCycle(found.id).lastShipmentDate); 
+            logic.addBatchSales(found.id, item, price, finalDate, quantity); setMsg(`Venta: ${quantity} x ${item} ($${price} c/u)`); setTimeout(() => setMsg(null), 2000); setItem(""); setPrice(""); setSearch(""); setFound(null); setSuggestions([]); setQty(1);
+        };
+
+        return (
+            <div className="h-full flex flex-col bg-[#f0f2f5]">
+                <div className="bg-white p-4 shadow-sm z-30 border-b border-slate-100 rounded-b-[30px] mb-2">
+                    <div className="flex justify-between items-center mb-4"><div className="flex flex-col"><h2 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-indigo-600 tracking-tighter">ADELITA STORE</h2><span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase ml-0.5">Live Sale System</span></div><div className="flex flex-col items-end"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Fecha Venta</label><input type="date" value={saleDate} onChange={e => setSaleDate(e.target.value)} className="bg-slate-50 text-slate-700 font-bold text-xs p-2 rounded-xl border border-slate-200 outline-none w-28 text-center shadow-sm" /></div></div>
+                    <div className="relative"><input value={search} onChange={e => setSearch(e.target.value)} className="w-full text-center text-xl font-mono uppercase bg-slate-50 border-2 border-slate-200 rounded-2xl p-4 focus:border-pink-500 outline-none transition-all font-bold text-slate-700 placeholder:text-slate-300 shadow-inner" placeholder="BUSCAR CLIENTE (ID / NOMBRE)" autoFocus />{suggestions.length > 0 && !found && (<div className="absolute top-full left-0 w-full mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl z-40 overflow-hidden">{suggestions.map(s => (<div key={s.id} onClick={() => selectSuggestion(s)} className="p-4 border-b border-slate-50 hover:bg-slate-50 flex justify-between items-center cursor-pointer"><span className="font-bold text-slate-800 text-lg">{s.id}</span><span className="text-sm text-slate-500 font-medium">{s.name}</span></div>))}</div>)}</div>
+                    {found && (<div className="mt-3 bg-gradient-to-r from-emerald-500 to-teal-500 p-3 rounded-2xl text-center shadow-lg animate-in fade-in slide-in-from-top-4 mb-1 transform transition-all"><div className="font-black text-white text-xl tracking-tight">{found.name}</div><div className="text-white/80 text-xs font-bold tracking-widest">{found.id}</div></div>)}
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 pt-2">
+                    {msg && <div className="bg-emerald-600 text-white p-4 rounded-2xl mb-6 text-center font-bold animate-bounce shadow-xl mx-2 border-2 border-emerald-400">{msg}</div>}
+                    <div className="grid grid-cols-1 landscape:grid-cols-3 gap-4 h-full">
+                        <div className="pos-card-3d delay-1"><label className="pos-label-giant"><Icon.Tag /> Prenda</label><input value={item} onChange={e => setItem(e.target.value)} className="pos-input-modern mb-4" placeholder="NOMBRE..." /><div className="pos-scroll-area">{ITEMS_COMMON.map(it => (<div key={it} className="btn-3d-wrapper"><button onClick={() => setItem(it)} className={`btn-3d w-full h-full ${item === it ? 'active-pink' : ''}`}>{it}</button></div>))}</div></div>
+                        <div className="pos-card-3d delay-2"><label className="pos-label-giant"><Icon.Hash /> Cantidad</label><input type="number" inputMode="numeric" pattern="[0-9]*" value={qty} onChange={e => setQty(parseInt(e.target.value) || '')} className="pos-input-modern mb-4" placeholder="#" /><div className="pos-scroll-area">{QTY_OPTIONS.map(q => (<div key={q} className="btn-3d-wrapper"><button onClick={() => setQty(q)} className={`btn-3d w-full h-full ${qty === q ? 'active-indigo' : ''}`}>{q}</button></div>))}</div></div>
+                        <div className="pos-card-3d delay-3"><label className="pos-label-giant"><Icon.Dollar /> Precio Unitario</label><input type="number" inputMode="decimal" step="0.01" value={price} onChange={e => setPrice(e.target.value)} className="pos-input-modern mb-4 text-emerald-600" placeholder="$0.00" /><div className="pos-scroll-area">{PRICE_OPTIONS.map(p => (<div key={p} className="btn-3d-wrapper"><button onClick={() => setPrice(p)} className={`btn-3d w-full h-full ${price === p ? 'active-emerald' : ''}`}>${p}</button></div>))}</div></div>
+                    </div>
+                </div>
+                <div className="p-4 bg-white border-t border-slate-200 z-20 pb-6 md:pb-4 rounded-t-[30px] shadow-[0_-10px_20px_rgba(0,0,0,0.05)]"><button onClick={handleSubmit} disabled={!found || !item || !price} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xl shadow-2xl disabled:opacity-50 touch-card active:scale-95 transition-all flex items-center justify-center gap-3 tracking-wide"><span>CONFIRMAR VENTA</span><div className="bg-white/20 p-1.5 rounded-full"><Icon.Check /></div></button></div>
+            </div>
+        );
+    };
+
+    const ClientsView = ({ logic }) => {
+        const [view, setView] = useState('list'); const [activeClient, setActiveClient] = useState(null); const [filter, setFilter] = useState(""); const [newName, setNewName] = useState(""); const [newPhone, setNewPhone] = useState(""); const [newAbono, setNewAbono] = useState(""); const [regDate, setRegDate] = useState(getToday()); const [manualId, setManualId] = useState("");
+        const handleRegister = () => { if (!newName) return; const res = logic.registerClient(newName, newPhone, newAbono, regDate, manualId); if(res) { setNewName(""); setNewPhone(""); setNewAbono(""); setManualId(""); setView('list'); } };
+        if (view === 'detail' && activeClient) { const clientData = logic.clients.find(c => c.id === activeClient.id) || activeClient; return <ClientDetailComponent key={clientData.id} activeClient={clientData} logic={logic} onBack={() => setView('list')} />; }
+        const filteredList = logic.clients.filter(c => c.name.toLowerCase().includes(filter.toLowerCase()) || c.id.toLowerCase().includes(filter.toLowerCase()));
+        return (
+            <div className="flex flex-col h-full pb-20 landscape:pb-0"><div className="p-4 bg-white sticky top-0 z-10 space-y-3 shadow-sm"><div className="flex gap-2"><div className="flex-1 bg-slate-100 rounded-xl flex items-center px-3"><Icon.Search /><input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Buscar cliente..." className="bg-transparent w-full p-3 outline-none" /></div><button onClick={() => setView(view === 'new' ? 'list' : 'new')} className="bg-slate-900 text-white w-12 rounded-xl font-bold text-xl">{view === 'new' ? '×' : '+'}</button></div>{view === 'new' && (<div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 animate-in slide-in-from-top duration-300"><h3 className="font-bold mb-3">Nuevo Registro</h3><div className="space-y-3"><input value={manualId} onChange={e => setManualId(e.target.value)} placeholder="ID Personalizado (Opcional)" className="w-full p-3 bg-indigo-50 border-indigo-100 border rounded-xl font-mono text-sm placeholder:text-indigo-300" /><input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nombre Completo" className="w-full p-3 bg-white rounded-xl border" /><input value={newPhone} onChange={e => setNewPhone(e.target.value)} placeholder="Celular" type="tel" className="w-full p-3 bg-white rounded-xl border" /><div className="flex gap-2"><input value={newAbono} onChange={e => setNewAbono(e.target.value)} placeholder="Abono ($)" type="number" inputMode="decimal" step="0.01" className="flex-1 p-3 bg-white rounded-xl border" /><div className="flex flex-col w-32 relative"><label className="text-[10px] uppercase font-bold text-slate-400">Fecha Reg</label><div className="relative w-full h-10"><input type="date" value={regDate} onChange={e => setRegDate(e.target.value)} className="input-overlay-trigger" /><div className="date-icon-overlay">📅</div></div></div></div><button onClick={handleRegister} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg">Guardar Cliente</button></div></div>)}</div><div className="flex-1 overflow-y-auto p-4 space-y-2 landscape:grid landscape:grid-cols-2 landscape:gap-4 landscape:content-start">{filteredList.map(c => { const status = logic.getClientStatus(c, logic.getClientCycle(c.id)); return (<div key={c.id} onClick={() => { setActiveClient(c); setView('detail'); }} className="bg-white p-4 rounded-2xl border border-slate-100 flex justify-between items-center touch-card shadow-sm h-full"><div><div className="font-bold text-slate-800">{c.name}</div><span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">{c.id}</span></div><div className={`px-2 py-1 rounded text-[10px] font-bold border ${status.color}`}>{status.label}</div></div>); })}</div></div>
         );
     };
 
