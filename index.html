@@ -658,11 +658,15 @@
             return { code: 'ACC_PAID', label: 'ACUMULANDO', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
         };
 
-        const registerClient = (name, phone, initialAbono, dateStr, manualId) => {
+                const registerClient = (name, phone, cedula, province, city, address, initialAbono, dateStr, manualId) => {
             if (manualId && clients.some(c => c.id.toLowerCase() === manualId.toLowerCase())) { alert("ID ya existe"); return null; }
             const newId = manualId ? manualId.toUpperCase() : generateSmartID(name, clients.length);
             const dateISO = safeISO(dateStr);
-            window.fs.addDoc(window.fs.collection(window.db, 'clients'), { id: newId, name, phone, registeredAt: dateISO, shippingCost: 0, deliveryMethod: '', confirmShipping: false, forceAccumulate: false });
+            window.fs.addDoc(window.fs.collection(window.db, 'clients'), { 
+                id: newId, name, phone, 
+                cedula: cedula || "", province: province || "", city: city || "", address: address || "", 
+                registeredAt: dateISO, shippingCost: 0, deliveryMethod: '', confirmShipping: false, forceAccumulate: false 
+            });
             if (initialAbono > 0) addPayment(newId, initialAbono, 'Abono Inicial', dateISO);
             return newId;
         };
@@ -809,131 +813,62 @@
             </div>
         );
     };
-
-        const ClientDetailComponent = ({ activeClient, logic, onBack }) => {
-        const [payAmount, setPayAmount] = useState(""); const [payDate, setPayDate] = useState(getToday()); const [shipPayAmount, setShipPayAmount] = useState(""); const [shipPayDate, setShipPayDate] = useState(getToday()); const [orderViewMode, setOrderViewMode] = useState('grouped'); const [allHistoryViewMode, setAllHistoryViewMode] = useState('grouped'); const [tabView, setTabView] = useState('cycle'); const [showWaModal, setShowWaModal] = useState(false); 
-        const [showInvoice, setShowInvoice] = useState(false);
-        const [isEditing, setIsEditing] = useState(false);
+    const ClientDetailComponent = ({ activeClient, logic, onBack }) => {
+        const [payAmount, setPayAmount] = useState(""); const [payDate, setPayDate] = useState(getToday()); const [shipPayAmount, setShipPayAmount] = useState(""); const [shipPayDate, setShipPayDate] = useState(getToday()); const [orderViewMode, setOrderViewMode] = useState('grouped'); const [tabView, setTabView] = useState('cycle'); const [showWaModal, setShowWaModal] = useState(false); const [showInvoice, setShowInvoice] = useState(false); const [isEditing, setIsEditing] = useState(false);
         
-        const [editName, setEditName] = useState(activeClient.name);
-        const [editPhone, setEditPhone] = useState(activeClient.phone);
+        // ESTADOS EDICION NUEVOS
+        const [editName, setEditName] = useState(activeClient.name); const [editPhone, setEditPhone] = useState(activeClient.phone);
+        const [editCedula, setEditCedula] = useState(activeClient.cedula || ""); const [editProvince, setEditProvince] = useState(activeClient.province || "");
+        const [editCity, setEditCity] = useState(activeClient.city || ""); const [editAddress, setEditAddress] = useState(activeClient.address || "");
 
-        const cycle = logic.getClientCycle(activeClient.id);
-        const status = logic.getClientStatus(activeClient, cycle);
-        const shippingCost = activeClient.shippingCost || 0;
-        const shippingPaid = cycle.totalShippingPaid;
-        const shippingPending = Math.max(0, shippingCost - shippingPaid);
-        const clothingDebt = Math.abs(Math.min(0, cycle.clothingBalance));
-        const shippingBalance = shippingPaid - shippingCost;
+        const cycle = logic.getClientCycle(activeClient.id); const status = logic.getClientStatus(activeClient, cycle);
+        const shippingCost = activeClient.shippingCost || 0; const shippingPaid = cycle.totalShippingPaid; const shippingPending = Math.max(0, shippingCost - shippingPaid); const clothingDebt = Math.abs(Math.min(0, cycle.clothingBalance)); const shippingBalance = shippingPaid - shippingCost;
 
         const handleUpdateClient = (updates) => { logic.setClients(activeClient.id, updates); };
-        
-        const saveEdit = () => {
-            handleUpdateClient({ name: editName, phone: editPhone });
-            setIsEditing(false);
-        };
+        const saveEdit = () => { handleUpdateClient({ name: editName, phone: editPhone, cedula: editCedula, province: editProvince, city: editCity, address: editAddress }); setIsEditing(false); };
 
-        const deleteThisClient = () => {
-            if(confirm("⚠ ¿ESTÁS SEGURO? Se borrará el cliente y su historial. Esta acción es irreversible.")) {
-                logic.deleteClient(activeClient.id);
-                onBack();
-            }
-        };
-
+        const deleteThisClient = () => { if(confirm("⚠ ¿ESTÁS SEGURO? Se borrará el cliente y su historial. Esta acción es irreversible.")) { logic.deleteClient(activeClient.id); onBack(); } };
         const handlePayment = () => { if(!payAmount) return; logic.addPayment(activeClient.id, payAmount, 'Abono Ropa', smartDate(payDate, cycle.lastShipmentDate)); setPayAmount(""); };
-        const handleShippingPayment = () => {
-            if (!shipPayAmount) return;
-            const amount = parseFloat(shipPayAmount); const dateISO = smartDate(shipPayDate, cycle.lastShipmentDate);
-            if (amount > shippingPending + 0.01 && shippingPending > 0) { logic.addPayment(activeClient.id, shippingPending, 'Pago Envío (Auto)', dateISO); setTimeout(() => logic.addPayment(activeClient.id, amount - shippingPending, 'Abono Ropa (Excedente Envío)', dateISO), 50); } 
-            else if (shippingPending <= 0.01) { logic.addPayment(activeClient.id, amount, 'Abono Ropa', dateISO); } 
-            else { logic.addPayment(activeClient.id, amount, 'Pago Envío', dateISO); }
-            setShipPayAmount("");
-        };
+        const handleShippingPayment = () => { if (!shipPayAmount) return; const amount = parseFloat(shipPayAmount); const dateISO = smartDate(shipPayDate, cycle.lastShipmentDate); if (amount > shippingPending + 0.01 && shippingPending > 0) { logic.addPayment(activeClient.id, shippingPending, 'Pago Envío (Auto)', dateISO); setTimeout(() => logic.addPayment(activeClient.id, amount - shippingPending, 'Abono Ropa (Excedente Envío)', dateISO), 50); } else if (shippingPending <= 0.01) { logic.addPayment(activeClient.id, amount, 'Abono Ropa', dateISO); } else { logic.addPayment(activeClient.id, amount, 'Pago Envío', dateISO); } setShipPayAmount(""); };
         const handlePayWithBalance = () => { if (cycle.clothingBalance < shippingPending) return alert("Saldo insuficiente"); const dateISO = smartDate(getToday(), cycle.lastShipmentDate); logic.addPayment(activeClient.id, -shippingPending, 'Transferencia a Envío', dateISO); logic.addPayment(activeClient.id, shippingPending, 'Pago Envío (Saldo)', dateISO); alert("✅ Envío pagado con saldo"); };
         const handleRouteSelect = (route) => { let cost = 0; if (route === 'Servientrega') cost = 5; if (route === 'Domicilio') cost = 3; if (route === 'Ibarra') cost = cycle.totalSales >= 25 ? 0 : 3; handleUpdateClient({ deliveryMethod: route, shippingCost: cost }); };
         const cycleStartDateStr = cycle.lastShipmentDate.toLocaleDateString() === '12/31/1969' ? 'Inicio' : new Date(safeISO(cycle.lastShipmentDate)).toLocaleDateString();
-
-        const generateWaMessage = () => {
-            try {
-                const groups = {}; cycle.cycleSales.forEach(s => { const date = new Date(safeISO(s.date)); if(isNaN(date)) return; const d = date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'numeric' }); if (!groups[d]) groups[d] = { count: 0, total: 0 }; groups[d].count++; groups[d].total += s.value; });
-                let msg = `¡Hola! 👋 Aquí te adjunto la fotito de tus prendas separadas.\n\n`; Object.entries(groups).forEach(([d, v]) => msg += `Live ${d} 📸\n📝 RESUMEN: ${v.count} prendas\n💲 Subtotal: $${v.total.toFixed(2)}\n\n`);
-                const clothesPayments = cycle.cyclePayments.filter(p => !p.detail || !p.detail.includes("Pago Envío")); if (clothesPayments.length > 0) { msg += `💸 *ABONOS ROPA:*\n`; clothesPayments.forEach(p => msg += `✅ $${p.amount.toFixed(2)}\n`); msg += `\n`; }
-                msg += `📊 *RESUMEN DE CUENTA:*\nTotal Ropa: $${cycle.totalSales.toFixed(2)}\n(-) Total Abonos: $${cycle.totalNormalPaid.toFixed(2)}\n--------------------------\n`;
-                if (clothingDebt > 0.01) msg += `🔸 Ropa Pendiente: $${clothingDebt.toFixed(2)}\n`; else msg += `🔹 Ropa: PAGADA (Saldo a favor: $${cycle.clothingBalance.toFixed(2)})\n`;
-                if (activeClient.deliveryMethod) { if (shippingBalance < -0.01) msg += `🔸 Envío (${activeClient.deliveryMethod}): Pendiente $${Math.abs(shippingBalance).toFixed(2)}\n`; else msg += `🔹 Envío: CUBIERTO ✅\n`; }
-                const totalTotal = clothingDebt + Math.abs(Math.min(0, shippingBalance));
-                if (totalTotal > 0.01) { msg += `\n*🔴 TOTAL A TRANSFERIR: $${totalTotal.toFixed(2)}*\n\n🏦 *BANCO PICHINCHA*\n🔢 2204226498\n👤 Bryan David Suárez\n🆔 1003300751\n\n`; } else { msg += `\n*🟢 TODO PAGADO. ¡Gracias!*\n\n`; }
-                msg += `Responde:\n1️⃣ ACUMULAR\n2️⃣ ENVIAR`; return msg;
-            } catch(e) { return "Error generando mensaje."; }
-        };
+        const generateWaMessage = () => { try { const groups = {}; cycle.cycleSales.forEach(s => { const date = new Date(safeISO(s.date)); if(isNaN(date)) return; const d = date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'numeric' }); if (!groups[d]) groups[d] = { count: 0, total: 0 }; groups[d].count++; groups[d].total += s.value; }); let msg = `¡Hola! 👋 Aquí te adjunto la fotito de tus prendas separadas.\n\n`; Object.entries(groups).forEach(([d, v]) => msg += `Live ${d} 📸\n📝 RESUMEN: ${v.count} prendas\n💲 Subtotal: $${v.total.toFixed(2)}\n\n`); const clothesPayments = cycle.cyclePayments.filter(p => !p.detail || !p.detail.includes("Pago Envío")); if (clothesPayments.length > 0) { msg += `💸 *ABONOS ROPA:*\n`; clothesPayments.forEach(p => msg += `✅ $${p.amount.toFixed(2)}\n`); msg += `\n`; } msg += `📊 *RESUMEN DE CUENTA:*\nTotal Ropa: $${cycle.totalSales.toFixed(2)}\n(-) Total Abonos: $${cycle.totalNormalPaid.toFixed(2)}\n--------------------------\n`; if (clothingDebt > 0.01) msg += `🔸 Ropa Pendiente: $${clothingDebt.toFixed(2)}\n`; else msg += `🔹 Ropa: PAGADA (Saldo a favor: $${cycle.clothingBalance.toFixed(2)})\n`; if (activeClient.deliveryMethod) { if (shippingBalance < -0.01) msg += `🔸 Envío (${activeClient.deliveryMethod}): Pendiente $${Math.abs(shippingBalance).toFixed(2)}\n`; else msg += `🔹 Envío: CUBIERTO ✅\n`; } const totalTotal = clothingDebt + Math.abs(Math.min(0, shippingBalance)); if (totalTotal > 0.01) { msg += `\n*🔴 TOTAL A TRANSFERIR: $${totalTotal.toFixed(2)}*\n\n🏦 *BANCO PICHINCHA*\n🔢 2204226498\n👤 Bryan David Suárez\n🆔 1003300751\n\n`; } else { msg += `\n*🟢 TODO PAGADO. ¡Gracias!*\n\n`; } msg += `Responde:\n1️⃣ ACUMULAR\n2️⃣ ENVIAR`; return msg; } catch(e) { return "Error generando mensaje."; } };
         const copyToClipboard = () => { navigator.clipboard.writeText(generateWaMessage()).then(() => alert("Copiado!"), () => alert("Error copiar")); };
 
         return (
             <div className="flex flex-col h-full bg-white">
                 <div className="p-4 border-b flex items-center justify-between sticky top-0 bg-white z-10"><button onClick={onBack} className="text-slate-500 font-bold">← Atrás</button><div className={`text-xs px-3 py-1 rounded-full border font-bold flex items-center gap-1 ${status.color}`}>{status.label}</div></div>
                 {showWaModal && (<div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6" onClick={() => setShowWaModal(false)}><div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}><h3 className="font-bold text-lg mb-4 flex items-center gap-2 text-emerald-600"><Icon.Message /> Mensaje de Cobro</h3><textarea readOnly className="w-full h-64 p-3 bg-slate-50 border rounded-xl text-sm font-mono mb-4 resize-none focus:outline-none" value={generateWaMessage()}></textarea><button onClick={copyToClipboard} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg hover:bg-emerald-700 active:scale-95 transition-all"><Icon.Copy /> Copiar Mensaje</button></div></div>)}
-                
-                {showInvoice && (
-                    <Invoice3DModal 
-                        client={activeClient} 
-                        cycle={cycle} 
-                        onClose={() => setShowInvoice(false)} 
-                    />
-                )}
+                {showInvoice && (<Invoice3DModal client={activeClient} cycle={cycle} onClose={() => setShowInvoice(false)} />)}
 
                 <div className="flex-1 overflow-y-auto p-4 landscape:grid landscape:grid-cols-2 landscape:gap-6 landscape:overflow-hidden">
                     <div className="space-y-6 landscape:overflow-y-auto landscape:pr-2">
                         <div className="flex justify-between items-start">
                             <div className="flex-1">
                                 {isEditing ? (
-                                    <div className="space-y-2 mb-2 animate-in fade-in">
-                                        <input value={editName} onChange={e=>setEditName(e.target.value)} className="w-full border p-2 rounded" placeholder="Nombre" />
-                                        <input value={editPhone} onChange={e=>setEditPhone(e.target.value)} className="w-full border p-2 rounded" placeholder="Teléfono" />
-                                        <div className="flex gap-2">
-                                            <button onClick={saveEdit} className="bg-emerald-600 text-white px-3 py-1 rounded text-xs font-bold">Guardar</button>
-                                            <button onClick={() => setIsEditing(false)} className="bg-slate-300 text-slate-700 px-3 py-1 rounded text-xs font-bold">Cancelar</button>
-                                            <button onClick={deleteThisClient} className="bg-red-100 text-red-600 px-3 py-1 rounded text-xs font-bold ml-auto border border-red-200">Borrar Cliente</button>
-                                        </div>
+                                    <div className="space-y-2 mb-2 animate-in fade-in bg-slate-50 p-3 rounded-xl border border-indigo-100">
+                                        <div className="font-bold text-xs text-indigo-400 uppercase mb-2">Editar Información</div>
+                                        <input value={editName} onChange={e=>setEditName(e.target.value)} className="w-full border p-2 rounded mb-2" placeholder="Nombre" />
+                                        <div className="grid grid-cols-2 gap-2 mb-2"><input value={editPhone} onChange={e=>setEditPhone(e.target.value)} className="w-full border p-2 rounded" placeholder="Teléfono" /><input value={editCedula} onChange={e=>setEditCedula(e.target.value)} className="w-full border p-2 rounded" placeholder="Cédula/RUC" /></div>
+                                        <div className="grid grid-cols-2 gap-2 mb-2"><input value={editProvince} onChange={e=>setEditProvince(e.target.value)} className="w-full border p-2 rounded" placeholder="Provincia" /><input value={editCity} onChange={e=>setEditCity(e.target.value)} className="w-full border p-2 rounded" placeholder="Ciudad" /></div>
+                                        <textarea value={editAddress} onChange={e=>setEditAddress(e.target.value)} className="w-full border p-2 rounded mb-2 text-sm h-16 resize-none" placeholder="Dirección de envío completa..." />
+                                        <div className="flex gap-2"><button onClick={saveEdit} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex-1">Guardar</button><button onClick={() => setIsEditing(false)} className="bg-slate-300 text-slate-700 px-3 py-2 rounded-lg text-sm font-bold">Cancelar</button><button onClick={deleteThisClient} className="bg-red-100 text-red-600 px-3 py-2 rounded-lg text-sm font-bold border border-red-200"><Icon.Trash /></button></div>
                                     </div>
                                 ) : (
                                     <>
-                                        <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                                            {activeClient.name} 
-                                            <button onClick={() => setIsEditing(true)} className="text-slate-300 hover:text-slate-600 text-sm"><Icon.Edit /></button>
-                                        </h1>
-                                        <div className="flex gap-2 text-sm text-slate-500 mt-1"><span className="bg-slate-100 px-2 rounded">ID: {activeClient.id}</span><span>📞 {activeClient.phone}</span></div>
+                                        <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">{activeClient.name} <button onClick={() => setIsEditing(true)} className="text-slate-300 hover:text-slate-600 text-sm"><Icon.Edit /></button></h1>
+                                        <div className="flex flex-col gap-1 text-sm text-slate-500 mt-1"><div className="flex gap-2"><span className="bg-slate-100 px-2 rounded font-mono font-bold text-slate-600">{activeClient.id}</span><span>📞 {activeClient.phone}</span></div>{(activeClient.city || activeClient.province) && (<div className="flex items-center gap-1 text-indigo-600 font-medium text-xs"><i className="fas fa-map-marker-alt"></i> {activeClient.city}, {activeClient.province}</div>)}</div>
+                                        {activeClient.address && (<div className="mt-3 bg-blue-50 p-3 rounded-lg border border-blue-100 text-xs text-blue-800"><span className="font-bold block mb-1">📍 Dirección de Envío:</span>{activeClient.address}{activeClient.cedula && <span className="block mt-1 font-mono opacity-75">CI/RUC: {activeClient.cedula}</span>}</div>)}
                                     </>
                                 )}
                             </div>
-                            <div className="flex gap-2 ml-4">
-                                <button onClick={() => setShowInvoice(true)} className="bg-indigo-100 text-indigo-700 p-2 rounded-xl hover:bg-indigo-200 transition-colors shadow-sm"><Icon.FileText /></button>
-                                <button onClick={() => setShowWaModal(true)} className="bg-emerald-100 text-emerald-700 p-2 rounded-xl hover:bg-emerald-200 transition-colors shadow-sm"><Icon.Message /></button>
-                                <button onClick={deleteThisClient} className="bg-red-100 text-red-600 p-2 rounded-xl hover:bg-red-200 transition-colors shadow-sm" title="Eliminar Cliente Totalmente"><Icon.Trash /></button>
-                            </div>
+                            <div className="flex gap-2 ml-4"><button onClick={() => setShowInvoice(true)} className="bg-indigo-100 text-indigo-700 p-2 rounded-xl hover:bg-indigo-200 transition-colors shadow-sm"><Icon.FileText /></button><button onClick={() => setShowWaModal(true)} className="bg-emerald-100 text-emerald-700 p-2 rounded-xl hover:bg-emerald-200 transition-colors shadow-sm"><Icon.Message /></button><button onClick={deleteThisClient} className="bg-red-100 text-red-600 p-2 rounded-xl hover:bg-red-200 transition-colors shadow-sm" title="Eliminar Cliente"><Icon.Trash /></button></div>
                         </div>
                         <div className="flex border-b border-slate-200 landscape:hidden"><button onClick={() => setTabView('cycle')} className={`flex-1 py-2 text-sm text-center ${tabView === 'cycle' ? 'tab-active' : 'tab-inactive'}`}>Ciclo Actual</button><button onClick={() => setTabView('all')} className={`flex-1 py-2 text-sm text-center ${tabView === 'all' ? 'tab-active' : 'tab-inactive'}`}>Historial</button></div>
-                        {(tabView === 'cycle' || window.innerWidth > 768) && (
-                            <>
-                                <div className={`p-5 rounded-3xl border-2 ${clothingDebt > 0 ? 'border-red-100 bg-red-50' : 'border-slate-100 bg-white shadow-sm'}`}><div className="flex justify-between mb-2"><div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Saldo Ropa</div><div className="text-[10px] bg-slate-100 px-2 py-1 rounded text-slate-500 font-bold">Ciclo: {cycleStartDateStr}</div></div><div className="flex justify-between items-end"><div className={`text-3xl font-bold ${cycle.clothingBalance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{formatMoney(cycle.clothingBalance)}</div><div className="text-right text-xs text-slate-500"><div>Ventas: -{formatMoney(cycle.totalSales)}</div><div>Abonos Ropa: +{formatMoney(cycle.totalNormalPaid)}</div></div></div><div className="mt-4 flex gap-2 items-center bg-white p-1 rounded-xl border border-slate-200"><div className="relative w-10 h-10"><input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} className="input-overlay-trigger" /><span className="date-icon-overlay text-xl">📅</span></div><input type="number" inputMode="decimal" step="0.01" value={payAmount} onChange={e => setPayAmount(e.target.value)} className="w-20 outline-none font-bold text-slate-700" placeholder="$0.00" /><button onClick={handlePayment} className="flex-1 bg-emerald-600 text-white rounded-lg font-bold text-xs py-2 shadow-sm">+ ABONO ROPA</button></div></div>
-                                <div className={`p-5 rounded-3xl border-2 space-y-4 ${shippingPending > 0.01 && activeClient.confirmShipping ? 'border-orange-200 bg-orange-50' : 'border-slate-200 bg-white'}`}><h3 className="font-bold text-slate-700 flex items-center gap-2"><Icon.Box /> Estado Envío</h3><div className="flex justify-between items-center text-sm"><span className="text-slate-500">Costo ({activeClient.deliveryMethod || '-'}):</span><span className="font-bold">${shippingCost.toFixed(2)}</span></div><div className="flex justify-between items-center text-sm border-b pb-2"><span className="text-slate-500">Pagado:</span><span className="font-bold text-emerald-600">${shippingPaid.toFixed(2)}</span></div><div className="bg-white p-3 rounded-xl border border-slate-200 mt-2"><label className="text-[10px] font-bold text-slate-400 uppercase">Pagar Envío (Divisor)</label><div className="flex gap-2 mt-1 items-center"><div className="relative w-8 h-8"><input type="date" value={shipPayDate} onChange={e => setShipPayDate(e.target.value)} className="input-overlay-trigger" /><span className="date-icon-overlay text-lg">📅</span></div><input type="number" inputMode="decimal" step="0.01" value={shipPayAmount} onChange={e => setShipPayAmount(e.target.value)} className="w-16 border border-slate-200 rounded-lg px-2 py-1 text-sm outline-none" placeholder="$" /><button onClick={handleShippingPayment} className="flex-1 bg-indigo-600 text-white rounded-lg font-bold text-xs py-1.5 shadow-sm hover:bg-indigo-700">PAGAR</button>{cycle.clothingBalance >= shippingPending && shippingPending > 0.01 && <button onClick={handlePayWithBalance} className="bg-emerald-600 text-white rounded-lg font-bold text-[10px] px-2 py-1.5 shadow-sm hover:bg-emerald-700 ml-1">USAR SALDO</button>}</div><div className="text-[10px] text-slate-400 mt-1">Si el monto sobra, se va a saldo de ropa.</div></div><div className="grid grid-cols-2 gap-3 pt-2"><div><label className="text-xs font-bold text-slate-400">Ruta</label><select className="w-full mt-1 p-2 rounded-xl border bg-white text-xs" value={activeClient.deliveryMethod} onChange={e => handleRouteSelect(e.target.value)}><option value="">-</option><option value="Servientrega">Servientrega</option><option value="Domicilio">Domicilio</option><option value="Cayambe">Cayambe</option><option value="Ibarra">Ibarra</option><option value="Retiro">Retiro</option></select></div><div><label className="text-xs font-bold text-slate-400">Costo Real</label><input type="number" inputMode="decimal" step="0.01" className="w-full mt-1 p-2 rounded-xl border bg-white text-xs" value={activeClient.shippingCost} onChange={e => handleUpdateClient({ shippingCost: parseFloat(e.target.value) })} /></div></div><div className="flex items-center justify-between pt-2 border-t"><span className="font-bold text-xs text-slate-700">Confirmar para Bodega</span><input type="checkbox" className="w-5 h-5" checked={activeClient.confirmShipping} onChange={e => handleUpdateClient({ confirmShipping: e.target.checked })} /></div></div>
-                            </>
-                        )}
+                        {(tabView === 'cycle' || window.innerWidth > 768) && (<><div className={`p-5 rounded-3xl border-2 ${clothingDebt > 0 ? 'border-red-100 bg-red-50' : 'border-slate-100 bg-white shadow-sm'}`}><div className="flex justify-between mb-2"><div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Saldo Ropa</div><div className="text-[10px] bg-slate-100 px-2 py-1 rounded text-slate-500 font-bold">Ciclo: {cycleStartDateStr}</div></div><div className="flex justify-between items-end"><div className={`text-3xl font-bold ${cycle.clothingBalance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{formatMoney(cycle.clothingBalance)}</div><div className="text-right text-xs text-slate-500"><div>Ventas: -{formatMoney(cycle.totalSales)}</div><div>Abonos Ropa: +{formatMoney(cycle.totalNormalPaid)}</div></div></div><div className="mt-4 flex gap-2 items-center bg-white p-1 rounded-xl border border-slate-200"><div className="relative w-10 h-10"><input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} className="input-overlay-trigger" /><span className="date-icon-overlay text-xl">📅</span></div><input type="number" inputMode="decimal" step="0.01" value={payAmount} onChange={e => setPayAmount(e.target.value)} className="w-20 outline-none font-bold text-slate-700" placeholder="$0.00" /><button onClick={handlePayment} className="flex-1 bg-emerald-600 text-white rounded-lg font-bold text-xs py-2 shadow-sm">+ ABONO ROPA</button></div></div><div className={`p-5 rounded-3xl border-2 space-y-4 ${shippingPending > 0.01 && activeClient.confirmShipping ? 'border-orange-200 bg-orange-50' : 'border-slate-200 bg-white'}`}><h3 className="font-bold text-slate-700 flex items-center gap-2"><Icon.Box /> Estado Envío</h3><div className="flex justify-between items-center text-sm"><span className="text-slate-500">Costo ({activeClient.deliveryMethod || '-'}):</span><span className="font-bold">${shippingCost.toFixed(2)}</span></div><div className="flex justify-between items-center text-sm border-b pb-2"><span className="text-slate-500">Pagado:</span><span className="font-bold text-emerald-600">${shippingPaid.toFixed(2)}</span></div><div className="bg-white p-3 rounded-xl border border-slate-200 mt-2"><label className="text-[10px] font-bold text-slate-400 uppercase">Pagar Envío (Divisor)</label><div className="flex gap-2 mt-1 items-center"><div className="relative w-8 h-8"><input type="date" value={shipPayDate} onChange={e => setShipPayDate(e.target.value)} className="input-overlay-trigger" /><span className="date-icon-overlay text-lg">📅</span></div><input type="number" inputMode="decimal" step="0.01" value={shipPayAmount} onChange={e => setShipPayAmount(e.target.value)} className="w-16 border border-slate-200 rounded-lg px-2 py-1 text-sm outline-none" placeholder="$" /><button onClick={handleShippingPayment} className="flex-1 bg-indigo-600 text-white rounded-lg font-bold text-xs py-1.5 shadow-sm hover:bg-indigo-700">PAGAR</button>{cycle.clothingBalance >= shippingPending && shippingPending > 0.01 && <button onClick={handlePayWithBalance} className="bg-emerald-600 text-white rounded-lg font-bold text-[10px] px-2 py-1.5 shadow-sm hover:bg-emerald-700 ml-1">USAR SALDO</button>}</div><div className="text-[10px] text-slate-400 mt-1">Si el monto sobra, se va a saldo de ropa.</div></div><div className="grid grid-cols-2 gap-3 pt-2"><div><label className="text-xs font-bold text-slate-400">Ruta</label><select className="w-full mt-1 p-2 rounded-xl border bg-white text-xs" value={activeClient.deliveryMethod} onChange={e => handleRouteSelect(e.target.value)}><option value="">-</option><option value="Servientrega">Servientrega</option><option value="Domicilio">Domicilio</option><option value="Cayambe">Cayambe</option><option value="Ibarra">Ibarra</option><option value="Retiro">Retiro</option></select></div><div><label className="text-xs font-bold text-slate-400">Costo Real</label><input type="number" inputMode="decimal" step="0.01" className="w-full mt-1 p-2 rounded-xl border bg-white text-xs" value={activeClient.shippingCost} onChange={e => handleUpdateClient({ shippingCost: parseFloat(e.target.value) })} /></div></div><div className="flex items-center justify-between pt-2 border-t"><span className="font-bold text-xs text-slate-700">Confirmar para Bodega</span><input type="checkbox" className="w-5 h-5" checked={activeClient.confirmShipping} onChange={e => handleUpdateClient({ confirmShipping: e.target.checked })} /></div></div></>)}
                     </div>
-                    <div className="landscape:block landscape:overflow-y-auto landscape:h-full">
-                        <div className="pb-4">
-                            <div className="flex justify-between items-end mb-3"><h3 className="text-xs font-bold text-slate-400 uppercase">Detalle Pedido</h3><div className="flex bg-slate-100 p-1 rounded-lg">
-                                <button onClick={() => setOrderViewMode('grouped')} className={`px-2 py-1 rounded-md text-[10px] flex items-center gap-1 ${orderViewMode==='grouped'?'bg-white shadow':''}`}>Lives</button>
-                                <button onClick={() => setOrderViewMode('list')} className={`px-2 py-1 rounded-md text-[10px] flex items-center gap-1 ${orderViewMode==='list'?'bg-white shadow':''}`}>Lista</button>
-                            </div></div>
-                            <SalesListRenderer sales={cycle.cycleSales} viewMode={orderViewMode} onDeleteSale={logic.deleteSale} />
-                        </div>
-                        <div className="hidden landscape:block pt-4 border-t border-slate-100 mt-4">
-                             <h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Historial de Pagos</h3>
-                             <div className="bg-white border border-slate-100 rounded-xl overflow-hidden">
-                                {cycle.allPayments.map((p, i) => (<div key={i} className="flex justify-between p-3 border-b border-slate-50 text-sm"><div><span className="block">{p.detail}</span><span className="text-[10px] text-slate-400">{new Date(safeISO(p.date)).toLocaleDateString()}</span></div><span className="font-bold text-emerald-600">+${p.amount}</span></div>))}
-                             </div>
-                        </div>
-                    </div>
+                    <div className="landscape:block landscape:overflow-y-auto landscape:h-full"><div className="pb-4"><div className="flex justify-between items-end mb-3"><h3 className="text-xs font-bold text-slate-400 uppercase">Detalle Pedido</h3><div className="flex bg-slate-100 p-1 rounded-lg"><button onClick={() => setOrderViewMode('grouped')} className={`px-2 py-1 rounded-md text-[10px] flex items-center gap-1 ${orderViewMode==='grouped'?'bg-white shadow':''}`}>Lives</button><button onClick={() => setOrderViewMode('list')} className={`px-2 py-1 rounded-md text-[10px] flex items-center gap-1 ${orderViewMode==='list'?'bg-white shadow':''}`}>Lista</button></div></div><SalesListRenderer sales={cycle.cycleSales} viewMode={orderViewMode} onDeleteSale={logic.deleteSale} /></div><div className="hidden landscape:block pt-4 border-t border-slate-100 mt-4"><h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Historial de Pagos</h3><div className="bg-white border border-slate-100 rounded-xl overflow-hidden">{cycle.allPayments.map((p, i) => (<div key={i} className="flex justify-between p-3 border-b border-slate-50 text-sm"><div><span className="block">{p.detail}</span><span className="text-[10px] text-slate-400">{new Date(safeISO(p.date)).toLocaleDateString()}</span></div><span className="font-bold text-emerald-600">+${p.amount}</span></div>))}</div></div></div>
                 </div>
             </div>
         );
@@ -994,13 +929,48 @@
         );
     };
 
-    const ClientsView = ({ logic }) => {
-        const [view, setView] = useState('list'); const [activeClient, setActiveClient] = useState(null); const [filter, setFilter] = useState(""); const [newName, setNewName] = useState(""); const [newPhone, setNewPhone] = useState(""); const [newAbono, setNewAbono] = useState(""); const [regDate, setRegDate] = useState(getToday()); const [manualId, setManualId] = useState("");
-        const handleRegister = () => { if (!newName) return; const res = logic.registerClient(newName, newPhone, newAbono, regDate, manualId); if(res) { setNewName(""); setNewPhone(""); setNewAbono(""); setManualId(""); setView('list'); } };
+     const ClientsView = ({ logic }) => {
+        const [view, setView] = useState('list'); const [activeClient, setActiveClient] = useState(null); const [filter, setFilter] = useState(""); 
+        
+        // CAMPOS NUEVOS
+        const [newName, setNewName] = useState(""); const [newPhone, setNewPhone] = useState(""); 
+        const [newCedula, setNewCedula] = useState(""); const [newProvince, setNewProvince] = useState(""); 
+        const [newCity, setNewCity] = useState(""); const [newAddress, setNewAddress] = useState(""); 
+        const [newAbono, setNewAbono] = useState(""); const [regDate, setRegDate] = useState(getToday()); const [manualId, setManualId] = useState("");
+
+        const handleRegister = () => { 
+            if (!newName) return; 
+            const res = logic.registerClient(newName, newPhone, newCedula, newProvince, newCity, newAddress, newAbono, regDate, manualId); 
+            if(res) { 
+                setNewName(""); setNewPhone(""); setNewCedula(""); setNewProvince(""); setNewCity(""); setNewAddress(""); 
+                setNewAbono(""); setManualId(""); setView('list'); 
+            } 
+        };
+
         if (view === 'detail' && activeClient) { const clientData = logic.clients.find(c => c.id === activeClient.id) || activeClient; return <ClientDetailComponent key={clientData.id} activeClient={clientData} logic={logic} onBack={() => setView('list')} />; }
         const filteredList = logic.clients.filter(c => c.name.toLowerCase().includes(filter.toLowerCase()) || c.id.toLowerCase().includes(filter.toLowerCase()));
+        
         return (
-            <div className="flex flex-col h-full pb-20 landscape:pb-0"><div className="p-4 bg-white sticky top-0 z-10 space-y-3 shadow-sm"><div className="flex gap-2"><div className="flex-1 bg-slate-100 rounded-xl flex items-center px-3"><Icon.Search /><input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Buscar cliente..." className="bg-transparent w-full p-3 outline-none" /></div><button onClick={() => setView(view === 'new' ? 'list' : 'new')} className="bg-slate-900 text-white w-12 rounded-xl font-bold text-xl">{view === 'new' ? '×' : '+'}</button></div>{view === 'new' && (<div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 animate-in slide-in-from-top duration-300"><h3 className="font-bold mb-3">Nuevo Registro</h3><div className="space-y-3"><input value={manualId} onChange={e => setManualId(e.target.value)} placeholder="ID Personalizado (Opcional)" className="w-full p-3 bg-indigo-50 border-indigo-100 border rounded-xl font-mono text-sm placeholder:text-indigo-300" /><input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nombre Completo" className="w-full p-3 bg-white rounded-xl border" /><input value={newPhone} onChange={e => setNewPhone(e.target.value)} placeholder="Celular" type="tel" className="w-full p-3 bg-white rounded-xl border" /><div className="flex gap-2"><input value={newAbono} onChange={e => setNewAbono(e.target.value)} placeholder="Abono ($)" type="number" inputMode="decimal" step="0.01" className="flex-1 p-3 bg-white rounded-xl border" /><div className="flex flex-col w-32 relative"><label className="text-[10px] uppercase font-bold text-slate-400">Fecha Reg</label><div className="relative w-full h-10"><input type="date" value={regDate} onChange={e => setRegDate(e.target.value)} className="input-overlay-trigger" /><div className="date-icon-overlay">📅</div></div></div></div><button onClick={handleRegister} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg">Guardar Cliente</button></div></div>)}</div><div className="flex-1 overflow-y-auto p-4 space-y-2 landscape:grid landscape:grid-cols-2 landscape:gap-4 landscape:content-start">{filteredList.map(c => { const status = logic.getClientStatus(c, logic.getClientCycle(c.id)); return (<div key={c.id} onClick={() => { setActiveClient(c); setView('detail'); }} className="bg-white p-4 rounded-2xl border border-slate-100 flex justify-between items-center touch-card shadow-sm h-full"><div><div className="font-bold text-slate-800">{c.name}</div><span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">{c.id}</span></div><div className={`px-2 py-1 rounded text-[10px] font-bold border ${status.color}`}>{status.label}</div></div>); })}</div></div>
+            <div className="flex flex-col h-full pb-20 landscape:pb-0">
+                <div className="p-4 bg-white sticky top-0 z-10 space-y-3 shadow-sm">
+                    <div className="flex gap-2"><div className="flex-1 bg-slate-100 rounded-xl flex items-center px-3"><Icon.Search /><input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Buscar cliente..." className="bg-transparent w-full p-3 outline-none" /></div><button onClick={() => setView(view === 'new' ? 'list' : 'new')} className="bg-slate-900 text-white w-12 rounded-xl font-bold text-xl">{view === 'new' ? '×' : '+'}</button></div>
+                    {view === 'new' && (
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 animate-in slide-in-from-top duration-300 overflow-y-auto max-h-[70vh]">
+                            <h3 className="font-bold mb-3">Nuevo Registro</h3>
+                            <div className="space-y-3">
+                                <div className="grid grid-cols-2 gap-2"><input value={manualId} onChange={e => setManualId(e.target.value)} placeholder="ID (Opcional)" className="p-3 bg-indigo-50 border-indigo-100 border rounded-xl font-mono text-sm" /><input value={newCedula} onChange={e => setNewCedula(e.target.value)} placeholder="Cédula / RUC" className="p-3 bg-white rounded-xl border" /></div>
+                                <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nombre Completo" className="w-full p-3 bg-white rounded-xl border" />
+                                <input value={newPhone} onChange={e => setNewPhone(e.target.value)} placeholder="Celular" type="tel" className="w-full p-3 bg-white rounded-xl border" />
+                                <div className="grid grid-cols-2 gap-2"><input value={newProvince} onChange={e => setNewProvince(e.target.value)} placeholder="Provincia" className="p-3 bg-white rounded-xl border" /><input value={newCity} onChange={e => setNewCity(e.target.value)} placeholder="Ciudad" className="p-3 bg-white rounded-xl border" /></div>
+                                <textarea value={newAddress} onChange={e => setNewAddress(e.target.value)} placeholder="Dirección Exacta" className="w-full p-3 bg-white rounded-xl border h-20 resize-none text-sm" />
+                                <div className="flex gap-2"><input value={newAbono} onChange={e => setNewAbono(e.target.value)} placeholder="Abono ($)" type="number" step="0.01" className="flex-1 p-3 bg-white rounded-xl border" /><div className="flex flex-col w-32 relative"><label className="text-[10px] uppercase font-bold text-slate-400">Fecha Reg</label><div className="relative w-full h-10"><input type="date" value={regDate} onChange={e => setRegDate(e.target.value)} className="input-overlay-trigger" /><div className="date-icon-overlay">📅</div></div></div></div>
+                                <button onClick={handleRegister} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg">Guardar Cliente</button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 space-y-2 landscape:grid landscape:grid-cols-2 landscape:gap-4 landscape:content-start">{filteredList.map(c => { const status = logic.getClientStatus(c, logic.getClientCycle(c.id)); return (<div key={c.id} onClick={() => { setActiveClient(c); setView('detail'); }} className="bg-white p-4 rounded-2xl border border-slate-100 flex justify-between items-center touch-card shadow-sm h-full"><div><div className="font-bold text-slate-800">{c.name}</div><div className="flex gap-2 mt-1"><span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">{c.id}</span>{c.city && <span className="text-xs bg-indigo-50 text-indigo-500 px-2 py-0.5 rounded flex items-center gap-1"><i className="fas fa-map-marker-alt"></i> {c.city}</span>}</div></div><div className={`px-2 py-1 rounded text-[10px] font-bold border ${status.color}`}>{status.label}</div></div>); })}</div>
+            </div>
         );
     };
 
