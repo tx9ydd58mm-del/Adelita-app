@@ -722,54 +722,7 @@
         );
     };
 
-    const ReportViewer = ({ logic, onClose, metrics }) => {
-        const [groupBy, setGroupBy] = useState('live'); const [showHelp, setShowHelp] = useState(false);
-        const reportData = useMemo(() => {
-            const groups = {}; const debtors = [];
-            logic.sales.forEach(sale => {
-                const date = new Date(safeISO(sale.date)); if (isNaN(date)) return;
-                let key = ""; if (groupBy === 'live') key = date.toLocaleDateString();
-                if (groupBy === 'week') { const startOfYear = new Date(date.getFullYear(), 0, 1); const week = Math.ceil((((date - startOfYear) / 86400000) + startOfYear.getDay() + 1) / 7); key = `Semana ${week} - ${date.getFullYear()}`; }
-                if (groupBy === 'month') key = date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }); if (groupBy === 'year') key = date.getFullYear().toString();
-                if (!groups[key]) groups[key] = { total: 0, items: [] }; groups[key].total += sale.value; groups[key].items.push(sale);
-            });
-            logic.clients.forEach(client => { const cycle = logic.getClientCycle(client.id); if (cycle.clothingBalance < -0.01) { debtors.push({ ...client, balance: cycle.clothingBalance }); } });
-            return { groups, debtors };
-        }, [logic.sales, logic.clients, groupBy]);
-        const handleDownloadPDF = () => { generatePDF(reportData, groupBy, metrics); }; const handlePrint = () => { window.print(); };
-
-        return (
-            <div className="fixed inset-0 bg-white z-[60] overflow-auto flex flex-col animate-in slide-in-from-bottom duration-300" id="printable-area">
-                {showHelp && (<div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-6" onClick={() => setShowHelp(false)}><div className="bg-white rounded-2xl p-6 max-w-sm text-center shadow-2xl" onClick={e => e.stopPropagation()}><div className="text-4xl mb-4">📄</div><h3 className="font-bold text-lg mb-2">Guardar PDF (iPad)</h3><ol className="text-left text-sm text-slate-600 space-y-2 mb-6 list-decimal pl-4"><li>Toca <b>"Imprimir"</b>.</li><li>Haz <b>Zoom</b> sobre la hoja previa.</li><li>Toca <b>"Compartir"</b> y <b>"Guardar en Archivos"</b>.</li></ol><button onClick={() => setShowHelp(false)} className="bg-slate-900 text-white w-full py-3 rounded-xl font-bold">¡Entendido!</button></div></div>)}
-                <div className="sticky top-0 bg-slate-900 text-white p-4 flex justify-between items-center no-print shadow-lg z-10"><div className="flex items-center gap-4"><h2 className="font-bold flex items-center gap-2 text-sm md:text-base"><Icon.FileText /> Reporte</h2><div className="flex bg-slate-800 rounded-lg p-1">{['live', 'week', 'month', 'year'].map(mode => (<button key={mode} onClick={() => setGroupBy(mode)} className={`px-2 md:px-3 py-1 rounded text-[10px] md:text-xs capitalize ${groupBy === mode ? 'bg-indigo-500 text-white font-bold' : 'text-slate-400 hover:text-white'}`}>{mode === 'live' ? 'Día' : mode === 'week' ? 'Sem' : mode}</button>))}</div></div><div className="flex gap-2"><button onClick={() => setShowHelp(true)} className="bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 px-3 py-2 rounded-lg font-bold text-xs transition-colors border border-amber-500/50 flex items-center gap-1"><Icon.Info /> PDF?</button><button onClick={handleDownloadPDF} className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg font-bold flex items-center gap-2 text-xs md:text-sm shadow-lg transition-colors"><Icon.Download /> Descargar</button><button onClick={handlePrint} className="bg-indigo-500 hover:bg-indigo-600 px-4 py-2 rounded-lg font-bold flex items-center gap-2 text-xs md:text-sm shadow-lg transition-colors"><Icon.Printer /> Imprimir</button><button onClick={onClose} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg font-bold text-xs md:text-sm transition-colors"><Icon.Close /></button></div></div>
-                <div className="p-4 md:p-8 max-w-5xl mx-auto w-full text-slate-800"><div className="text-center border-b-2 border-slate-900 pb-6 mb-8"><h1 className="text-2xl md:text-4xl font-extrabold text-slate-900 tracking-tight">Reporte ADELITA STORE</h1><p className="text-slate-500 mt-2 font-medium text-xs md:text-sm">Agrupado por: {groupBy.toUpperCase()} | Fecha: {new Date().toLocaleDateString()}</p></div><div className="grid grid-cols-3 gap-6 mb-10"><div className="p-4 bg-slate-50 rounded-xl text-center border"><div className="text-xs text-slate-400 uppercase font-bold">Ingresos</div><div className="text-xl font-bold text-emerald-600">{formatMoney(metrics.totalIncome)}</div></div><div className="p-4 bg-slate-50 rounded-xl text-center border"><div className="text-xs text-slate-400 uppercase font-bold">Gastos</div><div className="text-xl font-bold text-red-500">{formatMoney(metrics.totalExpenses)}</div></div><div className="p-4 bg-slate-50 rounded-xl text-center border"><div className="text-xs text-slate-400 uppercase font-bold">Utilidad</div><div className="text-xl font-bold text-indigo-900">{formatMoney(metrics.profit)}</div></div></div><h3 className="text-lg md:text-xl font-bold text-slate-900 mb-4 flex items-center gap-2"><Icon.Chart /> Ventas</h3><div className="space-y-4 mb-12">{Object.entries(reportData.groups).sort((a,b) => b[1].total - a[1].total).map(([key, data]) => (<details key={key} className="group bg-white border border-slate-200 rounded-xl overflow-hidden print:border-none print:break-inside-avoid"><summary className="flex justify-between items-center p-3 md:p-4 bg-slate-50 cursor-pointer hover:bg-slate-100 font-bold list-none text-sm md:text-base"><div className="flex items-center gap-2"><span className="text-indigo-600 group-open:rotate-90 transition-transform no-print">▶</span><span>{capitalizeFirst(key)}</span><span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-normal">{data.items.length} items</span></div><span className="text-emerald-700 text-lg">{formatMoney(data.total)}</span></summary><div className="p-4 bg-white border-t border-slate-100 text-xs md:text-sm"><table className="w-full"><thead className="text-xs text-slate-400 uppercase text-left"><tr><th>Cliente</th><th>Prenda</th><th className="text-right">Valor</th></tr></thead><tbody className="divide-y divide-slate-50">{data.items.map((sale, i) => (<tr key={i} className="hover:bg-slate-50"><td className="py-2 font-mono text-[10px] md:text-xs text-slate-500">{sale.clientId}</td><td className="py-2">{sale.item}</td><td className="py-2 text-right">{formatMoney(sale.value)}</td></tr>))}</tbody></table></div></details>))}</div><div className="break-inside-avoid page-break-before"><h3 className="text-lg md:text-xl font-bold text-red-700 mb-4 flex items-center gap-2 border-b-2 border-red-100 pb-2"><Icon.Alert /> Cuentas por Cobrar</h3>{reportData.debtors.length === 0 ? <p className="text-slate-400 italic">No hay deudores activos.</p> : (<table className="w-full text-left text-xs md:text-sm bg-red-50/30 rounded-xl overflow-hidden"><thead className="bg-red-100 text-red-800 uppercase text-[10px]"><tr><th className="p-3">Cliente</th><th className="p-3">Teléfono</th><th className="p-3 text-right">Deuda</th></tr></thead><tbody className="divide-y divide-red-100">{reportData.debtors.map(d => (<tr key={d.id}><td className="p-3 font-bold text-slate-700">{d.name}</td><td className="p-3 text-slate-500">{d.phone}</td><td className="p-3 text-right font-bold text-red-600">{formatMoney(d.balance)}</td></tr>))}</tbody></table>)}</div></div></div>
-        );
-    };
-
-    const AdminView = ({ logic, onClose }) => {
-        const [filter, setFilter] = useState('month'); const [expDetail, setExpDetail] = useState(""); const [expAmount, setExpAmount] = useState(""); const [expDate, setExpDate] = useState(getToday()); const [showExportMenu, setShowExportMenu] = useState(false); const [showPreview, setShowPreview] = useState(false);
-        const metrics = useMemo(() => {
-            const now = new Date(); const filterDate = new Date(); if (filter === 'week') filterDate.setDate(now.getDate() - 7); if (filter === 'month') filterDate.setMonth(now.getMonth() - 1); if (filter === 'all') filterDate.setFullYear(2000);
-            const filteredSales = logic.sales.filter(s => new Date(safeISO(s.date)) >= filterDate); const filteredExpenses = logic.expenses.filter(e => new Date(safeISO(e.date)) >= filterDate);
-            const totalIncome = filteredSales.reduce((acc, s) => acc + s.value, 0); const totalExpenses = filteredExpenses.reduce((acc, e) => acc + e.amount, 0);
-            const salesByDate = {}; filteredSales.forEach(s => { const dateKey = new Date(safeISO(s.date)).toLocaleDateString(); if (!salesByDate[dateKey]) salesByDate[dateKey] = 0; salesByDate[dateKey] += s.value; });
-            return { totalIncome, totalExpenses, profit: totalIncome - totalExpenses, salesByDate };
-        }, [logic.sales, logic.expenses, filter]);
-        const handleAddExpense = () => { if(!expDetail || !expAmount) return; logic.addExpense(expDetail, expAmount, expDate); setExpDetail(""); setExpAmount(""); alert("Gasto registrado"); };
-        const handleExportCSV = () => { const rows = [["Reporte"], ["Ingresos", metrics.totalIncome]]; Object.entries(metrics.salesByDate).forEach(([d, t]) => rows.push([d, t])); exportToCSV(rows, "Reporte.csv"); };
-
-        return (
-            <div className="flex flex-col h-full bg-slate-50 pb-20 landscape:pb-0 landscape:flex-row">
-                <div className="p-6 bg-slate-900 text-white shadow-lg landscape:w-1/3 landscape:flex landscape:flex-col landscape:justify-center"><h1 className="text-2xl font-bold flex items-center gap-2"><Icon.Chart /> Panel Gerencial</h1><div className="flex gap-2 mt-4 text-xs font-bold"><button onClick={() => setFilter('week')} className={`px-3 py-1 rounded-full ${filter === 'week' ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-slate-400'}`}>Semana</button><button onClick={() => setFilter('month')} className={`px-3 py-1 rounded-full ${filter === 'month' ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-slate-400'}`}>Mes</button><button onClick={() => setFilter('all')} className={`px-3 py-1 rounded-full ${filter === 'all' ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-slate-400'}`}>Todo</button></div>
-                <div className="mt-8 border-t border-slate-700 pt-4"><button onClick={() => window.fbAuth.signOut(window.auth)} className="text-red-400 text-xs font-bold border border-red-900 p-2 rounded hover:bg-red-900/50">Cerrar Sesión</button></div></div>
-                {showExportMenu && (<div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6 animate-in fade-in" onClick={() => setShowExportMenu(false)}><div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-4 shadow-2xl" onClick={e => e.stopPropagation()}><h3 className="font-bold text-xl text-center text-slate-800 mb-2">Generar Reporte</h3><button onClick={() => { handleExportCSV(); setShowExportMenu(false); }} className="w-full flex items-center gap-4 p-4 bg-emerald-50 text-emerald-800 rounded-2xl font-bold hover:bg-emerald-100 transition-colors border border-emerald-100"><div className="bg-white p-3 rounded-xl shadow-sm"><Icon.List /></div><div className="text-left"><div className="text-base">Excel / CSV</div><div className="text-[10px] opacity-60 font-normal">Datos crudos para editar</div></div></button><button onClick={() => { setShowPreview(true); setShowExportMenu(false); }} className="w-full flex items-center gap-4 p-4 bg-indigo-50 text-indigo-800 rounded-2xl font-bold hover:bg-indigo-100 transition-colors border border-indigo-100"><div className="bg-white p-3 rounded-xl shadow-sm"><Icon.FileText /></div><div className="text-left"><div className="text-base">Visualizar / PDF</div><div className="text-[10px] opacity-60 font-normal">Ver y guardar reporte</div></div></button><button onClick={() => setShowExportMenu(false)} className="w-full py-3 text-slate-400 font-bold text-sm hover:text-slate-600">Cancelar</button></div></div>)}
-                {showPreview && <ReportViewer logic={logic} metrics={metrics} onClose={() => setShowPreview(false)} />}
-                <div className="flex-1 overflow-y-auto p-4 space-y-6 landscape:w-2/3"><div className="grid grid-cols-2 gap-4"><div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100"><p className="text-xs text-slate-400 font-bold uppercase">Ingresos</p><p className="text-2xl font-bold text-emerald-600">{formatMoney(metrics.totalIncome)}</p></div><div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100"><p className="text-xs text-slate-400 font-bold uppercase">Gastos</p><p className="text-2xl font-bold text-red-500">{formatMoney(metrics.totalExpenses)}</p></div><div className="col-span-2 bg-indigo-600 text-white p-4 rounded-2xl shadow-lg flex justify-between items-center"><div><p className="text-xs font-bold uppercase opacity-75">Utilidad Neta</p><p className="text-3xl font-bold">{formatMoney(metrics.profit)}</p></div><button onClick={() => setShowExportMenu(true)} className="bg-white/20 p-2 px-4 rounded-lg hover:bg-white/30 flex items-center gap-2 font-bold text-sm transition-all"><Icon.Download /> Exportar</button></div></div><div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200"><h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2">📉 Registrar Gasto</h3><div className="space-y-3"><input value={expDetail} onChange={e => setExpDetail(e.target.value)} placeholder="Concepto (ej: Paca Americana)" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl" /><div className="flex gap-2"><input type="number" inputMode="decimal" step="0.01" value={expAmount} onChange={e => setExpAmount(e.target.value)} placeholder="$ Monto" className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-red-500" /><input type="date" value={expDate} onChange={e => setExpDate(e.target.value)} className="w-32 p-3 bg-slate-50 border border-slate-200 rounded-xl" /></div><button onClick={handleAddExpense} className="w-full bg-slate-800 text-white py-3 rounded-xl font-bold shadow-md hover:bg-slate-700">Guardar Gasto</button></div></div><div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"><div className="p-4 border-b border-slate-100 font-bold text-slate-700">Ventas por Fecha (Lives)</div>{Object.entries(metrics.salesByDate).length === 0 ? <p className="p-4 text-slate-400 text-sm">Sin datos en este periodo</p> : (Object.entries(metrics.salesByDate).sort((a,b) => b[1] - a[1]).map(([date, total]) => (<div key={date} className="flex justify-between p-4 border-b border-slate-50 last:border-0"><span className="font-medium text-slate-600">{date}</span><span className="font-bold text-emerald-600">{formatMoney(total)}</span></div>)))}</div></div>
-            </div>
-        );
-    };
-
-    const SalesListRenderer = ({ sales, viewMode, emptyMessage = "Sin registros", onDeleteSale }) => {
+       const SalesListRenderer = ({ sales, viewMode, emptyMessage = "Sin registros", onDeleteSale, onEditSale }) => {
         const groupedSales = useMemo(() => {
             const groups = {};
             sales.forEach(sale => {
@@ -782,9 +735,7 @@
         }, [sales]);
 
         const handleDelete = (s) => {
-            if(confirm(`¿Eliminar ${s.item} ($${s.value})?`)) {
-                onDeleteSale(s.fireId);
-            }
+            if(confirm(`¿Eliminar ${s.item} ($${s.value})?`)) { onDeleteSale(s.fireId); }
         };
 
         if (sales.length === 0) return <div className="p-4 text-center text-slate-300 italic text-sm">{emptyMessage}</div>;
@@ -797,17 +748,23 @@
                             <div key={idx} className="flex justify-between items-center p-3 border-b border-slate-50 text-sm last:border-0 hover:bg-slate-50 group">
                                 <span className="flex-1">{s.item}</span>
                                 <span className="font-medium mr-3">${s.value}</span>
-                                <button onClick={() => handleDelete(s)} className="text-slate-300 hover:text-red-500 transition-colors p-1"><Icon.Trash /></button>
+                                <div className="flex gap-1">
+                                    <button onClick={() => onEditSale && onEditSale(s)} className="text-slate-300 hover:text-indigo-500 transition-colors p-2 rounded-full hover:bg-indigo-50"><Icon.Edit /></button>
+                                    <button onClick={() => handleDelete(s)} className="text-slate-300 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-50"><Icon.Trash /></button>
+                                </div>
                             </div>
                         ))}
-                        <div className="bg-white px-4 py-1 border-b border-slate-200 text-right text-[10px] font-bold text-slate-500">Subtotal: ${items.reduce((acc, curr) => acc + curr.value, 0)}</div>
+                        <div className="bg-white px-4 py-1 border-b border-slate-200 text-right text-[10px] font-bold text-slate-500">Subtotal: ${items.reduce((acc, curr) => acc + curr.value, 0).toFixed(2)}</div>
                     </div>
                 ))}
                 {viewMode === 'list' && sales.map((s, idx) => (
                     <div key={idx} className="flex justify-between items-center p-3 border-b border-slate-50 text-sm hover:bg-slate-50 group">
                         <div className="flex-1"><span className="block">{s.item}</span><span className="text-[10px] text-slate-400">{new Date(safeISO(s.date)).toLocaleDateString()}</span></div>
                         <span className="font-medium mr-3">${s.value}</span>
-                        <button onClick={() => handleDelete(s)} className="text-slate-300 hover:text-red-500 transition-colors p-1"><Icon.Trash /></button>
+                        <div className="flex gap-1">
+                             <button onClick={() => onEditSale && onEditSale(s)} className="text-slate-300 hover:text-indigo-500 transition-colors p-2 rounded-full hover:bg-indigo-50"><Icon.Edit /></button>
+                             <button onClick={() => handleDelete(s)} className="text-slate-300 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-50"><Icon.Trash /></button>
+                        </div>
                     </div>
                 ))}
             </div>
@@ -818,7 +775,9 @@
         const [showInvoice, setShowInvoice] = useState(false);
         const [isEditing, setIsEditing] = useState(false);
         
-        // ESTADOS DE EDICIÓN
+        // --- NUEVO: ESTADO PARA EDITAR VENTA INDIVIDUAL ---
+        const [editingSale, setEditingSale] = useState(null); 
+
         const [editName, setEditName] = useState(activeClient.name);
         const [editPhone, setEditPhone] = useState(activeClient.phone);
         const [editCedula, setEditCedula] = useState(activeClient.cedula || "");
@@ -839,6 +798,23 @@
         const saveEdit = () => {
             handleUpdateClient({ name: editName, phone: editPhone, cedula: editCedula, province: editProvince, city: editCity, address: editAddress });
             setIsEditing(false);
+        };
+
+        // --- NUEVO: FUNCIÓN GUARDAR EDICIÓN VENTA ---
+        const handleSaveSaleEdit = async () => {
+            if(!editingSale) return;
+            try {
+                const finalDateISO = smartDate(editingSale.date, cycle.lastShipmentDate); 
+                const docRef = window.fs.doc(window.db, "sales", editingSale.fireId);
+                await window.fs.updateDoc(docRef, {
+                    item: editingSale.item,
+                    value: parseFloat(editingSale.value),
+                    date: finalDateISO
+                });
+                setEditingSale(null); 
+            } catch(e) {
+                alert("Error al actualizar: " + e.message);
+            }
         };
 
         const deleteThisClient = () => {
@@ -862,7 +838,6 @@
         const handlePayWithBalance = () => { 
             if (cycle.clothingBalance < shippingPending) return alert("Saldo insuficiente"); 
             const dateISO = smartDate(getToday(), cycle.lastShipmentDate); 
-            // Esto mueve el saldo de ropa a envíos
             logic.addPayment(activeClient.id, -shippingPending, 'Transferencia a Envío', dateISO); 
             logic.addPayment(activeClient.id, shippingPending, 'Pago Envío (Saldo)', dateISO); 
             alert("✅ Envío pagado con saldo"); 
@@ -887,7 +862,40 @@
         const copyToClipboard = () => { navigator.clipboard.writeText(generateWaMessage()).then(() => alert("Copiado!"), () => alert("Error copiar")); };
 
         return (
-            <div className="flex flex-col h-full bg-white">
+            <div className="flex flex-col h-full bg-white relative">
+                {/* --- MODAL DE EDICIÓN DE VENTA --- */}
+                {editingSale && (
+                    <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-6 animate-in fade-in" onClick={() => setEditingSale(null)}>
+                        <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
+                            <div className="text-center border-b pb-2 mb-2">
+                                <h3 className="font-bold text-xl text-slate-800">Editar Venta</h3>
+                                <p className="text-xs text-slate-400">Corrige fecha, nombre o precio</p>
+                            </div>
+                            
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Fecha del Live</label>
+                                <input type="date" value={editingSale.date ? editingSale.date.split('T')[0] : ''} onChange={e => setEditingSale({...editingSale, date: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700" />
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-3">
+                                <div className="col-span-2">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Prenda</label>
+                                    <input value={editingSale.item} onChange={e => setEditingSale({...editingSale, item: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl" />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Precio</label>
+                                    <input type="number" step="0.01" value={editingSale.value} onChange={e => setEditingSale({...editingSale, value: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-emerald-600" />
+                                </div>
+                            </div>
+
+                            <div className="flex gap-2 pt-2">
+                                <button onClick={() => setEditingSale(null)} className="flex-1 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200">Cancelar</button>
+                                <button onClick={handleSaveSaleEdit} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-lg">Guardar Cambios</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                
                 <div className="p-4 border-b flex items-center justify-between sticky top-0 bg-white z-10"><button onClick={onBack} className="text-slate-500 font-bold">← Atrás</button><div className={`text-xs px-3 py-1 rounded-full border font-bold flex items-center gap-1 ${status.color}`}>{status.label}</div></div>
                 {showWaModal && (<div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6" onClick={() => setShowWaModal(false)}><div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}><h3 className="font-bold text-lg mb-4 flex items-center gap-2 text-emerald-600"><Icon.Message /> Mensaje de Cobro</h3><textarea readOnly className="w-full h-64 p-3 bg-slate-50 border rounded-xl text-sm font-mono mb-4 resize-none focus:outline-none" value={generateWaMessage()}></textarea><button onClick={copyToClipboard} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg hover:bg-emerald-700 active:scale-95 transition-all"><Icon.Copy /> Copiar Mensaje</button></div></div>)}
                 {showInvoice && (<Invoice3DModal client={activeClient} cycle={cycle} onClose={() => setShowInvoice(false)} />)}
@@ -920,7 +928,6 @@
                             <>
                                 <div className={`p-5 rounded-3xl border-2 ${clothingDebt > 0 ? 'border-red-100 bg-red-50' : 'border-slate-100 bg-white shadow-sm'}`}><div className="flex justify-between mb-2"><div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Saldo Ropa</div><div className="text-[10px] bg-slate-100 px-2 py-1 rounded text-slate-500 font-bold">Ciclo: {cycleStartDateStr}</div></div><div className="flex justify-between items-end"><div className={`text-3xl font-bold ${cycle.clothingBalance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{formatMoney(cycle.clothingBalance)}</div><div className="text-right text-xs text-slate-500"><div>Ventas: -{formatMoney(cycle.totalSales)}</div><div>Abonos Ropa: +{formatMoney(cycle.totalNormalPaid)}</div></div></div>
                                 
-                                {/* CORRECCIÓN DE INPUTS (Z-INDEX Y TAMAÑO) */}
                                 <div className="mt-4 flex gap-2 items-center bg-white p-1 rounded-xl border border-slate-200">
                                     <div className="relative w-8 h-8 flex-shrink-0 bg-slate-100 rounded-lg flex items-center justify-center">
                                         <span className="text-lg">📅</span>
@@ -933,7 +940,6 @@
                                 
                                 <div className={`p-5 rounded-3xl border-2 space-y-4 ${shippingPending > 0.01 && activeClient.confirmShipping ? 'border-orange-200 bg-orange-50' : 'border-slate-200 bg-white'}`}><h3 className="font-bold text-slate-700 flex items-center gap-2"><Icon.Box /> Estado Envío</h3><div className="flex justify-between items-center text-sm"><span className="text-slate-500">Costo ({activeClient.deliveryMethod || '-'}):</span><span className="font-bold">${shippingCost.toFixed(2)}</span></div><div className="flex justify-between items-center text-sm border-b pb-2"><span className="text-slate-500">Pagado:</span><span className="font-bold text-emerald-600">${shippingPaid.toFixed(2)}</span></div>
                                 
-                                {/* CORRECCIÓN DE INPUTS ENVIOS (Z-INDEX Y TAMAÑO) */}
                                 <div className="bg-white p-3 rounded-xl border border-slate-200 mt-2">
                                     <label className="text-[10px] font-bold text-slate-400 uppercase">Pagar Envío (Divisor)</label>
                                     <div className="flex gap-2 mt-1 items-center">
@@ -953,13 +959,19 @@
                         )}
                     </div>
                     <div className="landscape:block landscape:overflow-y-auto landscape:h-full">
-                        <div className="pb-4"><div className="flex justify-between items-end mb-3"><h3 className="text-xs font-bold text-slate-400 uppercase">Detalle Pedido</h3><div className="flex bg-slate-100 p-1 rounded-lg"><button onClick={() => setOrderViewMode('grouped')} className={`px-2 py-1 rounded-md text-[10px] flex items-center gap-1 ${orderViewMode==='grouped'?'bg-white shadow':''}`}>Lives</button><button onClick={() => setOrderViewMode('list')} className={`px-2 py-1 rounded-md text-[10px] flex items-center gap-1 ${orderViewMode==='list'?'bg-white shadow':''}`}>Lista</button></div></div><SalesListRenderer sales={cycle.cycleSales} viewMode={orderViewMode} onDeleteSale={logic.deleteSale} /></div>
+                        <div className="pb-4"><div className="flex justify-between items-end mb-3"><h3 className="text-xs font-bold text-slate-400 uppercase">Detalle Pedido</h3><div className="flex bg-slate-100 p-1 rounded-lg"><button onClick={() => setOrderViewMode('grouped')} className={`px-2 py-1 rounded-md text-[10px] flex items-center gap-1 ${orderViewMode==='grouped'?'bg-white shadow':''}`}>Lives</button><button onClick={() => setOrderViewMode('list')} className={`px-2 py-1 rounded-md text-[10px] flex items-center gap-1 ${orderViewMode==='list'?'bg-white shadow':''}`}>Lista</button></div></div>
+                        
+                        {/* AQUI PASAMOS LA FUNCION DE EDITAR A LA LISTA */}
+                        <SalesListRenderer sales={cycle.cycleSales} viewMode={orderViewMode} onDeleteSale={logic.deleteSale} onEditSale={(sale) => setEditingSale(sale)} />
+                        
+                        </div>
                         <div className="hidden landscape:block pt-4 border-t border-slate-100 mt-4"><h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Historial de Pagos</h3><div className="bg-white border border-slate-100 rounded-xl overflow-hidden">{cycle.allPayments.map((p, i) => (<div key={i} className="flex justify-between p-3 border-b border-slate-50 text-sm"><div><span className="block">{p.detail}</span><span className="text-[10px] text-slate-400">{new Date(safeISO(p.date)).toLocaleDateString()}</span></div><span className="font-bold text-emerald-600">+${p.amount}</span></div>))}</div></div>
                     </div>
                 </div>
             </div>
         );
     };
+
 
 
     const WarehouseView = ({ logic }) => {
