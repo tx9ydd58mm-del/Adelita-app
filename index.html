@@ -775,7 +775,7 @@
         const [showInvoice, setShowInvoice] = useState(false);
         const [isEditing, setIsEditing] = useState(false);
         
-        // --- NUEVO: ESTADO PARA EDITAR VENTA INDIVIDUAL ---
+        // --- ESTADO PARA EDITAR VENTA INDIVIDUAL ---
         const [editingSale, setEditingSale] = useState(null); 
 
         const [editName, setEditName] = useState(activeClient.name);
@@ -800,7 +800,6 @@
             setIsEditing(false);
         };
 
-        // --- NUEVO: FUNCIÓN GUARDAR EDICIÓN VENTA ---
         const handleSaveSaleEdit = async () => {
             if(!editingSale) return;
             try {
@@ -846,17 +845,59 @@
         const handleRouteSelect = (route) => { let cost = 0; if (route === 'Servientrega') cost = 5; if (route === 'Domicilio') cost = 3; if (route === 'Ibarra') cost = cycle.totalSales >= 25 ? 0 : 3; handleUpdateClient({ deliveryMethod: route, shippingCost: cost }); };
         const cycleStartDateStr = cycle.lastShipmentDate.toLocaleDateString() === '12/31/1969' ? 'Inicio' : new Date(safeISO(cycle.lastShipmentDate)).toLocaleDateString();
 
+        // --- LÓGICA DEL MENSAJE WHATSAPP MODIFICADA ---
         const generateWaMessage = () => {
             try {
-                const groups = {}; cycle.cycleSales.forEach(s => { const date = new Date(safeISO(s.date)); if(isNaN(date)) return; const d = date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'numeric' }); if (!groups[d]) groups[d] = { count: 0, total: 0 }; groups[d].count++; groups[d].total += s.value; });
-                let msg = `¡Hola! 👋 Aquí te adjunto la fotito de tus prendas separadas.\n\n`; Object.entries(groups).forEach(([d, v]) => msg += `Live ${d} 📸\n📝 RESUMEN: ${v.count} prendas\n💲 Subtotal: $${v.total.toFixed(2)}\n\n`);
-                const clothesPayments = cycle.cyclePayments.filter(p => !p.detail || !p.detail.includes("Pago Envío")); if (clothesPayments.length > 0) { msg += `💸 *ABONOS ROPA:*\n`; clothesPayments.forEach(p => msg += `✅ $${p.amount.toFixed(2)}\n`); msg += `\n`; }
+                // 1. ORDENAR CRONOLÓGICAMENTE (Más antiguo primero)
+                const sortedSales = [...cycle.cycleSales].sort((a, b) => new Date(safeISO(a.date)) - new Date(safeISO(b.date)));
+
+                const groups = {}; 
+                sortedSales.forEach(s => { 
+                    const date = new Date(safeISO(s.date)); 
+                    if(isNaN(date)) return; 
+                    // Usamos el formato numérico para ordenar las claves correctamente si es necesario, pero el array ya está ordenado
+                    const d = date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'numeric' }); 
+                    if (!groups[d]) groups[d] = { count: 0, total: 0 }; 
+                    groups[d].count++; 
+                    groups[d].total += s.value; 
+                });
+                
+                let msg = `¡Hola! 👋 Aquí te adjunto la fotito de tus prendas separadas.\n\n`; 
+                
+                // Al iterar sobre groups (creado desde un array ordenado), el orden de inserción se mantiene usualmente
+                Object.entries(groups).forEach(([d, v]) => msg += `Live ${d} 📸\n📝 RESUMEN: ${v.count} prendas\n💲 Subtotal: $${v.total.toFixed(2)}\n\n`);
+                
+                const clothesPayments = cycle.cyclePayments.filter(p => !p.detail || !p.detail.includes("Pago Envío")); 
+                if (clothesPayments.length > 0) { 
+                    msg += `💸 *ABONOS ROPA:*\n`; 
+                    clothesPayments.forEach(p => msg += `✅ $${p.amount.toFixed(2)}\n`); 
+                    msg += `\n`; 
+                }
+                
                 msg += `📊 *RESUMEN DE CUENTA:*\nTotal Ropa: $${cycle.totalSales.toFixed(2)}\n(-) Total Abonos: $${cycle.totalNormalPaid.toFixed(2)}\n--------------------------\n`;
-                if (clothingDebt > 0.01) msg += `🔸 Ropa Pendiente: $${clothingDebt.toFixed(2)}\n`; else msg += `🔹 Ropa: PAGADA (Saldo a favor: $${cycle.clothingBalance.toFixed(2)})\n`;
-                if (activeClient.deliveryMethod) { if (shippingBalance < -0.01) msg += `🔸 Envío (${activeClient.deliveryMethod}): Pendiente $${Math.abs(shippingBalance).toFixed(2)}\n`; else msg += `🔹 Envío: CUBIERTO ✅\n`; }
+                
+                if (clothingDebt > 0.01) msg += `🔸 Ropa Pendiente: $${clothingDebt.toFixed(2)}\n`; 
+                else msg += `🔹 Ropa: PAGADA (Saldo a favor: $${cycle.clothingBalance.toFixed(2)})\n`;
+                
+                if (activeClient.deliveryMethod) { 
+                    if (shippingBalance < -0.01) msg += `🔸 Envío (${activeClient.deliveryMethod}): Pendiente $${Math.abs(shippingBalance).toFixed(2)}\n`; 
+                    else msg += `🔹 Envío: CUBIERTO ✅\n`; 
+                }
+                
                 const totalTotal = clothingDebt + Math.abs(Math.min(0, shippingBalance));
-                if (totalTotal > 0.01) { msg += `\n*🔴 TOTAL A TRANSFERIR: $${totalTotal.toFixed(2)}*\n\n🏦 *BANCO PICHINCHA*\n🔢 2204226498\n👤 Bryan David Suárez\n🆔 1003300751\n\n`; } else { msg += `\n*🟢 TODO PAGADO. ¡Gracias!*\n\n`; }
-                msg += `Responde:\n1️⃣ ACUMULAR\n2️⃣ ENVIAR`; return msg;
+                
+                // 2. LÓGICA DE TEXTO DE COBRO ACTUALIZADA
+                if (totalTotal > 0.01) { 
+                    // CASO: TIENE DEUDA -> Texto de cobro sutil + Opciones al final
+                    msg += `\n*🔴 TOTAL A TRANSFERIR: $${totalTotal.toFixed(2)}*\n\n🏦 *BANCO PICHINCHA*\n🔢 2204226498\n👤 Bryan David Suárez\n🆔 1003300751\n\n`; 
+                    msg += `Ayúdanos con la fotito del comprobante 📸.\nUna vez realizado el pago, por favor confírmanos tu decisión:\n1️⃣ ACUMULAR\n2️⃣ ENVIAR`;
+                } else { 
+                    // CASO: AL DÍA -> Texto directo
+                    msg += `\n*🟢 TODO PAGADO. ¡Gracias!*\n\n`; 
+                    msg += `Responde:\n1️⃣ ACUMULAR\n2️⃣ ENVIAR`;
+                }
+                
+                return msg;
             } catch(e) { return "Error generando mensaje."; }
         };
         const copyToClipboard = () => { navigator.clipboard.writeText(generateWaMessage()).then(() => alert("Copiado!"), () => alert("Error copiar")); };
@@ -871,27 +912,9 @@
                                 <h3 className="font-bold text-xl text-slate-800">Editar Venta</h3>
                                 <p className="text-xs text-slate-400">Corrige fecha, nombre o precio</p>
                             </div>
-                            
-                            <div>
-                                <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Fecha del Live</label>
-                                <input type="date" value={editingSale.date ? editingSale.date.split('T')[0] : ''} onChange={e => setEditingSale({...editingSale, date: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700" />
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-3">
-                                <div className="col-span-2">
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Prenda</label>
-                                    <input value={editingSale.item} onChange={e => setEditingSale({...editingSale, item: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl" />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Precio</label>
-                                    <input type="number" step="0.01" value={editingSale.value} onChange={e => setEditingSale({...editingSale, value: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-emerald-600" />
-                                </div>
-                            </div>
-
-                            <div className="flex gap-2 pt-2">
-                                <button onClick={() => setEditingSale(null)} className="flex-1 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200">Cancelar</button>
-                                <button onClick={handleSaveSaleEdit} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-lg">Guardar Cambios</button>
-                            </div>
+                            <div><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Fecha del Live</label><input type="date" value={editingSale.date ? editingSale.date.split('T')[0] : ''} onChange={e => setEditingSale({...editingSale, date: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700" /></div>
+                            <div className="grid grid-cols-3 gap-3"><div className="col-span-2"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Prenda</label><input value={editingSale.item} onChange={e => setEditingSale({...editingSale, item: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl" /></div><div><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Precio</label><input type="number" step="0.01" value={editingSale.value} onChange={e => setEditingSale({...editingSale, value: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-emerald-600" /></div></div>
+                            <div className="flex gap-2 pt-2"><button onClick={() => setEditingSale(null)} className="flex-1 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200">Cancelar</button><button onClick={handleSaveSaleEdit} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-lg">Guardar Cambios</button></div>
                         </div>
                     </div>
                 )}
@@ -960,10 +983,7 @@
                     </div>
                     <div className="landscape:block landscape:overflow-y-auto landscape:h-full">
                         <div className="pb-4"><div className="flex justify-between items-end mb-3"><h3 className="text-xs font-bold text-slate-400 uppercase">Detalle Pedido</h3><div className="flex bg-slate-100 p-1 rounded-lg"><button onClick={() => setOrderViewMode('grouped')} className={`px-2 py-1 rounded-md text-[10px] flex items-center gap-1 ${orderViewMode==='grouped'?'bg-white shadow':''}`}>Lives</button><button onClick={() => setOrderViewMode('list')} className={`px-2 py-1 rounded-md text-[10px] flex items-center gap-1 ${orderViewMode==='list'?'bg-white shadow':''}`}>Lista</button></div></div>
-                        
-                        {/* AQUI PASAMOS LA FUNCION DE EDITAR A LA LISTA */}
                         <SalesListRenderer sales={cycle.cycleSales} viewMode={orderViewMode} onDeleteSale={logic.deleteSale} onEditSale={(sale) => setEditingSale(sale)} />
-                        
                         </div>
                         <div className="hidden landscape:block pt-4 border-t border-slate-100 mt-4"><h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Historial de Pagos</h3><div className="bg-white border border-slate-100 rounded-xl overflow-hidden">{cycle.allPayments.map((p, i) => (<div key={i} className="flex justify-between p-3 border-b border-slate-50 text-sm"><div><span className="block">{p.detail}</span><span className="text-[10px] text-slate-400">{new Date(safeISO(p.date)).toLocaleDateString()}</span></div><span className="font-bold text-emerald-600">+${p.amount}</span></div>))}</div></div>
                     </div>
@@ -971,7 +991,6 @@
             </div>
         );
     };
-
 
 
     const WarehouseView = ({ logic }) => {
