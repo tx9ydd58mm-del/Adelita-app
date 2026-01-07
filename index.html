@@ -130,30 +130,27 @@
         .tab-inactive { color: #64748b; }
 
         /* =========================================
-           ESTILOS ESPECÍFICOS PARA FACTURA ADELITA 3D
+           ESTILOS DE FACTURA (CORREGIDOS PARA PNG Y PRINT)
            ========================================= */
         :root {
             --gradient-header: linear-gradient(135deg, #FF9A9E 0%, #FECFEF 99%, #FECFEF 100%);
             --gradient-brand: linear-gradient(to right, #b224ef, #7579ff);
             --gradient-gold: linear-gradient(45deg, #FDC830, #F37335);
             --shipping-gradient: linear-gradient(120deg, #89f7fe 0%, #66a6ff 100%);
-            --bg-body-invoice: rgba(32, 32, 37, 0.95); /* Fondo oscuro semitransparente */
+            --bg-body-invoice: rgba(32, 32, 37, 0.95);
             --paper: #ffffff;
             --shadow-deep: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
         }
 
-        /* Modal Flotante con Scroll Correcto */
         .invoice-modal-container {
             font-family: 'Montserrat', sans-serif;
             background-color: var(--bg-body-invoice);
             backdrop-filter: blur(5px);
             position: fixed; inset: 0; z-index: 5000;
             display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
-            overflow-y: auto; /* PERMITE SCROLL */
-            padding: 20px;
+            overflow-y: auto; padding: 20px;
         }
 
-        /* Panel de controles flotante */
         .controls-panel {
             position: fixed; bottom: 30px; right: 20px;
             display: flex; flex-direction: column; gap: 15px; z-index: 5001;
@@ -163,21 +160,24 @@
             border: 2px solid rgba(255,255,255,0.3); color: white; font-size: 22px;
             cursor: pointer; box-shadow: 0 8px 16px rgba(0,0,0,0.4);
             transition: transform 0.2s; display: flex; align-items: center; justify-content: center;
-            background-color: #333; /* Fallback */
+            background-color: #333; 
         }
         .btn-float:active { transform: scale(0.95); }
-        
         .btn-add { background: linear-gradient(45deg, #11998e, #38ef7d); }
         .btn-photo { background: linear-gradient(45deg, #FF416C, #FF4B2B); }
-        .btn-print { background: linear-gradient(45deg, #3a7bd5, #3a6073); } /* Nuevo botón imprimir */
+        .btn-print { background: linear-gradient(45deg, #3a7bd5, #3a6073); }
         .btn-close { background: linear-gradient(45deg, #2c3e50, #4ca1af); position: fixed; top: 20px; right: 20px; z-index: 5002; width: 45px; height: 45px; font-size: 20px; }
 
+        /* El contenedor del recibo */
         #receipt-wide {
             width: 100%; max-width: 700px;
             background-color: var(--paper);
             box-shadow: var(--shadow-deep); 
-            position: relative; overflow: hidden; border-radius: 12px;
-            margin-top: 60px; margin-bottom: 120px; /* Margen para no chocar con botones */
+            position: relative; 
+            /* QUITAMOS OVERFLOW HIDDEN PARA QUE SE VEA TODO AL IMPRIMIR */
+            overflow: visible; 
+            border-radius: 12px;
+            margin-top: 60px; margin-bottom: 120px;
             transform-origin: top center;
         }
 
@@ -197,27 +197,16 @@
         }
 
         .info-container { padding: 20px 50px; display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; }
-        
-        @media (max-width: 600px) {
-            .header-wide { flex-direction: column; text-align: center; gap: 20px; padding: 20px; }
-            .info-container { grid-template-columns: 1fr; padding: 10px 20px; }
-            .brand-section h1 { font-size: 36px; }
-            .grid-header, .item-row { grid-template-columns: 40px 1fr 60px 60px; padding-left: 10px; padding-right: 10px; }
-            #receipt-wide { width: 95%; margin-top: 20px; }
-        }
-
         .info-card {
             background: white; padding: 15px; border-radius: 10px;
             box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
             border-left: 5px solid #ddd; transition: all 0.3s;
         }
-
         .card-client { border-left-color: #b224ef; }
         .card-lives { border-left-color: #ff0050; background: #fff5f7; }
 
         .label { font-size: 10px; color: #888; text-transform: uppercase; font-weight: 800; display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
         .input-text { font-size: 16px; font-weight: 600; color: #333; width: 100%; outline: none; border-bottom: 1px dashed transparent; }
-        .input-text:focus { border-bottom: 1px dashed #ccc; }
 
         .grid-header {
             display: grid; grid-template-columns: 60px 1fr 100px 100px; padding: 12px 50px;
@@ -233,14 +222,15 @@
 
         .item-row {
             display: grid; grid-template-columns: 60px 1fr 100px 100px; padding: 15px 0;
-            border-bottom: 1px solid #f0f0f0; align-items: center; transition: background 0.2s; position: relative;
+            border-bottom: 1px solid #f0f0f0; align-items: center; position: relative;
+            /* EVITA QUE LOS ITEMS SE CORTEN AL IMPRIMIR */
+            break-inside: avoid; page-break-inside: avoid;
         }
         .item-row:nth-child(even) { background-color: #fafafa; }
 
         .col-qty { 
             text-align: center; font-weight: 800; background: linear-gradient(135deg, #e0e0e0 0%, #f5f5f5 100%); 
             border-radius: 50%; width: 30px; height: 30px; line-height: 30px; margin: 0 auto; font-size: 12px; color: #555; 
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
         .col-desc { padding-left: 15px; font-size: 14px; color: #444; font-weight: 500; }
         .col-unit { text-align: right; font-family: 'Space Mono', monospace; color: #888; font-size: 13px; }
@@ -249,38 +239,50 @@
         .delete-btn {
             position: absolute; left: -30px; color: white; background: #ff6b6b; 
             width: 25px; height: 25px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            font-size: 12px; cursor: pointer; opacity: 0; box-shadow: 0 2px 5px rgba(255, 107, 107, 0.4); transition: 0.2s;
+            font-size: 12px; cursor: pointer; opacity: 0; transition: 0.2s;
         }
         .item-row:hover .delete-btn { opacity: 1; left: -15px;}
 
         .shipping-section-3d {
             margin: 20px 50px; background: var(--shipping-gradient); padding: 2px;
-            border-radius: 12px; box-shadow: 0 8px 20px rgba(102, 166, 255, 0.25);
-            transform: perspective(500px) rotateX(2deg);
+            border-radius: 12px; 
+            break-inside: avoid; /* Evita corte al imprimir */
         }
         .shipping-inner { background: white; border-radius: 10px; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
         .shipping-icon-box { background: #e3f2fd; color: #2196f3; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; margin-right: 15px; }
-        .shipping-price-tag { background: #2196f3; color: white; font-family: 'Space Mono', monospace; padding: 5px 15px; border-radius: 20px; font-weight: 700; box-shadow: 0 4px 10px rgba(33, 150, 243, 0.3); }
+        .shipping-price-tag { background: #2196f3; color: white; font-family: 'Space Mono', monospace; padding: 5px 15px; border-radius: 20px; font-weight: 700; }
 
-        .footer-area { background: #fdfbf7; padding: 0 50px 30px 50px; position: relative; }
+        .footer-area { 
+            background: #fdfbf7; padding: 0 50px 30px 50px; position: relative; 
+            break-inside: avoid; page-break-inside: avoid; /* NO CORTAR TOTALES */
+        }
         .divider-graphic { height: 4px; background: repeating-linear-gradient(45deg, #ddd, #ddd 5px, transparent 5px, transparent 10px); margin: 10px 0 20px 0; opacity: 0.5; }
         .totals-flex { display: flex; justify-content: flex-end; }
-        .totals-card { width: 300px; background: #fff; padding: 20px; border-radius: 12px; border: 1px solid #eee; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+        .totals-card { width: 300px; background: #fff; padding: 20px; border-radius: 12px; border: 1px solid #eee; }
         .total-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; color: #666; }
         .final-total { margin-top: 15px; padding-top: 15px; border-top: 2px dashed #eee; display: flex; justify-content: space-between; align-items: center; }
         .final-label { font-size: 14px; font-weight: 800; color: #333; }
         .final-amount { font-size: 26px; font-weight: 800; background: var(--gradient-gold); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 
-        .bank-footer { background: #333; color: #aaa; padding: 20px 50px; font-size: 11px; display: flex; justify-content: space-between; align-items: center; border-top: 4px solid #FDC830; }
+        .bank-footer { 
+            background: #333; color: #aaa; padding: 20px 50px; font-size: 11px; display: flex; justify-content: space-between; align-items: center; border-top: 4px solid #FDC830; 
+            break-inside: avoid;
+        }
         .bank-info strong { color: white; font-size: 13px; display: block; margin-bottom: 3px; }
 
-        [contenteditable]:hover { background-color: rgba(255, 230, 0, 0.1); cursor: text; box-shadow: 0 0 0 2px rgba(255, 215, 0, 0.3); border-radius: 4px; }
+        @media (max-width: 600px) {
+            .header-wide { flex-direction: column; text-align: center; gap: 20px; padding: 20px; }
+            .info-container { grid-template-columns: 1fr; padding: 10px 20px; }
+            .brand-section h1 { font-size: 36px; }
+            .grid-header, .item-row { grid-template-columns: 40px 1fr 60px 60px; padding-left: 10px; padding-right: 10px; }
+            #receipt-wide { width: 95%; margin-top: 20px; }
+        }
 
-        /* --- ESTILOS DE IMPRESIÓN / PDF NATIVO --- */
+        /* --- ESTILOS DE IMPRESIÓN (PDF NATIVO) CORREGIDOS --- */
         @media print {
-            body * { visibility: hidden; } /* Ocultar todo el sitio */
+            body * { visibility: hidden; } /* Ocultar todo */
             .invoice-modal-container, .invoice-modal-container * {
-                visibility: visible; /* Mostrar solo el modal */
+                visibility: visible; /* Mostrar solo factura */
             }
             .invoice-modal-container {
                 position: absolute; left: 0; top: 0; width: 100%; height: auto;
@@ -288,14 +290,23 @@
                 backdrop-filter: none;
             }
             .controls-panel, .btn-close, .delete-btn, .no-print { 
-                display: none !important; /* Ocultar botones de control */
+                display: none !important; 
             }
             #receipt-wide {
                 box-shadow: none; margin: 0; width: 100%; max-width: 100%;
-                border: none; transform: none;
+                border: none; transform: none; 
+                overflow: visible !important; height: auto !important;
+            }
+            /* Forzar colores de fondo para Chrome/Safari */
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            
+            .item-row, .footer-area, .bank-footer, .shipping-section-3d {
+                break-inside: avoid; page-break-inside: avoid;
             }
         }
     </style>
+
+
 </head>
 <body class="adelita-bg">
 
@@ -419,14 +430,13 @@
     };
 
     // --- NUEVO COMPONENTE DE FACTURA 3D ULTIMATE ---
+    
     const Invoice3DModal = ({ client, cycle, onClose }) => {
         const [items, setItems] = useState([]);
 
-        // LÓGICA DE AGRUPACIÓN INTELIGENTE (PUNTO 4)
+        // LÓGICA DE AGRUPACIÓN INTELIGENTE
         useEffect(() => {
             const grouped = {};
-            
-            // Agrupar items por nombre y precio
             cycle.cycleSales.forEach(s => {
                 const key = `${s.item.trim().toLowerCase()}-${s.value}`;
                 if (!grouped[key]) {
@@ -435,10 +445,7 @@
                 grouped[key].qty += 1;
                 grouped[key].total += s.value;
             });
-
-            // Convertir objeto agrupado a array
             const loadedItems = Object.values(grouped);
-
             if(loadedItems.length === 0) {
                  setItems([{qty: 1, desc: "Prenda...", unit: 0, total: 0}]);
             } else {
@@ -446,34 +453,49 @@
             }
         }, [cycle]);
 
-        // MODO FOTO (HTML2CANVAS)
+        // MODO FOTO MEJORADO (Captura TODA la factura, no solo lo visible)
         const handlePhotoDownload = () => {
             const receipt = document.getElementById('receipt-wide');
             const controls = document.querySelector('.controls-panel');
             const btnClose = document.querySelector('.btn-close');
+            
+            // Ocultar botones
             if (controls) controls.style.display = 'none';
             if (btnClose) btnClose.style.display = 'none';
             
+            // Truco: Forzar altura completa y scroll arriba para capturar todo
+            window.scrollTo(0,0);
+            const originalStyle = receipt.style.cssText;
+            receipt.style.height = 'auto';
+            receipt.style.overflow = 'visible';
+            receipt.style.maxHeight = 'none';
+
             window.html2canvas(receipt, {
-                scale: 2,
+                scale: 2, // Mejor calidad
                 backgroundColor: null,
                 useCORS: true,
+                scrollY: -window.scrollY, // Corregir desplazamiento
+                windowHeight: receipt.scrollHeight + 100, // Asegurar altura total
                 ignoreElements: (element) => element.classList.contains('delete-btn')
             }).then(canvas => {
                 const link = document.createElement('a');
-                link.download = `Recibo_${client.name}_${new Date().toISOString().split('T')[0]}.png`;
+                link.download = `Recibo_${client.id}_${new Date().toISOString().split('T')[0]}.png`;
                 link.href = canvas.toDataURL("image/png");
                 link.click();
+                
+                // Restaurar botones y estilo
+                receipt.style.cssText = originalStyle;
                 if (controls) controls.style.display = 'flex';
                 if (btnClose) btnClose.style.display = 'flex';
             }).catch(err => {
                 alert("Error generando imagen: " + err);
+                receipt.style.cssText = originalStyle;
                 if (controls) controls.style.display = 'flex';
                 if (btnClose) btnClose.style.display = 'flex';
             });
         };
 
-        // MODO PDF / COMPARTIR / IMPRIMIR (NATIVO)
+        // MODO PDF / COMPARTIR (NATIVO iOS)
         const handleNativeShare = () => {
             window.print();
         };
@@ -487,7 +509,7 @@
 
                 <div className="controls-panel" data-html2canvas-ignore="true">
                     <button className="btn-float btn-add" onClick={addItem} title="Añadir Prenda Manual"><i className="fas fa-plus"></i></button>
-                    <button className="btn-float btn-photo" onClick={handlePhotoDownload} title="Descargar como Foto (PNG)"><i className="fas fa-camera"></i></button>
+                    <button className="btn-float btn-photo" onClick={handlePhotoDownload} title="Descargar como Foto (PNG Completo)"><i className="fas fa-camera"></i></button>
                     <button className="btn-float btn-print" onClick={handleNativeShare} title="PDF / Compartir / Imprimir"><i className="fas fa-file-pdf"></i></button>
                 </div>
 
@@ -508,11 +530,13 @@
                     <div className="info-container">
                         <div className="info-card card-client">
                             <span className="label"><i className="fas fa-user-circle"></i> CLIENTE VIP</span>
-                            <div className="input-text" contentEditable="true" suppressContentEditableWarning={true}>{client.name}</div>
+                            {/* AQUÍ AÑADÍ EL ID DEL CLIENTE GRANDE */}
+                            <div className="input-text" style={{fontSize: '22px', fontWeight:'900', color:'#333'}} contentEditable="true" suppressContentEditableWarning={true}>{client.id}</div>
+                            <div className="input-text" style={{fontSize: '12px', color:'#666', marginTop:'4px'}} contentEditable="true" suppressContentEditableWarning={true}>{client.name}</div>
                         </div>
                         <div className="info-card card-lives">
                             <span className="label" style={{color:'#ff0050'}}><i className="fab fa-tiktok"></i> ACUMULADO / LIVES</span>
-                            <div className="input-text" contentEditable="true" suppressContentEditableWarning={true} style={{color: '#c41e3a'}}>{cycle.itemsCount} Prendas Acumuladas</div>
+                            <div className="input-text" contentEditable="true" suppressContentEditableWarning={true} style={{color: '#c41e3a', fontSize: '18px'}}>{cycle.itemsCount} Prendas Acumuladas</div>
                         </div>
                     </div>
                     <div className="grid-header"><div>#</div><div>DESCRIPCIÓN DE PRENDA</div><div>UNITARIO</div><div>TOTAL</div></div>
@@ -555,6 +579,7 @@
             </div>
         );
     };
+
 
     // --- LÓGICA DE NEGOCIO (CONECTADA A FIREBASE) ---
     const useBusinessLogic = (user) => {
