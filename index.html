@@ -770,12 +770,13 @@
             </div>
         );
     };
+
+
     const ClientDetailComponent = ({ activeClient, logic, onBack }) => {
         const [payAmount, setPayAmount] = useState(""); const [payDate, setPayDate] = useState(getToday()); const [shipPayAmount, setShipPayAmount] = useState(""); const [shipPayDate, setShipPayDate] = useState(getToday()); const [orderViewMode, setOrderViewMode] = useState('grouped'); const [allHistoryViewMode, setAllHistoryViewMode] = useState('grouped'); const [tabView, setTabView] = useState('cycle'); const [showWaModal, setShowWaModal] = useState(false); 
         const [showInvoice, setShowInvoice] = useState(false);
         const [isEditing, setIsEditing] = useState(false);
         
-        // --- ESTADO PARA EDITAR VENTA INDIVIDUAL ---
         const [editingSale, setEditingSale] = useState(null); 
 
         const [editName, setEditName] = useState(activeClient.name);
@@ -805,22 +806,13 @@
             try {
                 const finalDateISO = smartDate(editingSale.date, cycle.lastShipmentDate); 
                 const docRef = window.fs.doc(window.db, "sales", editingSale.fireId);
-                await window.fs.updateDoc(docRef, {
-                    item: editingSale.item,
-                    value: parseFloat(editingSale.value),
-                    date: finalDateISO
-                });
+                await window.fs.updateDoc(docRef, { item: editingSale.item, value: parseFloat(editingSale.value), date: finalDateISO });
                 setEditingSale(null); 
-            } catch(e) {
-                alert("Error al actualizar: " + e.message);
-            }
+            } catch(e) { alert("Error al actualizar: " + e.message); }
         };
 
         const deleteThisClient = () => {
-            if(confirm("⚠ ¿ESTÁS SEGURO? Se borrará el cliente y su historial. Esta acción es irreversible.")) {
-                logic.deleteClient(activeClient.id);
-                onBack();
-            }
+            if(confirm("⚠ ¿ESTÁS SEGURO? Se borrará el cliente y su historial. Esta acción es irreversible.")) { logic.deleteClient(activeClient.id); onBack(); }
         };
 
         const handlePayment = () => { if(!payAmount) return; logic.addPayment(activeClient.id, payAmount, 'Abono Ropa', smartDate(payDate, cycle.lastShipmentDate)); setPayAmount(""); };
@@ -845,58 +837,33 @@
         const handleRouteSelect = (route) => { let cost = 0; if (route === 'Servientrega') cost = 5; if (route === 'Domicilio') cost = 3; if (route === 'Ibarra') cost = cycle.totalSales >= 25 ? 0 : 3; handleUpdateClient({ deliveryMethod: route, shippingCost: cost }); };
         const cycleStartDateStr = cycle.lastShipmentDate.toLocaleDateString() === '12/31/1969' ? 'Inicio' : new Date(safeISO(cycle.lastShipmentDate)).toLocaleDateString();
 
-        // --- LÓGICA DEL MENSAJE WHATSAPP MODIFICADA ---
         const generateWaMessage = () => {
             try {
-                // 1. ORDENAR CRONOLÓGICAMENTE (Más antiguo primero)
                 const sortedSales = [...cycle.cycleSales].sort((a, b) => new Date(safeISO(a.date)) - new Date(safeISO(b.date)));
-
                 const groups = {}; 
                 sortedSales.forEach(s => { 
-                    const date = new Date(safeISO(s.date)); 
-                    if(isNaN(date)) return; 
-                    // Usamos el formato numérico para ordenar las claves correctamente si es necesario, pero el array ya está ordenado
+                    const date = new Date(safeISO(s.date)); if(isNaN(date)) return; 
                     const d = date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'numeric' }); 
-                    if (!groups[d]) groups[d] = { count: 0, total: 0 }; 
-                    groups[d].count++; 
-                    groups[d].total += s.value; 
+                    if (!groups[d]) groups[d] = { count: 0, total: 0 }; groups[d].count++; groups[d].total += s.value; 
                 });
                 
                 let msg = `¡Hola! 👋 Aquí te adjunto la fotito de tus prendas separadas.\n\n`; 
-                
-                // Al iterar sobre groups (creado desde un array ordenado), el orden de inserción se mantiene usualmente
                 Object.entries(groups).forEach(([d, v]) => msg += `Live ${d} 📸\n📝 RESUMEN: ${v.count} prendas\n💲 Subtotal: $${v.total.toFixed(2)}\n\n`);
                 
                 const clothesPayments = cycle.cyclePayments.filter(p => !p.detail || !p.detail.includes("Pago Envío")); 
-                if (clothesPayments.length > 0) { 
-                    msg += `💸 *ABONOS ROPA:*\n`; 
-                    clothesPayments.forEach(p => msg += `✅ $${p.amount.toFixed(2)}\n`); 
-                    msg += `\n`; 
-                }
+                if (clothesPayments.length > 0) { msg += `💸 *ABONOS ROPA:*\n`; clothesPayments.forEach(p => msg += `✅ $${p.amount.toFixed(2)}\n`); msg += `\n`; }
                 
                 msg += `📊 *RESUMEN DE CUENTA:*\nTotal Ropa: $${cycle.totalSales.toFixed(2)}\n(-) Total Abonos: $${cycle.totalNormalPaid.toFixed(2)}\n--------------------------\n`;
-                
-                if (clothingDebt > 0.01) msg += `🔸 Ropa Pendiente: $${clothingDebt.toFixed(2)}\n`; 
-                else msg += `🔹 Ropa: PAGADA (Saldo a favor: $${cycle.clothingBalance.toFixed(2)})\n`;
-                
-                if (activeClient.deliveryMethod) { 
-                    if (shippingBalance < -0.01) msg += `🔸 Envío (${activeClient.deliveryMethod}): Pendiente $${Math.abs(shippingBalance).toFixed(2)}\n`; 
-                    else msg += `🔹 Envío: CUBIERTO ✅\n`; 
-                }
+                if (clothingDebt > 0.01) msg += `🔸 Ropa Pendiente: $${clothingDebt.toFixed(2)}\n`; else msg += `🔹 Ropa: PAGADA (Saldo a favor: $${cycle.clothingBalance.toFixed(2)})\n`;
+                if (activeClient.deliveryMethod) { if (shippingBalance < -0.01) msg += `🔸 Envío (${activeClient.deliveryMethod}): Pendiente $${Math.abs(shippingBalance).toFixed(2)}\n`; else msg += `🔹 Envío: CUBIERTO ✅\n`; }
                 
                 const totalTotal = clothingDebt + Math.abs(Math.min(0, shippingBalance));
-                
-                // 2. LÓGICA DE TEXTO DE COBRO ACTUALIZADA
                 if (totalTotal > 0.01) { 
-                    // CASO: TIENE DEUDA -> Texto de cobro sutil + Opciones al final
                     msg += `\n*🔴 TOTAL A TRANSFERIR: $${totalTotal.toFixed(2)}*\n\n🏦 *BANCO PICHINCHA*\n🔢 2204226498\n👤 Bryan David Suárez\n🆔 1003300751\n\n`; 
                     msg += `Ayúdanos con la fotito del comprobante 📸.\nUna vez realizado el pago, por favor confírmanos tu decisión:\n1️⃣ ACUMULAR\n2️⃣ ENVIAR`;
                 } else { 
-                    // CASO: AL DÍA -> Texto directo
-                    msg += `\n*🟢 TODO PAGADO. ¡Gracias!*\n\n`; 
-                    msg += `Responde:\n1️⃣ ACUMULAR\n2️⃣ ENVIAR`;
+                    msg += `\n*🟢 TODO PAGADO. ¡Gracias!*\n\n`; msg += `Responde:\n1️⃣ ACUMULAR\n2️⃣ ENVIAR`;
                 }
-                
                 return msg;
             } catch(e) { return "Error generando mensaje."; }
         };
@@ -904,14 +871,10 @@
 
         return (
             <div className="flex flex-col h-full bg-white relative">
-                {/* --- MODAL DE EDICIÓN DE VENTA --- */}
                 {editingSale && (
                     <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-6 animate-in fade-in" onClick={() => setEditingSale(null)}>
                         <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
-                            <div className="text-center border-b pb-2 mb-2">
-                                <h3 className="font-bold text-xl text-slate-800">Editar Venta</h3>
-                                <p className="text-xs text-slate-400">Corrige fecha, nombre o precio</p>
-                            </div>
+                            <div className="text-center border-b pb-2 mb-2"><h3 className="font-bold text-xl text-slate-800">Editar Venta</h3><p className="text-xs text-slate-400">Corrige fecha, nombre o precio</p></div>
                             <div><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Fecha del Live</label><input type="date" value={editingSale.date ? editingSale.date.split('T')[0] : ''} onChange={e => setEditingSale({...editingSale, date: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700" /></div>
                             <div className="grid grid-cols-3 gap-3"><div className="col-span-2"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Prenda</label><input value={editingSale.item} onChange={e => setEditingSale({...editingSale, item: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl" /></div><div><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Precio</label><input type="number" step="0.01" value={editingSale.value} onChange={e => setEditingSale({...editingSale, value: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-emerald-600" /></div></div>
                             <div className="flex gap-2 pt-2"><button onClick={() => setEditingSale(null)} className="flex-1 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200">Cancelar</button><button onClick={handleSaveSaleEdit} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-lg">Guardar Cambios</button></div>
@@ -938,8 +901,17 @@
                                     </div>
                                 ) : (
                                     <>
-                                        <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">{activeClient.name} <button onClick={() => setIsEditing(true)} className="text-slate-300 hover:text-slate-600 text-sm"><Icon.Edit /></button></h1>
-                                        <div className="flex flex-col gap-1 text-sm text-slate-500 mt-1"><div className="flex gap-2"><span className="bg-slate-100 px-2 rounded font-mono font-bold text-slate-600">{activeClient.id}</span><span>📞 {activeClient.phone}</span></div>{(activeClient.city || activeClient.province) && (<div className="flex items-center gap-1 text-indigo-600 font-medium text-xs"><i className="fas fa-map-marker-alt"></i> {activeClient.city}, {activeClient.province}</div>)}</div>
+                                        {/* CAMBIO AQUÍ: ID COMO TÍTULO PRINCIPAL */}
+                                        <h1 className="text-4xl font-black text-slate-800 tracking-tighter mb-1">{activeClient.id}</h1>
+                                        
+                                        <div className="flex flex-col gap-1 text-sm text-slate-500">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-bold text-slate-600 uppercase tracking-wide">{activeClient.name}</span>
+                                                <button onClick={() => setIsEditing(true)} className="text-slate-300 hover:text-slate-600 text-sm"><Icon.Edit /></button>
+                                            </div>
+                                            <div className="flex gap-2 text-xs"><span>📞 {activeClient.phone}</span></div>
+                                            {(activeClient.city || activeClient.province) && (<div className="flex items-center gap-1 text-indigo-600 font-medium text-xs"><i className="fas fa-map-marker-alt"></i> {activeClient.city}, {activeClient.province}</div>)}
+                                        </div>
                                         {activeClient.address && (<div className="mt-3 bg-blue-50 p-3 rounded-lg border border-blue-100 text-xs text-blue-800"><span className="font-bold block mb-1">📍 Dirección de Envío:</span>{activeClient.address}{activeClient.cedula && <span className="block mt-1 font-mono opacity-75">CI/RUC: {activeClient.cedula}</span>}</div>)}
                                     </>
                                 )}
@@ -993,6 +965,7 @@
     };
 
 
+
     const WarehouseView = ({ logic }) => {
         const [guide, setGuide] = useState(""); const [dispatchDate, setDispatchDate] = useState(getToday()); const [selectedClient, setSelectedClient] = useState(null);
         
@@ -1001,13 +974,10 @@
         const handleDispatch = () => {
             if (!guide) return alert("Falta Guía");
             const finalDate = smartDate(dispatchDate, logic.getClientCycle(selectedClient.id).lastShipmentDate);
-            
             const cycle = logic.getClientCycle(selectedClient.id); 
             const clothingBalance = cycle.clothingBalance; 
             const shippingBalance = cycle.totalShippingPaid - (selectedClient.shippingCost || 0);
 
-            // CORRECCIÓN CRÍTICA: NO agregar venta de envío (addSale) porque duplicaba la deuda.
-            // Arrastrar saldos a favor al siguiente ciclo (ropa o vueltos de envío)
             if (clothingBalance > 0.01) logic.addPayment(selectedClient.id, clothingBalance, "Saldo a Favor Ropa (Arrastre)", new Date(new Date(finalDate).getTime() + 1000).toISOString());
             if (shippingBalance > 0.01) logic.addPayment(selectedClient.id, shippingBalance, "Vuelto Envío (Arrastre)", new Date(new Date(finalDate).getTime() + 1000).toISOString());
             
@@ -1017,10 +987,29 @@
             alert("✅ Despachado Correctamente"); setSelectedClient(null); setGuide("");
         };
 
-        if (selectedClient) return (<div className="p-6 h-full flex flex-col bg-slate-100"><button onClick={() => setSelectedClient(null)} className="mb-4 font-bold text-slate-500">← Volver</button><div className="bg-white p-6 rounded-3xl shadow-xl border-l-8 border-indigo-600"><h2 className="text-2xl font-bold mb-1">{selectedClient.name}</h2><p className="text-slate-500 mb-6">{selectedClient.deliveryMethod}</p><div className="space-y-4 mb-8"><div className="bg-slate-50 p-3 rounded-lg text-sm border"><div className="flex justify-between"><span>Ropa:</span><span className="text-emerald-600 font-bold">PAGADO</span></div><div className="flex justify-between"><span>Envío:</span><span className="text-emerald-600 font-bold">PAGADO</span></div></div><input value={guide} onChange={e => setGuide(e.target.value)} placeholder="Número de Guía / Tracking" className="w-full p-4 border-2 rounded-xl text-xl font-mono focus:border-indigo-600 outline-none" autoFocus /><div><label className="text-xs font-bold text-slate-400">Fecha Despacho</label><input type="date" value={dispatchDate} onChange={e => setDispatchDate(e.target.value)} className="w-full p-3 border rounded-xl" /></div></div><button onClick={handleDispatch} className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg text-lg flex items-center justify-center gap-2"><Icon.Check /> CONFIRMAR SALIDA</button></div></div>);
+        if (selectedClient) return (<div className="p-6 h-full flex flex-col bg-slate-100"><button onClick={() => setSelectedClient(null)} className="mb-4 font-bold text-slate-500">← Volver</button><div className="bg-white p-6 rounded-3xl shadow-xl border-l-8 border-indigo-600"><h2 className="text-4xl font-black mb-1 text-slate-800">{selectedClient.id}</h2><p className="text-slate-500 font-bold uppercase mb-6 text-sm">{selectedClient.name} • {selectedClient.deliveryMethod}</p><div className="space-y-4 mb-8"><div className="bg-slate-50 p-3 rounded-lg text-sm border"><div className="flex justify-between"><span>Ropa:</span><span className="text-emerald-600 font-bold">PAGADO</span></div><div className="flex justify-between"><span>Envío:</span><span className="text-emerald-600 font-bold">PAGADO</span></div></div><input value={guide} onChange={e => setGuide(e.target.value)} placeholder="Número de Guía / Tracking" className="w-full p-4 border-2 rounded-xl text-xl font-mono focus:border-indigo-600 outline-none" autoFocus /><div><label className="text-xs font-bold text-slate-400">Fecha Despacho</label><input type="date" value={dispatchDate} onChange={e => setDispatchDate(e.target.value)} className="w-full p-3 border rounded-xl" /></div></div><button onClick={handleDispatch} className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg text-lg flex items-center justify-center gap-2"><Icon.Check /> CONFIRMAR SALIDA</button></div></div>);
         
-        return (<div className="p-4 pb-24"><h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-700"><Icon.Box /> Listos para Enviar ({readyClients.length})</h2><div className="space-y-3">{readyClients.length === 0 && <div className="text-center py-12 text-slate-400 border border-dashed rounded-3xl">No hay paquetes listos</div>}{readyClients.map(c => (<div key={c.id} onClick={() => setSelectedClient(c)} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center touch-card cursor-pointer"><div><div className="font-bold text-slate-800">{c.name}</div><div className={`inline-block px-2 py-0.5 mt-1 rounded text-[10px] font-bold border ${c.status.color}`}>{c.status.label}</div></div><button className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm">DESPACHAR</button></div>))}</div></div>);
+        return (
+            <div className="p-4 pb-24">
+                <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-700"><Icon.Box /> Listos para Enviar ({readyClients.length})</h2>
+                <div className="space-y-3">
+                    {readyClients.length === 0 && <div className="text-center py-12 text-slate-400 border border-dashed rounded-3xl">No hay paquetes listos</div>}
+                    {readyClients.map(c => (
+                        <div key={c.id} onClick={() => setSelectedClient(c)} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center touch-card cursor-pointer">
+                            <div>
+                                {/* CAMBIO AQUÍ: ID GRANDE */}
+                                <div className="font-black text-lg text-slate-800 tracking-tight">{c.id}</div>
+                                <div className="text-xs font-bold text-slate-500 uppercase mt-0.5">{c.name}</div>
+                                <div className={`inline-block px-2 py-0.5 mt-1 rounded text-[10px] font-bold border ${c.status.color}`}>{c.status.label}</div>
+                            </div>
+                            <button className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm">DESPACHAR</button>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
     };
+
 
 
     const LiveView = ({ logic }) => {
@@ -1043,8 +1032,15 @@
             <div className="h-full flex flex-col bg-[#f0f2f5]">
                 <div className="bg-white p-4 shadow-sm z-30 border-b border-slate-100 rounded-b-[30px] mb-2">
                     <div className="flex justify-between items-center mb-4"><div className="flex flex-col"><h2 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-indigo-600 tracking-tighter">ADELITA STORE</h2><span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase ml-0.5">Live Sale System</span></div><div className="flex flex-col items-end"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Fecha Venta</label><input type="date" value={saleDate} onChange={e => setSaleDate(e.target.value)} className="bg-slate-50 text-slate-700 font-bold text-xs p-2 rounded-xl border border-slate-200 outline-none w-28 text-center shadow-sm" /></div></div>
-                    <div className="relative"><input value={search} onChange={e => setSearch(e.target.value)} className="w-full text-center text-xl font-mono uppercase bg-slate-50 border-2 border-slate-200 rounded-2xl p-4 focus:border-pink-500 outline-none transition-all font-bold text-slate-700 placeholder:text-slate-300 shadow-inner" placeholder="BUSCAR CLIENTE (ID / NOMBRE)" autoFocus />{suggestions.length > 0 && !found && (<div className="absolute top-full left-0 w-full mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl z-40 overflow-hidden">{suggestions.map(s => (<div key={s.id} onClick={() => selectSuggestion(s)} className="p-4 border-b border-slate-50 hover:bg-slate-50 flex justify-between items-center cursor-pointer"><span className="font-bold text-slate-800 text-lg">{s.id}</span><span className="text-sm text-slate-500 font-medium">{s.name}</span></div>))}</div>)}</div>
-                    {found && (<div className="mt-3 bg-gradient-to-r from-emerald-500 to-teal-500 p-3 rounded-2xl text-center shadow-lg animate-in fade-in slide-in-from-top-4 mb-1 transform transition-all"><div className="font-black text-white text-xl tracking-tight">{found.name}</div><div className="text-white/80 text-xs font-bold tracking-widest">{found.id}</div></div>)}
+                    <div className="relative"><input value={search} onChange={e => setSearch(e.target.value)} className="w-full text-center text-xl font-mono uppercase bg-slate-50 border-2 border-slate-200 rounded-2xl p-4 focus:border-pink-500 outline-none transition-all font-bold text-slate-700 placeholder:text-slate-300 shadow-inner" placeholder="BUSCAR (ID O NOMBRE)" autoFocus />{suggestions.length > 0 && !found && (<div className="absolute top-full left-0 w-full mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl z-40 overflow-hidden">{suggestions.map(s => (<div key={s.id} onClick={() => selectSuggestion(s)} className="p-4 border-b border-slate-50 hover:bg-slate-50 flex justify-between items-center cursor-pointer"><span className="font-bold text-slate-800 text-lg">{s.id}</span><span className="text-sm text-slate-500 font-medium">{s.name}</span></div>))}</div>)}</div>
+                    
+                    {/* CAMBIO AQUÍ: ID GRANDE, NOMBRE PEQUEÑO */}
+                    {found && (
+                        <div className="mt-3 bg-gradient-to-r from-emerald-500 to-teal-500 p-3 rounded-2xl text-center shadow-lg animate-in fade-in slide-in-from-top-4 mb-1 transform transition-all">
+                            <div className="text-white/90 text-sm font-bold tracking-widest uppercase mb-1">{found.name}</div>
+                            <div className="font-black text-white text-4xl tracking-tight">{found.id}</div>
+                        </div>
+                    )}
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 pt-2">
                     {msg && <div className="bg-emerald-600 text-white p-4 rounded-2xl mb-6 text-center font-bold animate-bounce shadow-xl mx-2 border-2 border-emerald-400">{msg}</div>}
@@ -1058,6 +1054,7 @@
             </div>
         );
     };
+
 
      const ClientsView = ({ logic }) => {
         const [view, setView] = useState('list'); const [activeClient, setActiveClient] = useState(null); const [filter, setFilter] = useState(""); 
@@ -1083,7 +1080,7 @@
         return (
             <div className="flex flex-col h-full pb-20 landscape:pb-0">
                 <div className="p-4 bg-white sticky top-0 z-10 space-y-3 shadow-sm">
-                    <div className="flex gap-2"><div className="flex-1 bg-slate-100 rounded-xl flex items-center px-3"><Icon.Search /><input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Buscar cliente..." className="bg-transparent w-full p-3 outline-none" /></div><button onClick={() => setView(view === 'new' ? 'list' : 'new')} className="bg-slate-900 text-white w-12 rounded-xl font-bold text-xl">{view === 'new' ? '×' : '+'}</button></div>
+                    <div className="flex gap-2"><div className="flex-1 bg-slate-100 rounded-xl flex items-center px-3"><Icon.Search /><input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Buscar por ID o Nombre..." className="bg-transparent w-full p-3 outline-none" /></div><button onClick={() => setView(view === 'new' ? 'list' : 'new')} className="bg-slate-900 text-white w-12 rounded-xl font-bold text-xl">{view === 'new' ? '×' : '+'}</button></div>
                     {view === 'new' && (
                         <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 animate-in slide-in-from-top duration-300 overflow-y-auto max-h-[70vh]">
                             <h3 className="font-bold mb-3">Nuevo Registro</h3>
@@ -1099,15 +1096,35 @@
                         </div>
                     )}
                 </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-2 landscape:grid landscape:grid-cols-2 landscape:gap-4 landscape:content-start">{filteredList.map(c => { const status = logic.getClientStatus(c, logic.getClientCycle(c.id)); return (<div key={c.id} onClick={() => { setActiveClient(c); setView('detail'); }} className="bg-white p-4 rounded-2xl border border-slate-100 flex justify-between items-center touch-card shadow-sm h-full"><div><div className="font-bold text-slate-800">{c.name}</div><div className="flex gap-2 mt-1"><span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">{c.id}</span>{c.city && <span className="text-xs bg-indigo-50 text-indigo-500 px-2 py-0.5 rounded flex items-center gap-1"><i className="fas fa-map-marker-alt"></i> {c.city}</span>}</div></div><div className={`px-2 py-1 rounded text-[10px] font-bold border ${status.color}`}>{status.label}</div></div>); })}</div>
+                <div className="flex-1 overflow-y-auto p-4 space-y-2 landscape:grid landscape:grid-cols-2 landscape:gap-4 landscape:content-start">
+                    {filteredList.map(c => { 
+                        const status = logic.getClientStatus(c, logic.getClientCycle(c.id)); 
+                        return (
+                            <div key={c.id} onClick={() => { setActiveClient(c); setView('detail'); }} className="bg-white p-4 rounded-2xl border border-slate-100 flex justify-between items-center touch-card shadow-sm h-full">
+                                <div>
+                                    {/* CAMBIO AQUÍ: ID GRANDE, NOMBRE PEQUEÑO */}
+                                    <div className="font-black text-xl text-slate-800 tracking-tight">{c.id}</div>
+                                    <div className="flex flex-col mt-0.5">
+                                        <span className="text-xs font-bold text-slate-500 uppercase">{c.name}</span>
+                                        {c.city && <span className="text-[10px] text-indigo-400 font-bold flex items-center gap-1"><i className="fas fa-map-marker-alt"></i> {c.city}</span>}
+                                    </div>
+                                </div>
+                                <div className={`px-2 py-1 rounded text-[10px] font-bold border ${status.color}`}>{status.label}</div>
+                            </div>
+                        ); 
+                    })}
+                </div>
             </div>
         );
     };
 
+
+
+
     // --- MÓDULO DE ADMINISTRACIÓN (GERENCIA) ---
 
     const ReportViewer = ({ logic, onClose, metrics }) => {
-        const [groupBy, setGroupBy] = useState('live'); 
+        const [groupBy, setGroupBy] = useState('live'); // 'live' (fecha) o 'client' (cliente)
         const [showHelp, setShowHelp] = useState(false);
 
         const reportData = useMemo(() => {
@@ -1115,18 +1132,29 @@
                 const groups = {}; 
                 const debtors = [];
                 
-                // Agrupar Ventas
                 logic.sales.forEach(sale => {
                     const date = new Date(safeISO(sale.date)); 
                     if (isNaN(date)) return;
                     
                     let key = ""; 
-                    if (groupBy === 'live') key = date.toLocaleDateString();
-                    if (groupBy === 'week') { const startOfYear = new Date(date.getFullYear(), 0, 1); const week = Math.ceil((((date - startOfYear) / 86400000) + startOfYear.getDay() + 1) / 7); key = `Semana ${week} - ${date.getFullYear()}`; }
-                    if (groupBy === 'month') key = date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }); 
-                    if (groupBy === 'year') key = date.getFullYear().toString();
+                    let keyDisplay = "";
+
+                    // LÓGICA DE AGRUPACIÓN (FECHA O CLIENTE)
+                    if (groupBy === 'client') {
+                        key = sale.clientId;
+                        // Buscamos el nombre para mostrarlo bonito, pero agrupamos por ID
+                        const clientName = logic.clients.find(c => c.id === sale.clientId)?.name || "Desconocido";
+                        keyDisplay = `${sale.clientId} - ${clientName}`;
+                    } else {
+                        // Agrupación por fechas (Live, Sem, Mes)
+                        if (groupBy === 'live') key = date.toLocaleDateString();
+                        else if (groupBy === 'week') { const startOfYear = new Date(date.getFullYear(), 0, 1); const week = Math.ceil((((date - startOfYear) / 86400000) + startOfYear.getDay() + 1) / 7); key = `Semana ${week} - ${date.getFullYear()}`; }
+                        else if (groupBy === 'month') key = date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }); 
+                        else if (groupBy === 'year') key = date.getFullYear().toString();
+                        keyDisplay = key;
+                    }
                     
-                    if (!groups[key]) groups[key] = { total: 0, items: [] }; 
+                    if (!groups[key]) groups[key] = { label: keyDisplay, total: 0, items: [] }; 
                     groups[key].total += sale.value; 
                     groups[key].items.push(sale);
                 });
@@ -1141,7 +1169,7 @@
                     } catch(e) {}
                 });
 
-                return { groups, debtors: debtors.sort((a,b) => a.balance - b.balance) }; // Ordenar deudores por mayor deuda
+                return { groups, debtors: debtors.sort((a,b) => a.balance - b.balance) };
             } catch (e) {
                 console.error("Error generando reporte:", e);
                 return { groups: {}, debtors: [] };
@@ -1155,15 +1183,20 @@
                 {showHelp && (<div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-6" onClick={() => setShowHelp(false)}><div className="bg-white rounded-2xl p-6 max-w-sm text-center shadow-2xl" onClick={e => e.stopPropagation()}><div className="text-4xl mb-4">📄</div><h3 className="font-bold text-lg mb-2">Guardar PDF (iPad)</h3><ol className="text-left text-sm text-slate-600 space-y-2 mb-6 list-decimal pl-4"><li>Toca <b>"Imprimir"</b>.</li><li>Haz <b>Zoom</b> sobre la hoja previa.</li><li>Toca <b>"Compartir"</b> y <b>"Guardar en Archivos"</b>.</li></ol><button onClick={() => setShowHelp(false)} className="bg-slate-900 text-white w-full py-3 rounded-xl font-bold">¡Entendido!</button></div></div>)}
                 
                 <div className="sticky top-0 bg-slate-900 text-white p-4 flex justify-between items-center no-print shadow-lg z-10">
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-col md:flex-row md:items-center gap-4">
                         <h2 className="font-bold flex items-center gap-2 text-sm md:text-base"><Icon.FileText /> Reporte</h2>
-                        <div className="flex bg-slate-800 rounded-lg p-1">
-                            {['live', 'week', 'month', 'year'].map(mode => (<button key={mode} onClick={() => setGroupBy(mode)} className={`px-2 md:px-3 py-1 rounded text-[10px] md:text-xs capitalize ${groupBy === mode ? 'bg-indigo-500 text-white font-bold' : 'text-slate-400 hover:text-white'}`}>{mode === 'live' ? 'Día' : mode === 'week' ? 'Sem' : mode}</button>))}
+                        
+                        {/* SELECTOR DE MODO DE VISTA */}
+                        <div className="flex bg-slate-800 rounded-lg p-1 overflow-x-auto max-w-[200px] md:max-w-none">
+                            <button onClick={() => setGroupBy('live')} className={`px-3 py-1 rounded text-xs whitespace-nowrap ${groupBy === 'live' ? 'bg-indigo-500 text-white font-bold' : 'text-slate-400 hover:text-white'}`}>Por Días</button>
+                            <button onClick={() => setGroupBy('client')} className={`px-3 py-1 rounded text-xs whitespace-nowrap ${groupBy === 'client' ? 'bg-pink-500 text-white font-bold' : 'text-slate-400 hover:text-white'}`}>Por Clientes</button>
+                            <div className="w-px bg-slate-700 mx-1"></div>
+                            <button onClick={() => setGroupBy('month')} className={`px-3 py-1 rounded text-xs whitespace-nowrap ${groupBy === 'month' ? 'bg-slate-600 text-white font-bold' : 'text-slate-400 hover:text-white'}`}>Mes</button>
                         </div>
                     </div>
                     <div className="flex gap-2">
                         <button onClick={() => setShowHelp(true)} className="bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 px-3 py-2 rounded-lg font-bold text-xs transition-colors border border-amber-500/50 flex items-center gap-1"><Icon.Info /> PDF?</button>
-                        <button onClick={handlePrint} className="bg-indigo-500 hover:bg-indigo-600 px-4 py-2 rounded-lg font-bold flex items-center gap-2 text-xs md:text-sm shadow-lg transition-colors"><Icon.Printer /> Imprimir / PDF</button>
+                        <button onClick={handlePrint} className="bg-indigo-500 hover:bg-indigo-600 px-4 py-2 rounded-lg font-bold flex items-center gap-2 text-xs md:text-sm shadow-lg transition-colors"><Icon.Printer /> Imprimir</button>
                         <button onClick={onClose} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg font-bold text-xs md:text-sm transition-colors"><Icon.Close /></button>
                     </div>
                 </div>
@@ -1171,10 +1204,9 @@
                 <div className="p-4 md:p-8 max-w-5xl mx-auto w-full text-slate-800">
                     <div className="text-center border-b-2 border-slate-900 pb-6 mb-8">
                         <h1 className="text-2xl md:text-4xl font-extrabold text-slate-900 tracking-tight">Reporte ADELITA STORE</h1>
-                        <p className="text-slate-500 mt-2 font-medium text-xs md:text-sm">Agrupado por: {groupBy.toUpperCase()} | Fecha: {new Date().toLocaleDateString()}</p>
+                        <p className="text-slate-500 mt-2 font-medium text-xs md:text-sm">Agrupado por: {groupBy === 'client' ? 'CLIENTES' : 'FECHAS'} | Fecha: {new Date().toLocaleDateString()}</p>
                     </div>
 
-                    {/* Resumen Financiero en Reporte */}
                     {metrics && (
                         <div className="grid grid-cols-3 gap-6 mb-10">
                             <div className="p-4 bg-slate-50 rounded-xl text-center border"><div className="text-xs text-slate-400 uppercase font-bold">Ingresos Reales</div><div className="text-xl font-bold text-emerald-600">{formatMoney(metrics.totalCollected)}</div></div>
@@ -1184,28 +1216,37 @@
                     )}
 
                     <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-4 flex items-center gap-2"><Icon.Chart /> Detalle de Ventas</h3>
+                    
                     <div className="space-y-4 mb-12">
+                        {/* AQUÍ ESTÁ LA LÓGICA DE COLAPSAR/EXPANDIR (<details>) */}
                         {Object.entries(reportData.groups).sort((a,b) => b[1].total - a[1].total).map(([key, data]) => (
-                            <div key={key} className="bg-white border border-slate-200 rounded-xl overflow-hidden print:border-none print:break-inside-avoid">
-                                <div className="flex justify-between items-center p-3 md:p-4 bg-slate-50 font-bold text-sm md:text-base">
-                                    <div className="flex items-center gap-2"><span>{capitalizeFirst(key)}</span><span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-normal">{data.items.length} items</span></div>
+                            <details key={key} className="group bg-white border border-slate-200 rounded-xl overflow-hidden print:border-none print:break-inside-avoid shadow-sm open:shadow-md transition-shadow">
+                                <summary className="flex justify-between items-center p-3 md:p-4 bg-slate-50 cursor-pointer hover:bg-slate-100 font-bold list-none text-sm md:text-base select-none">
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-indigo-600 group-open:rotate-90 transition-transform no-print">▶</span>
+                                        <span className="uppercase tracking-wide text-slate-700">{data.label}</span>
+                                        <span className="text-[10px] bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-bold">{data.items.length} items</span>
+                                    </div>
                                     <span className="text-emerald-700 text-lg">{formatMoney(data.total)}</span>
-                                </div>
-                                <div className="p-4 bg-white border-t border-slate-100 text-xs md:text-sm">
+                                </summary>
+                                <div className="p-4 bg-white border-t border-slate-100 text-xs md:text-sm animate-in slide-in-from-top-2 duration-200">
                                     <table className="w-full">
-                                        <thead className="text-xs text-slate-400 uppercase text-left"><tr><th>Cliente</th><th>Prenda</th><th className="text-right">Valor</th></tr></thead>
+                                        <thead className="text-xs text-slate-400 uppercase text-left bg-slate-50"><tr><th className="p-2">ID</th><th className="p-2">Detalle</th><th className="p-2 text-right">Valor</th></tr></thead>
                                         <tbody className="divide-y divide-slate-50">
                                             {data.items.map((sale, i) => (
                                                 <tr key={i} className="hover:bg-slate-50">
-                                                    <td className="py-2 font-mono text-[10px] md:text-xs text-slate-500">{sale.clientId}</td>
-                                                    <td className="py-2">{sale.item}</td>
-                                                    <td className="py-2 text-right">{formatMoney(sale.value)}</td>
+                                                    <td className="p-2 font-black text-slate-700 font-mono">{sale.clientId}</td>
+                                                    <td className="p-2">
+                                                        <span className="block font-bold">{sale.item}</span>
+                                                        <span className="text-[10px] text-slate-400">{new Date(safeISO(sale.date)).toLocaleDateString()}</span>
+                                                    </td>
+                                                    <td className="p-2 text-right font-bold text-slate-700">{formatMoney(sale.value)}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
                                     </table>
                                 </div>
-                            </div>
+                            </details>
                         ))}
                     </div>
 
@@ -1213,11 +1254,14 @@
                         <h3 className="text-lg md:text-xl font-bold text-red-700 mb-4 flex items-center gap-2 border-b-2 border-red-100 pb-2"><Icon.Alert /> Cuentas por Cobrar (Calle)</h3>
                         {reportData.debtors.length === 0 ? <p className="text-slate-400 italic">No hay deudores activos.</p> : (
                             <table className="w-full text-left text-xs md:text-sm bg-red-50/30 rounded-xl overflow-hidden">
-                                <thead className="bg-red-100 text-red-800 uppercase text-[10px]"><tr><th className="p-3">Cliente</th><th className="p-3">Teléfono</th><th className="p-3 text-right">Deuda</th></tr></thead>
+                                <thead className="bg-red-100 text-red-800 uppercase text-[10px]"><tr><th className="p-3">ID / Cliente</th><th className="p-3">Teléfono</th><th className="p-3 text-right">Deuda</th></tr></thead>
                                 <tbody className="divide-y divide-red-100">
                                     {reportData.debtors.map(d => (
                                         <tr key={d.id}>
-                                            <td className="p-3 font-bold text-slate-700">{d.name}</td>
+                                            <td className="p-3">
+                                                <div className="font-black text-slate-800">{d.id}</div>
+                                                <div className="text-[10px] text-slate-500 uppercase">{d.name}</div>
+                                            </td>
                                             <td className="p-3 text-slate-500">{d.phone}</td>
                                             <td className="p-3 text-right font-bold text-red-600">{formatMoney(d.balance)}</td>
                                         </tr>
@@ -1230,6 +1274,8 @@
             </div>
         );
     };
+
+
     const AdminView = ({ logic, onClose }) => {
         const [filter, setFilter] = useState('month'); 
         const [expDetail, setExpDetail] = useState(""); 
