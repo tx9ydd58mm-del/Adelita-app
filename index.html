@@ -670,10 +670,14 @@
             return { clothingBalance, totalSales, totalNormalPaid, totalShippingPaid, itemsCount: cycleSales.length, lastShipmentDate, cycleSales, cyclePayments, allSales, allPayments };
         };
 
-        const getClientStatus = (client, cycleData) => {
+                const getClientStatus = (client, cycleData) => {
             const { clothingBalance, totalShippingPaid } = cycleData;
             const shippingCost = client.shippingCost || 0;
             const shippingBalance = totalShippingPaid - shippingCost;
+
+            // NUEVO: Prioridad máxima a solicitud de preparación
+            if (client.preparing) return { code: 'PREPARING', label: 'ALISTANDO (PEND)', color: 'bg-purple-600 text-white animate-pulse shadow-lg border-purple-800' };
+
             if (clothingBalance < -0.01 && !client.forceAccumulate) return { code: 'DEBT', label: 'DEBE ROPA', color: 'bg-red-100 text-red-700 border-red-200' };
             if (client.confirmShipping) {
                 if (shippingBalance >= -0.01) return { code: 'READY', label: 'LISTO ENVÍO', color: 'bg-indigo-600 text-white animate-pulse' };
@@ -682,6 +686,7 @@
             if (clothingBalance < 0 && client.forceAccumulate) return { code: 'ACC_AUTH', label: 'ACUMULANDO (AUT)', color: 'bg-amber-100 text-amber-700 border-amber-200' };
             return { code: 'ACC_PAID', label: 'ACUMULANDO', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
         };
+
 
                 const registerClient = (name, phone, cedula, province, city, address, initialAbono, dateStr, manualId) => {
             if (manualId && clients.some(c => c.id.toLowerCase() === manualId.toLowerCase())) { alert("ID ya existe"); return null; }
@@ -974,7 +979,27 @@
                                     <div className="text-[10px] text-slate-400 mt-1">Si el monto sobra, se va a saldo de ropa.</div>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-3 pt-2"><div><label className="text-xs font-bold text-slate-400">Ruta</label><select className="w-full mt-1 p-2 rounded-xl border bg-white text-xs" value={activeClient.deliveryMethod} onChange={e => handleRouteSelect(e.target.value)}><option value="">-</option><option value="Servientrega">Servientrega</option><option value="Domicilio">Domicilio</option><option value="Cayambe">Cayambe</option><option value="Ibarra">Ibarra</option><option value="Retiro">Retiro</option></select></div><div><label className="text-xs font-bold text-slate-400">Costo Real</label><input type="number" inputMode="decimal" step="0.01" className="w-full mt-1 p-2 rounded-xl border bg-white text-xs" value={activeClient.shippingCost} onChange={e => handleUpdateClient({ shippingCost: parseFloat(e.target.value) })} /></div></div><div className="flex items-center justify-between pt-2 border-t"><span className="font-bold text-xs text-slate-700">Confirmar para Bodega</span><input type="checkbox" className="w-5 h-5" checked={activeClient.confirmShipping} onChange={e => handleUpdateClient({ confirmShipping: e.target.checked })} /></div></div>
+                              
+                                <div className="grid grid-cols-2 gap-3 pt-2">
+                                    <div><label className="text-xs font-bold text-slate-400">Ruta</label><select className="w-full mt-1 p-2 rounded-xl border bg-white text-xs" value={activeClient.deliveryMethod} onChange={e => handleRouteSelect(e.target.value)}><option value="">-</option><option value="Servientrega">Servientrega</option><option value="Domicilio">Domicilio</option><option value="Cayambe">Cayambe</option><option value="Ibarra">Ibarra</option><option value="Retiro">Retiro</option></select></div>
+                                    <div><label className="text-xs font-bold text-slate-400">Costo Real</label><input type="number" inputMode="decimal" step="0.01" className="w-full mt-1 p-2 rounded-xl border bg-white text-xs" value={activeClient.shippingCost} onChange={e => handleUpdateClient({ shippingCost: parseFloat(e.target.value) })} /></div>
+                                </div>
+                                <div className="mt-4 pt-4 border-t flex flex-col gap-3">
+                                    <div className="flex items-center justify-between bg-purple-50 p-3 rounded-xl border border-purple-100">
+                                        <span className="font-bold text-xs text-purple-800">1. SOLICITÓ ENVÍO (ALISTAR)</span>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" className="sr-only peer" checked={activeClient.preparing || false} onChange={e => handleUpdateClient({ preparing: e.target.checked })} />
+                                            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                                        </label>
+                                    </div>
+                                    <div className="flex items-center justify-between p-2 opacity-50">
+                                        <span className="font-bold text-xs text-slate-700">2. PAGADO Y LISTO (Salida)</span>
+                                        <input type="checkbox" className="w-5 h-5" checked={activeClient.confirmShipping} onChange={e => handleUpdateClient({ confirmShipping: e.target.checked })} disabled />
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 text-center">Activa "Solicitó Envío" para que aparezca en Bodega aunque deba.</p>
+                                </div>
+                                </div>
+
                             </>
                         )}
                     </div>
@@ -993,7 +1018,12 @@
     const WarehouseView = ({ logic }) => {
         const [guide, setGuide] = useState(""); const [dispatchDate, setDispatchDate] = useState(getToday()); const [selectedClient, setSelectedClient] = useState(null);
         
-        const readyClients = logic.clients.map(c => ({...c, cycle: logic.getClientCycle(c.id)})).map(c => ({...c, status: logic.getClientStatus(c, c.cycle)})).filter(c => c.status.code === 'READY');
+        // AHORA FILTRAMOS TAMBIÉN LOS 'PREPARING'
+        const readyClients = logic.clients
+            .map(c => ({...c, cycle: logic.getClientCycle(c.id)}))
+            .map(c => ({...c, status: logic.getClientStatus(c, c.cycle)}))
+            .filter(c => c.status.code === 'READY' || c.status.code === 'PREPARING')
+            .sort((a,b) => (a.status.code === 'READY' ? -1 : 1)); // Poner los Listos (Pagados) primero
         
         const handleDispatch = () => {
             if (!guide) return alert("Falta Guía");
@@ -1006,27 +1036,27 @@
             if (shippingBalance > 0.01) logic.addPayment(selectedClient.id, shippingBalance, "Vuelto Envío (Arrastre)", new Date(new Date(finalDate).getTime() + 1000).toISOString());
             
             logic.registerShipment(selectedClient.id, guide, selectedClient.deliveryMethod, finalDate);
-            logic.setClients(selectedClient.id, { confirmShipping: false, forceAccumulate: false });
+            // Limpiamos también el flag de preparing
+            logic.setClients(selectedClient.id, { confirmShipping: false, forceAccumulate: false, preparing: false });
             
             alert("✅ Despachado Correctamente"); setSelectedClient(null); setGuide("");
         };
 
-        if (selectedClient) return (<div className="p-6 h-full flex flex-col bg-slate-100"><button onClick={() => setSelectedClient(null)} className="mb-4 font-bold text-slate-500">← Volver</button><div className="bg-white p-6 rounded-3xl shadow-xl border-l-8 border-indigo-600"><h2 className="text-4xl font-black mb-1 text-slate-800">{selectedClient.id}</h2><p className="text-slate-500 font-bold uppercase mb-6 text-sm">{selectedClient.name} • {selectedClient.deliveryMethod}</p><div className="space-y-4 mb-8"><div className="bg-slate-50 p-3 rounded-lg text-sm border"><div className="flex justify-between"><span>Ropa:</span><span className="text-emerald-600 font-bold">PAGADO</span></div><div className="flex justify-between"><span>Envío:</span><span className="text-emerald-600 font-bold">PAGADO</span></div></div><input value={guide} onChange={e => setGuide(e.target.value)} placeholder="Número de Guía / Tracking" className="w-full p-4 border-2 rounded-xl text-xl font-mono focus:border-indigo-600 outline-none" autoFocus /><div><label className="text-xs font-bold text-slate-400">Fecha Despacho</label><input type="date" value={dispatchDate} onChange={e => setDispatchDate(e.target.value)} className="w-full p-3 border rounded-xl" /></div></div><button onClick={handleDispatch} className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg text-lg flex items-center justify-center gap-2"><Icon.Check /> CONFIRMAR SALIDA</button></div></div>);
+        if (selectedClient) return (<div className="p-6 h-full flex flex-col bg-slate-100"><button onClick={() => setSelectedClient(null)} className="mb-4 font-bold text-slate-500">← Volver</button><div className="bg-white p-6 rounded-3xl shadow-xl border-l-8 border-indigo-600"><h2 className="text-4xl font-black mb-1 text-slate-800">{selectedClient.id}</h2><p className="text-slate-500 font-bold uppercase mb-6 text-sm">{selectedClient.name} • {selectedClient.deliveryMethod}</p><div className="space-y-4 mb-8"><div className="bg-slate-50 p-3 rounded-lg text-sm border"><div className="flex justify-between"><span>Ropa:</span><span className="text-emerald-600 font-bold">REVISAR SALDO</span></div></div><input value={guide} onChange={e => setGuide(e.target.value)} placeholder="Número de Guía / Tracking" className="w-full p-4 border-2 rounded-xl text-xl font-mono focus:border-indigo-600 outline-none" autoFocus /><div><label className="text-xs font-bold text-slate-400">Fecha Despacho</label><input type="date" value={dispatchDate} onChange={e => setDispatchDate(e.target.value)} className="w-full p-3 border rounded-xl" /></div></div><button onClick={handleDispatch} className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg text-lg flex items-center justify-center gap-2"><Icon.Check /> CONFIRMAR SALIDA</button></div></div>);
         
         return (
             <div className="p-4 pb-24">
-                <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-700"><Icon.Box /> Listos para Enviar ({readyClients.length})</h2>
+                <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-700"><Icon.Box /> Zona de Preparación ({readyClients.length})</h2>
                 <div className="space-y-3">
-                    {readyClients.length === 0 && <div className="text-center py-12 text-slate-400 border border-dashed rounded-3xl">No hay paquetes listos</div>}
+                    {readyClients.length === 0 && <div className="text-center py-12 text-slate-400 border border-dashed rounded-3xl">Todo despachado</div>}
                     {readyClients.map(c => (
-                        <div key={c.id} onClick={() => setSelectedClient(c)} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center touch-card cursor-pointer">
+                        <div key={c.id} onClick={() => setSelectedClient(c)} className={`bg-white p-4 rounded-2xl shadow-sm border flex justify-between items-center touch-card cursor-pointer ${c.status.code === 'PREPARING' ? 'border-purple-200 bg-purple-50' : 'border-slate-100'}`}>
                             <div>
-                                {/* CAMBIO AQUÍ: ID GRANDE */}
                                 <div className="font-black text-lg text-slate-800 tracking-tight">{c.id}</div>
                                 <div className="text-xs font-bold text-slate-500 uppercase mt-0.5">{c.name}</div>
                                 <div className={`inline-block px-2 py-0.5 mt-1 rounded text-[10px] font-bold border ${c.status.color}`}>{c.status.label}</div>
                             </div>
-                            <button className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm">DESPACHAR</button>
+                            <button className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm">PROCESAR</button>
                         </div>
                     ))}
                 </div>
@@ -1138,289 +1168,207 @@
     // --- MÓDULO DE ADMINISTRACIÓN (GERENCIA) ---
 
     const ReportViewer = ({ logic, onClose, metrics }) => {
-        const [groupBy, setGroupBy] = useState('live'); // 'live' (fecha) o 'client' (cliente)
+        const [groupBy, setGroupBy] = useState('live'); 
         const [showHelp, setShowHelp] = useState(false);
 
+        // LÓGICA DE DATOS JERÁRQUICA (Fecha -> Clientes -> Items)
         const reportData = useMemo(() => {
-            try {
-                const groups = {}; 
-                const debtors = [];
+            const groups = {}; 
+            const debtors = [];
+            
+            logic.sales.forEach(sale => {
+                const date = new Date(safeISO(sale.date)); 
+                if (isNaN(date)) return;
                 
-                logic.sales.forEach(sale => {
-                    const date = new Date(safeISO(sale.date)); 
-                    if (isNaN(date)) return;
-                    
-                    let key = ""; 
-                    let keyDisplay = "";
+                let mainKey = ""; 
+                let mainLabel = "";
 
-                    // LÓGICA DE AGRUPACIÓN (FECHA O CLIENTE)
-                    if (groupBy === 'client') {
-                        key = sale.clientId;
-                        // Buscamos el nombre para mostrarlo bonito, pero agrupamos por ID
-                        const clientName = logic.clients.find(c => c.id === sale.clientId)?.name || "Desconocido";
-                        keyDisplay = `${sale.clientId} - ${clientName}`;
-                    } else {
-                        // Agrupación por fechas (Live, Sem, Mes)
-                        if (groupBy === 'live') key = date.toLocaleDateString();
-                        else if (groupBy === 'week') { const startOfYear = new Date(date.getFullYear(), 0, 1); const week = Math.ceil((((date - startOfYear) / 86400000) + startOfYear.getDay() + 1) / 7); key = `Semana ${week} - ${date.getFullYear()}`; }
-                        else if (groupBy === 'month') key = date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }); 
-                        else if (groupBy === 'year') key = date.getFullYear().toString();
-                        keyDisplay = key;
-                    }
-                    
-                    if (!groups[key]) groups[key] = { label: keyDisplay, total: 0, items: [] }; 
-                    groups[key].total += sale.value; 
-                    groups[key].items.push(sale);
-                });
+                // Nivel 1: Agrupación Principal (Fecha o Cliente)
+                if (groupBy === 'client') {
+                    mainKey = sale.clientId;
+                    const clientName = logic.clients.find(c => c.id === sale.clientId)?.name || "Desconocido";
+                    mainLabel = `${sale.clientId} - ${clientName}`;
+                } else {
+                    if (groupBy === 'live') mainKey = date.toLocaleDateString();
+                    else if (groupBy === 'week') { const s = new Date(date.getFullYear(), 0, 1); const w = Math.ceil((((date - s) / 86400000) + s.getDay() + 1) / 7); mainKey = `Semana ${w} - ${date.getFullYear()}`; }
+                    else if (groupBy === 'month') mainKey = date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }); 
+                    mainLabel = mainKey;
+                }
+                
+                if (!groups[mainKey]) groups[mainKey] = { label: mainLabel, total: 0, clients: {} }; 
+                groups[mainKey].total += sale.value;
 
-                // Calcular Deudores
-                logic.clients.forEach(client => { 
-                    try {
-                        const cycle = logic.getClientCycle(client.id); 
-                        if (cycle.clothingBalance < -0.01) { 
-                            debtors.push({ ...client, balance: cycle.clothingBalance }); 
-                        } 
-                    } catch(e) {}
-                });
+                // Nivel 2: Sub-agrupación por Cliente (Solo si no estamos agrupando por cliente ya)
+                const subKey = sale.clientId;
+                if (!groups[mainKey].clients[subKey]) {
+                    const cName = logic.clients.find(c => c.id === subKey)?.name || "";
+                    groups[mainKey].clients[subKey] = { id: subKey, name: cName, total: 0, items: [] };
+                }
+                groups[mainKey].clients[subKey].total += sale.value;
+                groups[mainKey].clients[subKey].items.push(sale);
+            });
 
-                return { groups, debtors: debtors.sort((a,b) => a.balance - b.balance) };
-            } catch (e) {
-                console.error("Error generando reporte:", e);
-                return { groups: {}, debtors: [] };
-            }
+            // Deudores (sin cambios)
+            logic.clients.forEach(c => { 
+                const cy = logic.getClientCycle(c.id); 
+                if (cy.clothingBalance < -0.01) debtors.push({ ...c, balance: cy.clothingBalance }); 
+            });
+
+            return { groups, debtors: debtors.sort((a,b) => a.balance - b.balance) };
         }, [logic.sales, logic.clients, groupBy]);
 
-        const handlePrint = () => { window.print(); };
+        const handlePrint = () => window.print();
 
         return (
             <div className="fixed inset-0 bg-white z-[60] overflow-auto flex flex-col animate-in slide-in-from-bottom duration-300" id="printable-area">
-                {showHelp && (<div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-6" onClick={() => setShowHelp(false)}><div className="bg-white rounded-2xl p-6 max-w-sm text-center shadow-2xl" onClick={e => e.stopPropagation()}><div className="text-4xl mb-4">📄</div><h3 className="font-bold text-lg mb-2">Guardar PDF (iPad)</h3><ol className="text-left text-sm text-slate-600 space-y-2 mb-6 list-decimal pl-4"><li>Toca <b>"Imprimir"</b>.</li><li>Haz <b>Zoom</b> sobre la hoja previa.</li><li>Toca <b>"Compartir"</b> y <b>"Guardar en Archivos"</b>.</li></ol><button onClick={() => setShowHelp(false)} className="bg-slate-900 text-white w-full py-3 rounded-xl font-bold">¡Entendido!</button></div></div>)}
-                
                 <div className="sticky top-0 bg-slate-900 text-white p-4 flex justify-between items-center no-print shadow-lg z-10">
-                    <div className="flex flex-col md:flex-row md:items-center gap-4">
-                        <h2 className="font-bold flex items-center gap-2 text-sm md:text-base"><Icon.FileText /> Reporte</h2>
-                        
-                        {/* SELECTOR DE MODO DE VISTA */}
-                        <div className="flex bg-slate-800 rounded-lg p-1 overflow-x-auto max-w-[200px] md:max-w-none">
-                            <button onClick={() => setGroupBy('live')} className={`px-3 py-1 rounded text-xs whitespace-nowrap ${groupBy === 'live' ? 'bg-indigo-500 text-white font-bold' : 'text-slate-400 hover:text-white'}`}>Por Días</button>
-                            <button onClick={() => setGroupBy('client')} className={`px-3 py-1 rounded text-xs whitespace-nowrap ${groupBy === 'client' ? 'bg-pink-500 text-white font-bold' : 'text-slate-400 hover:text-white'}`}>Por Clientes</button>
-                            <div className="w-px bg-slate-700 mx-1"></div>
-                            <button onClick={() => setGroupBy('month')} className={`px-3 py-1 rounded text-xs whitespace-nowrap ${groupBy === 'month' ? 'bg-slate-600 text-white font-bold' : 'text-slate-400 hover:text-white'}`}>Mes</button>
-                        </div>
+                    <h2 className="font-bold flex items-center gap-2"><Icon.FileText /> Reporte</h2>
+                    <div className="flex bg-slate-800 rounded-lg p-1">
+                        <button onClick={() => setGroupBy('live')} className={`px-3 py-1 rounded text-xs ${groupBy === 'live' ? 'bg-indigo-500 font-bold' : 'text-slate-400'}`}>Días</button>
+                        <button onClick={() => setGroupBy('client')} className={`px-3 py-1 rounded text-xs ${groupBy === 'client' ? 'bg-pink-500 font-bold' : 'text-slate-400'}`}>Clientes</button>
                     </div>
-                    <div className="flex gap-2">
-                        <button onClick={() => setShowHelp(true)} className="bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 px-3 py-2 rounded-lg font-bold text-xs transition-colors border border-amber-500/50 flex items-center gap-1"><Icon.Info /> PDF?</button>
-                        <button onClick={handlePrint} className="bg-indigo-500 hover:bg-indigo-600 px-4 py-2 rounded-lg font-bold flex items-center gap-2 text-xs md:text-sm shadow-lg transition-colors"><Icon.Printer /> Imprimir</button>
-                        <button onClick={onClose} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg font-bold text-xs md:text-sm transition-colors"><Icon.Close /></button>
-                    </div>
+                    <div className="flex gap-2"><button onClick={handlePrint} className="bg-indigo-500 px-4 py-2 rounded-lg font-bold text-sm"><Icon.Printer /> Imprimir</button><button onClick={onClose} className="bg-white/10 px-4 py-2 rounded-lg"><Icon.Close /></button></div>
                 </div>
 
                 <div className="p-4 md:p-8 max-w-5xl mx-auto w-full text-slate-800">
                     <div className="text-center border-b-2 border-slate-900 pb-6 mb-8">
-                        <h1 className="text-2xl md:text-4xl font-extrabold text-slate-900 tracking-tight">Reporte ADELITA STORE</h1>
-                        <p className="text-slate-500 mt-2 font-medium text-xs md:text-sm">Agrupado por: {groupBy === 'client' ? 'CLIENTES' : 'FECHAS'} | Fecha: {new Date().toLocaleDateString()}</p>
+                        <h1 className="text-3xl font-black text-slate-900">Reporte ADELITA STORE</h1>
+                        <p className="text-slate-500 mt-1">Generado: {new Date().toLocaleDateString()}</p>
                     </div>
 
-                    {metrics && (
-                        <div className="grid grid-cols-3 gap-6 mb-10">
-                            <div className="p-4 bg-slate-50 rounded-xl text-center border"><div className="text-xs text-slate-400 uppercase font-bold">Ingresos Reales</div><div className="text-xl font-bold text-emerald-600">{formatMoney(metrics.totalCollected)}</div></div>
-                            <div className="p-4 bg-slate-50 rounded-xl text-center border"><div className="text-xs text-slate-400 uppercase font-bold">Gastos</div><div className="text-xl font-bold text-red-500">{formatMoney(metrics.totalExpenses)}</div></div>
-                            <div className="p-4 bg-slate-50 rounded-xl text-center border"><div className="text-xs text-slate-400 uppercase font-bold">Utilidad</div><div className="text-xl font-bold text-indigo-900">{formatMoney(metrics.profit)}</div></div>
-                        </div>
-                    )}
-
-                    <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-4 flex items-center gap-2"><Icon.Chart /> Detalle de Ventas</h3>
-                    
                     <div className="space-y-4 mb-12">
-                        {/* AQUÍ ESTÁ LA LÓGICA DE COLAPSAR/EXPANDIR (<details>) */}
                         {Object.entries(reportData.groups).sort((a,b) => b[1].total - a[1].total).map(([key, data]) => (
-                            <details key={key} className="group bg-white border border-slate-200 rounded-xl overflow-hidden print:border-none print:break-inside-avoid shadow-sm open:shadow-md transition-shadow">
-                                <summary className="flex justify-between items-center p-3 md:p-4 bg-slate-50 cursor-pointer hover:bg-slate-100 font-bold list-none text-sm md:text-base select-none">
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-indigo-600 group-open:rotate-90 transition-transform no-print">▶</span>
-                                        <span className="uppercase tracking-wide text-slate-700">{data.label}</span>
-                                        <span className="text-[10px] bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-bold">{data.items.length} items</span>
-                                    </div>
+                            <details key={key} className="group bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm open:shadow-md transition-all">
+                                <summary className="flex justify-between items-center p-3 bg-slate-50 cursor-pointer hover:bg-slate-100 font-bold select-none">
+                                    <div className="flex items-center gap-2"><span className="text-indigo-600 group-open:rotate-90 transition-transform">▶</span> <span className="uppercase">{data.label}</span></div>
                                     <span className="text-emerald-700 text-lg">{formatMoney(data.total)}</span>
                                 </summary>
-                                <div className="p-4 bg-white border-t border-slate-100 text-xs md:text-sm animate-in slide-in-from-top-2 duration-200">
-                                    <table className="w-full">
-                                        <thead className="text-xs text-slate-400 uppercase text-left bg-slate-50"><tr><th className="p-2">ID</th><th className="p-2">Detalle</th><th className="p-2 text-right">Valor</th></tr></thead>
-                                        <tbody className="divide-y divide-slate-50">
-                                            {data.items.map((sale, i) => (
-                                                <tr key={i} className="hover:bg-slate-50">
-                                                    <td className="p-2 font-black text-slate-700 font-mono">{sale.clientId}</td>
-                                                    <td className="p-2">
-                                                        <span className="block font-bold">{sale.item}</span>
-                                                        <span className="text-[10px] text-slate-400">{new Date(safeISO(sale.date)).toLocaleDateString()}</span>
-                                                    </td>
-                                                    <td className="p-2 text-right font-bold text-slate-700">{formatMoney(sale.value)}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                <div className="p-3 bg-white border-t border-slate-100 text-sm">
+                                    {/* NIVEL 2: ITERAR CLIENTES DENTRO DE LA FECHA */}
+                                    {Object.values(data.clients).map(sub => (
+                                        <details key={sub.id} className="mb-2 border border-slate-100 rounded-lg">
+                                            <summary className="flex justify-between p-2 bg-slate-50/50 cursor-pointer hover:bg-slate-100 text-xs font-bold">
+                                                <span>{sub.id} <span className="text-slate-400 font-normal">({sub.name})</span></span>
+                                                <span>{formatMoney(sub.total)}</span>
+                                            </summary>
+                                            <div className="p-2 pl-4 bg-white">
+                                                {sub.items.map((it, i) => (
+                                                    <div key={i} className="flex justify-between text-xs py-1 border-b border-slate-50 last:border-0">
+                                                        <span>{it.item}</span>
+                                                        <span className="font-mono">{formatMoney(it.value)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </details>
+                                    ))}
+                                    {groupBy === 'client' && <div className="text-center text-xs text-slate-400 italic mt-2">Vista agrupada por cliente (Nivel único)</div>}
                                 </div>
                             </details>
                         ))}
-                    </div>
-
-                    <div className="break-inside-avoid page-break-before">
-                        <h3 className="text-lg md:text-xl font-bold text-red-700 mb-4 flex items-center gap-2 border-b-2 border-red-100 pb-2"><Icon.Alert /> Cuentas por Cobrar (Calle)</h3>
-                        {reportData.debtors.length === 0 ? <p className="text-slate-400 italic">No hay deudores activos.</p> : (
-                            <table className="w-full text-left text-xs md:text-sm bg-red-50/30 rounded-xl overflow-hidden">
-                                <thead className="bg-red-100 text-red-800 uppercase text-[10px]"><tr><th className="p-3">ID / Cliente</th><th className="p-3">Teléfono</th><th className="p-3 text-right">Deuda</th></tr></thead>
-                                <tbody className="divide-y divide-red-100">
-                                    {reportData.debtors.map(d => (
-                                        <tr key={d.id}>
-                                            <td className="p-3">
-                                                <div className="font-black text-slate-800">{d.id}</div>
-                                                <div className="text-[10px] text-slate-500 uppercase">{d.name}</div>
-                                            </td>
-                                            <td className="p-3 text-slate-500">{d.phone}</td>
-                                            <td className="p-3 text-right font-bold text-red-600">{formatMoney(d.balance)}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        )}
                     </div>
                 </div>
             </div>
         );
     };
 
-
     const AdminView = ({ logic, onClose }) => {
         const [filter, setFilter] = useState('month'); 
-        const [expDetail, setExpDetail] = useState(""); 
-        const [expAmount, setExpAmount] = useState(""); 
-        const [expDate, setExpDate] = useState(getToday()); 
-        const [showExportMenu, setShowExportMenu] = useState(false); 
-        const [showPreview, setShowPreview] = useState(false);
-        
-        // --- ESTADO PARA EL "DRILL-DOWN" (Explorar detalles al dar clic) ---
-        const [detailMode, setDetailMode] = useState(null); // 'sales', 'income', 'debtors', 'expenses'
+        const [expDetail, setExpDetail] = useState(""); const [expAmount, setExpAmount] = useState(""); const [expDate, setExpDate] = useState(getToday()); 
+        const [showExportMenu, setShowExportMenu] = useState(false); const [showPreview, setShowPreview] = useState(false);
+        const [detailMode, setDetailMode] = useState(null); 
 
         const metrics = useMemo(() => {
             try {
-                const safeSales = logic.sales || [];
-                const safePayments = logic.payments || [];
-                const safeExpenses = logic.expenses || [];
-                const safeClients = logic.clients || [];
-
-                const now = new Date(); 
-                const filterDate = new Date(); 
-                if (filter === 'week') filterDate.setDate(now.getDate() - 7); 
-                else if (filter === 'month') filterDate.setMonth(now.getMonth() - 1); 
-                else if (filter === 'year') filterDate.setFullYear(now.getFullYear(), 0, 1);
-                else if (filter === 'all') filterDate.setFullYear(2000); 
+                const safeSales = logic.sales || []; const safePayments = logic.payments || []; const safeExpenses = logic.expenses || []; const safeClients = logic.clients || [];
+                const now = new Date(); const filterDate = new Date(); 
+                if (filter === 'week') filterDate.setDate(now.getDate() - 7); else if (filter === 'month') filterDate.setMonth(now.getMonth() - 1); else if (filter === 'year') filterDate.setFullYear(now.getFullYear(), 0, 1); else if (filter === 'all') filterDate.setFullYear(2000); 
 
                 const filteredSales = safeSales.filter(s => new Date(safeISO(s.date)) >= filterDate); 
                 const filteredPayments = safePayments.filter(p => new Date(safeISO(p.date)) >= filterDate);
                 const filteredExpenses = safeExpenses.filter(e => new Date(safeISO(e.date)) >= filterDate);
-
                 const totalSales = filteredSales.reduce((acc, s) => acc + (s.value || 0), 0);
-
-                const realIncomePayments = filteredPayments.filter(p => {
-                    const det = (p.detail || "").toLowerCase();
-                    return !det.includes("envío") && !det.includes("envio") && !det.includes("transferencia");
-                });
+                const realIncomePayments = filteredPayments.filter(p => { const det = (p.detail || "").toLowerCase(); return !det.includes("envío") && !det.includes("envio") && !det.includes("transferencia"); });
                 const totalCollected = realIncomePayments.reduce((acc, p) => acc + (p.amount || 0), 0);
                 const totalExpenses = filteredExpenses.reduce((acc, e) => acc + (e.amount || 0), 0);
-
-                // Cálculo de Deudores (snapshot actual)
+                
                 const debtorsList = [];
-                safeClients.forEach(c => {
-                    try {
-                        const cycle = logic.getClientCycle(c.id);
-                        if (cycle.clothingBalance < -0.01) {
-                            debtorsList.push({ ...c, debt: cycle.clothingBalance });
-                        }
-                    } catch (err) {}
-                });
-                const totalReceivable = debtorsList.reduce((acc, c) => acc + Math.abs(c.debt), 0);
-                const debtorsCount = debtorsList.length;
+                safeClients.forEach(c => { try { const cycle = logic.getClientCycle(c.id); if (cycle.clothingBalance < -0.01) debtorsList.push({ ...c, debt: cycle.clothingBalance }); } catch (err) {} });
+                
+                const salesByDate = {}; filteredSales.forEach(s => { const dateKey = new Date(safeISO(s.date)).toLocaleDateString(); if (!salesByDate[dateKey]) salesByDate[dateKey] = 0; salesByDate[dateKey] += s.value; });
 
-                const salesByDate = {}; 
-                filteredSales.forEach(s => { 
-                    const dateKey = new Date(safeISO(s.date)).toLocaleDateString(); 
-                    if (!salesByDate[dateKey]) salesByDate[dateKey] = 0; 
-                    salesByDate[dateKey] += s.value; 
-                });
-
-                return { 
-                    totalSales, filteredSales,
-                    totalCollected, realIncomePayments,
-                    totalExpenses, filteredExpenses,
-                    totalReceivable, debtorsCount, debtorsList,
-                    profit: totalCollected - totalExpenses, 
-                    salesByDate 
-                };
-
-            } catch (error) {
-                console.error("Error crítico en métricas:", error);
-                return { totalSales: 0, filteredSales:[], totalCollected: 0, realIncomePayments:[], totalExpenses: 0, filteredExpenses:[], totalReceivable: 0, debtorsCount: 0, debtorsList:[], profit: 0, salesByDate: {} };
-            }
+                return { totalSales, filteredSales, totalCollected, realIncomePayments, totalExpenses, filteredExpenses, totalReceivable: debtorsList.reduce((acc, c) => acc + Math.abs(c.debt), 0), debtorsCount: debtorsList.length, debtorsList, profit: totalCollected - totalExpenses, salesByDate };
+            } catch (error) { return { totalSales:0, profit:0, salesByDate:{} }; }
         }, [logic.sales, logic.payments, logic.expenses, logic.clients, filter]);
 
         const handleAddExpense = () => { if(!expDetail || !expAmount) return; logic.addExpense(expDetail, expAmount, expDate); setExpDetail(""); setExpAmount(""); alert("Gasto registrado"); };
-        
-        const handleExportCSV = () => { 
-            const rows = [["REPORTE GERENCIAL ADELITA STORE"], ["Periodo", filter.toUpperCase()], [""], ["INDICADOR", "VALOR"], ["Ventas Totales (Ropa)", metrics.totalSales], ["Recaudado Real (Banco)", metrics.totalCollected], ["Por Cobrar (Calle)", metrics.totalReceivable], ["Gastos Operativos", metrics.totalExpenses], ["Utilidad Neta", metrics.profit], [""], ["DETALLE VENTAS DIARIAS"], ["FECHA", "MONTO"]]; 
-            Object.entries(metrics.salesByDate).forEach(([d, t]) => rows.push([d, t])); 
-            exportToCSV(rows, "Reporte_Gerencia.csv"); 
-        };
 
-        // --- COMPONENTE INTERNO PARA LA TABLA DE DETALLES ---
+        // --- MODAL DETALLE CON FILTRO INTELIGENTE ---
         const DetailModal = () => {
             if (!detailMode) return null;
+            const [grouped, setGrouped] = useState(false); // ESTADO PARA AGRUPAR
             let title = ""; let items = []; let cols = []; let colorClass = "";
 
-            if (detailMode === 'sales') {
-                title = "Detalle de Ventas (Ropa)"; colorClass = "text-blue-600";
-                items = metrics.filteredSales.sort((a,b) => new Date(b.date) - new Date(a.date));
-                cols = ["Fecha", "Cliente", "Prenda", "Valor"];
-            } else if (detailMode === 'income') {
-                title = "Ingresos Reales (Banco)"; colorClass = "text-emerald-600";
-                items = metrics.realIncomePayments.sort((a,b) => new Date(b.date) - new Date(a.date));
-                cols = ["Fecha", "Cliente", "Detalle", "Monto"];
-            } else if (detailMode === 'debtors') {
-                title = "Cuentas por Cobrar (Calle)"; colorClass = "text-red-600";
-                items = metrics.debtorsList.sort((a,b) => a.debt - b.debt); // Ordenar por mayor deuda (negativa)
-                cols = ["Cliente", "Teléfono", "Ciudad", "Deuda"];
-            } else if (detailMode === 'expenses') {
-                title = "Gastos Operativos"; colorClass = "text-orange-600";
-                items = metrics.filteredExpenses.sort((a,b) => new Date(b.date) - new Date(a.date));
-                cols = ["Fecha", "Detalle", "", "Monto"];
+            if (detailMode === 'sales') { title = "Ventas Ropa"; colorClass = "text-blue-600"; items = metrics.filteredSales; cols = ["Fecha", "ID Cliente", "Prenda", "Valor"]; }
+            else if (detailMode === 'income') { title = "Ingresos Reales"; colorClass = "text-emerald-600"; items = metrics.realIncomePayments; cols = ["Fecha", "ID Cliente", "Detalle", "Monto"]; }
+            else if (detailMode === 'debtors') { title = "Cuentas por Cobrar"; colorClass = "text-red-600"; items = metrics.debtorsList; cols = ["ID Cliente", "Nombre/Info", "Deuda"]; }
+            else if (detailMode === 'expenses') { title = "Gastos"; colorClass = "text-orange-600"; items = metrics.filteredExpenses; cols = ["Fecha", "Detalle", "Monto"]; }
+
+            // LÓGICA DE AGRUPACIÓN DINÁMICA
+            let displayItems = items;
+            if (grouped && (detailMode === 'sales' || detailMode === 'income')) {
+                const map = {};
+                items.forEach(it => {
+                    const k = it.clientId; 
+                    if(!map[k]) map[k] = { clientId: k, total: 0, count: 0 };
+                    map[k].total += (it.value || it.amount); map[k].count++;
+                });
+                displayItems = Object.values(map).sort((a,b) => b.total - a.total);
+            } else {
+                displayItems = [...items].sort((a,b) => (b.date ? new Date(b.date) : 0) - (a.date ? new Date(a.date) : 0));
             }
 
             return (
                 <div className="fixed inset-0 bg-black/70 z-[70] flex items-center justify-center p-4 animate-in fade-in" onClick={() => setDetailMode(null)}>
                     <div className="bg-white w-full max-w-4xl h-[80vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-                        <div className="p-5 border-b flex justify-between items-center bg-slate-50">
+                        <div className="p-4 border-b flex justify-between items-center bg-slate-50">
                             <h3 className={`font-bold text-xl ${colorClass}`}>{title}</h3>
-                            <button onClick={() => setDetailMode(null)} className="w-8 h-8 rounded-full bg-slate-200 text-slate-500 font-bold flex items-center justify-center hover:bg-slate-300">×</button>
+                            <div className="flex gap-2">
+                                {(detailMode === 'sales' || detailMode === 'income') && (
+                                    <button onClick={() => setGrouped(!grouped)} className={`px-3 py-1 rounded-lg text-xs font-bold border ${grouped ? 'bg-slate-800 text-white' : 'bg-white text-slate-600'}`}>
+                                        {grouped ? 'Desagrupar' : 'Agrupar por Cliente'}
+                                    </button>
+                                )}
+                                <button onClick={() => setDetailMode(null)} className="w-8 h-8 rounded-full bg-slate-200 text-slate-500 font-bold flex items-center justify-center">×</button>
+                            </div>
                         </div>
                         <div className="flex-1 overflow-auto p-0">
                             <table className="w-full text-sm text-left">
                                 <thead className="bg-slate-100 text-slate-500 uppercase text-xs sticky top-0 font-bold">
-                                    <tr>{cols.map((c,i) => <th key={i} className="p-3">{c}</th>)}</tr>
+                                    <tr>
+                                        {grouped ? <> <th className="p-3">ID Cliente</th><th className="p-3">Cant. Items</th><th className="p-3 text-right">Total</th> </> : cols.map((c,i) => <th key={i} className="p-3">{c}</th>)}
+                                    </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {items.map((it, idx) => (
+                                    {displayItems.map((it, idx) => (
                                         <tr key={idx} className="hover:bg-slate-50">
-                                            {detailMode === 'sales' && <><td className="p-3">{new Date(safeISO(it.date)).toLocaleDateString()}</td><td className="p-3 font-bold text-slate-700">{it.clientId}</td><td className="p-3">{it.item}</td><td className="p-3 font-bold text-right">${it.value.toFixed(2)}</td></>}
-                                            {detailMode === 'income' && <><td className="p-3">{new Date(safeISO(it.date)).toLocaleDateString()}</td><td className="p-3 font-bold text-slate-700">{logic.clients.find(c=>c.id===it.clientId)?.name || it.clientId}</td><td className="p-3">{it.detail}</td><td className="p-3 font-bold text-right text-emerald-600">+${it.amount.toFixed(2)}</td></>}
-                                            {detailMode === 'debtors' && <><td className="p-3 font-bold text-slate-700">{it.name} <span className="text-[10px] text-slate-400 block">{it.id}</span></td><td className="p-3">{it.phone}</td><td className="p-3">{it.city}</td><td className="p-3 font-bold text-right text-red-600">{it.debt.toFixed(2)}</td></>}
-                                            {detailMode === 'expenses' && <><td className="p-3">{new Date(safeISO(it.date)).toLocaleDateString()}</td><td className="p-3 font-bold text-slate-700">{it.detail}</td><td className="p-3"></td><td className="p-3 font-bold text-right text-orange-600">-${it.amount.toFixed(2)}</td></>}
+                                            {grouped ? (
+                                                <>
+                                                    <td className="p-3 font-black text-slate-800 text-lg">{it.clientId}</td>
+                                                    <td className="p-3">{it.count} registros</td>
+                                                    <td className={`p-3 font-bold text-right text-lg ${colorClass}`}>${it.total.toFixed(2)}</td>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    {detailMode === 'sales' && <><td className="p-3">{new Date(safeISO(it.date)).toLocaleDateString()}</td><td className="p-3 font-black text-slate-800">{it.clientId}</td><td className="p-3">{it.item}</td><td className="p-3 font-bold text-right">${it.value.toFixed(2)}</td></>}
+                                                    {detailMode === 'income' && <><td className="p-3">{new Date(safeISO(it.date)).toLocaleDateString()}</td><td className="p-3 font-black text-slate-800">{it.clientId}</td><td className="p-3">{it.detail}</td><td className="p-3 font-bold text-right text-emerald-600">+${it.amount.toFixed(2)}</td></>}
+                                                    {detailMode === 'debtors' && <><td className="p-3 font-black text-slate-800 text-lg">{it.id}</td><td className="p-3">{it.name}<br/><span className="text-xs text-slate-400">{it.phone}</span></td><td className="p-3 font-bold text-right text-red-600 text-lg">{it.debt.toFixed(2)}</td></>}
+                                                    {detailMode === 'expenses' && <><td className="p-3">{new Date(safeISO(it.date)).toLocaleDateString()}</td><td className="p-3 font-bold">{it.detail}</td><td className="p-3 font-bold text-right text-orange-600">-${it.amount.toFixed(2)}</td></>}
+                                                </>
+                                            )}
                                         </tr>
                                     ))}
-                                    {items.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-slate-400 italic">No hay registros</td></tr>}
                                 </tbody>
                             </table>
-                        </div>
-                        <div className="p-4 border-t bg-slate-50 text-right font-bold text-slate-700">
-                             Total Registros: {items.length}
                         </div>
                     </div>
                 </div>
@@ -1430,67 +1378,28 @@
         return (
             <div className="flex flex-col h-full bg-slate-50 pb-20 landscape:pb-0 landscape:flex-row font-sans relative">
                 <DetailModal />
-
-                {/* BARRA LATERAL / SUPERIOR */}
                 <div className="p-6 bg-slate-900 text-white shadow-lg landscape:w-1/3 landscape:flex landscape:flex-col landscape:justify-center">
                     <h1 className="text-2xl font-bold flex items-center gap-2 mb-1"><Icon.Chart /> Gerencia</h1>
-                    <p className="text-slate-400 text-xs mb-6 uppercase tracking-widest">Panel Financiero</p>
-                    <div className="flex gap-2 mt-2 text-xs font-bold bg-slate-800 p-1 rounded-lg self-start"><button onClick={() => setFilter('week')} className={`px-3 py-1.5 rounded-md transition-colors ${filter === 'week' ? 'bg-indigo-500 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Semana</button><button onClick={() => setFilter('month')} className={`px-3 py-1.5 rounded-md transition-colors ${filter === 'month' ? 'bg-indigo-500 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Mes</button><button onClick={() => setFilter('year')} className={`px-3 py-1.5 rounded-md transition-colors ${filter === 'year' ? 'bg-indigo-500 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Año</button><button onClick={() => setFilter('all')} className={`px-3 py-1.5 rounded-md transition-colors ${filter === 'all' ? 'bg-indigo-500 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Todo</button></div>
-                    <div className="mt-8 border-t border-slate-700 pt-6">
-                        <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
-                            <p className="text-xs text-slate-400 font-bold uppercase mb-1">Caja Real (Utilidad)</p>
-                            <p className={`text-3xl font-black ${metrics.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatMoney(metrics.profit)}</p>
-                            <p className="text-[10px] text-slate-500 mt-1">*Recaudado menos Gastos (Sin envíos)</p>
-                        </div>
-                    </div>
-                    <div className="mt-auto pt-6 flex gap-3"><button onClick={onClose} className="text-slate-400 text-xs font-bold border border-slate-700 px-4 py-2 rounded hover:bg-slate-800">Volver</button><button onClick={() => window.fbAuth.signOut(window.auth)} className="text-red-400 text-xs font-bold border border-red-900/50 px-4 py-2 rounded hover:bg-red-900/20">Cerrar Sesión</button></div>
+                    <div className="flex gap-2 mt-4 text-xs font-bold bg-slate-800 p-1 rounded-lg self-start"><button onClick={() => setFilter('week')} className={`px-3 py-1.5 rounded-md ${filter === 'week' ? 'bg-indigo-500' : 'text-slate-400'}`}>Semana</button><button onClick={() => setFilter('month')} className={`px-3 py-1.5 rounded-md ${filter === 'month' ? 'bg-indigo-500' : 'text-slate-400'}`}>Mes</button><button onClick={() => setFilter('all')} className={`px-3 py-1.5 rounded-md ${filter === 'all' ? 'bg-indigo-500' : 'text-slate-400'}`}>Todo</button></div>
+                    <div className="mt-8 border-t border-slate-700 pt-6"><div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700"><p className="text-xs text-slate-400 font-bold uppercase mb-1">Caja Real (Utilidad)</p><p className={`text-3xl font-black ${metrics.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatMoney(metrics.profit)}</p></div></div>
+                    <div className="mt-auto pt-6 flex gap-3"><button onClick={onClose} className="text-slate-400 text-xs font-bold border border-slate-700 px-4 py-2 rounded">Volver</button></div>
                 </div>
-
-                {/* MODALES EXPORTAR */}
-                {showExportMenu && (<div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6 animate-in fade-in" onClick={() => setShowExportMenu(false)}><div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-4 shadow-2xl" onClick={e => e.stopPropagation()}><h3 className="font-bold text-xl text-center text-slate-800 mb-2">Generar Reporte</h3><button onClick={() => { handleExportCSV(); setShowExportMenu(false); }} className="w-full flex items-center gap-4 p-4 bg-emerald-50 text-emerald-800 rounded-2xl font-bold hover:bg-emerald-100 transition-colors border border-emerald-100"><div className="bg-white p-3 rounded-xl shadow-sm"><Icon.List /></div><div className="text-left"><div className="text-base">Excel / CSV</div><div className="text-[10px] opacity-60 font-normal">Datos crudos para editar</div></div></button><button onClick={() => { setShowPreview(true); setShowExportMenu(false); }} className="w-full flex items-center gap-4 p-4 bg-indigo-50 text-indigo-800 rounded-2xl font-bold hover:bg-indigo-100 transition-colors border border-indigo-100"><div className="bg-white p-3 rounded-xl shadow-sm"><Icon.FileText /></div><div className="text-left"><div className="text-base">Visualizar / PDF</div><div className="text-[10px] opacity-60 font-normal">Ver y guardar reporte</div></div></button><button onClick={() => setShowExportMenu(false)} className="w-full py-3 text-slate-400 font-bold text-sm hover:text-slate-600">Cancelar</button></div></div>)}
-                {showPreview && <ReportViewer logic={logic} metrics={metrics} onClose={() => setShowPreview(false)} />}
-
-                {/* AREA PRINCIPAL - TARJETAS INTERACTIVAS */}
+                {/* PANEL DERECHO TARJETAS */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-6 landscape:w-2/3">
                     <div className="grid grid-cols-2 gap-4">
-                        {/* 1. VENTAS CLICKABLE */}
-                        <div onClick={() => setDetailMode('sales')} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 cursor-pointer hover:scale-[1.02] transition-transform active:scale-95 group">
-                            <div className="flex justify-between items-start mb-2"><div className="p-2 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-100"><Icon.Tag /></div><Icon.Search /></div>
-                            <p className="text-xs text-slate-400 font-bold uppercase">Ventas Ropa</p>
-                            <p className="text-xl md:text-2xl font-bold text-slate-800">{formatMoney(metrics.totalSales)}</p>
-                        </div>
-
-                        {/* 2. RECAUDADO CLICKABLE */}
-                        <div onClick={() => setDetailMode('income')} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 cursor-pointer hover:scale-[1.02] transition-transform active:scale-95 group">
-                            <div className="flex justify-between items-start mb-2"><div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-100"><Icon.Dollar /></div><Icon.Search /></div>
-                            <p className="text-xs text-slate-400 font-bold uppercase">Recaudado (Real)</p>
-                            <p className="text-xl md:text-2xl font-bold text-emerald-600">{formatMoney(metrics.totalCollected)}</p>
-                        </div>
-
-                        {/* 3. POR COBRAR CLICKABLE */}
-                        <div onClick={() => setDetailMode('debtors')} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden cursor-pointer hover:scale-[1.02] transition-transform active:scale-95 group">
-                            <div className="absolute top-0 right-0 p-2 opacity-10 text-red-600 transform translate-x-2 -translate-y-2"><svg className="w-16 h-16" fill="currentColor" viewBox="0 0 24 24"><path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>
-                            <div className="flex justify-between items-start mb-2"><div className="p-2 bg-red-50 text-red-600 rounded-lg group-hover:bg-red-100"><Icon.Users /></div><span className="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded-full">{metrics.debtorsCount} Clientes</span></div>
-                            <p className="text-xs text-slate-400 font-bold uppercase">Por Cobrar (Calle)</p>
-                            <p className="text-xl md:text-2xl font-bold text-red-500">{formatMoney(metrics.totalReceivable)}</p>
-                        </div>
-
-                        {/* 4. GASTOS CLICKABLE */}
-                        <div onClick={() => setDetailMode('expenses')} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 cursor-pointer hover:scale-[1.02] transition-transform active:scale-95 group">
-                            <div className="flex justify-between items-start mb-2"><div className="p-2 bg-orange-50 text-orange-600 rounded-lg group-hover:bg-orange-100"><Icon.List /></div><Icon.Search /></div>
-                            <p className="text-xs text-slate-400 font-bold uppercase">Gastos Operativos</p>
-                            <p className="text-xl md:text-2xl font-bold text-slate-800">{formatMoney(metrics.totalExpenses)}</p>
-                        </div>
+                        <div onClick={() => setDetailMode('sales')} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 cursor-pointer active:scale-95"><div className="flex justify-between mb-2"><div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><Icon.Tag /></div></div><p className="text-xs text-slate-400 font-bold uppercase">Ventas Ropa</p><p className="text-2xl font-bold text-slate-800">{formatMoney(metrics.totalSales)}</p></div>
+                        <div onClick={() => setDetailMode('income')} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 cursor-pointer active:scale-95"><div className="flex justify-between mb-2"><div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><Icon.Dollar /></div></div><p className="text-xs text-slate-400 font-bold uppercase">Recaudado (Real)</p><p className="text-2xl font-bold text-emerald-600">{formatMoney(metrics.totalCollected)}</p></div>
+                        <div onClick={() => setDetailMode('debtors')} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 cursor-pointer active:scale-95"><div className="flex justify-between mb-2"><div className="p-2 bg-red-50 text-red-600 rounded-lg"><Icon.Users /></div><span className="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded-full">{metrics.debtorsCount}</span></div><p className="text-xs text-slate-400 font-bold uppercase">Por Cobrar (Calle)</p><p className="text-2xl font-bold text-red-500">{formatMoney(metrics.totalReceivable)}</p></div>
+                        <div onClick={() => setDetailMode('expenses')} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 cursor-pointer active:scale-95"><div className="flex justify-between mb-2"><div className="p-2 bg-orange-50 text-orange-600 rounded-lg"><Icon.List /></div></div><p className="text-xs text-slate-400 font-bold uppercase">Gastos</p><p className="text-2xl font-bold text-slate-800">{formatMoney(metrics.totalExpenses)}</p></div>
                     </div>
-
-                    <button onClick={() => setShowExportMenu(true)} className="w-full bg-slate-800 text-white py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2"><Icon.Download /> DESCARGAR REPORTE PDF / EXCEL</button>
-
-                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200"><h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2">📉 Registrar Gasto</h3><div className="space-y-3"><input value={expDetail} onChange={e => setExpDetail(e.target.value)} placeholder="Concepto (ej: Paca Americana)" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl" /><div className="flex gap-2"><input type="number" inputMode="decimal" step="0.01" value={expAmount} onChange={e => setExpAmount(e.target.value)} placeholder="$ Monto" className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-red-500" /><input type="date" value={expDate} onChange={e => setExpDate(e.target.value)} className="w-32 p-3 bg-slate-50 border border-slate-200 rounded-xl" /></div><button onClick={handleAddExpense} className="w-full bg-slate-700 text-white py-3 rounded-xl font-bold shadow-md hover:bg-slate-600">Guardar Gasto</button></div></div>
-                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"><div className="p-4 border-b border-slate-100 font-bold text-slate-700 bg-slate-50/50">Ventas por Fecha (Lives)</div>{Object.entries(metrics.salesByDate).length === 0 ? <p className="p-8 text-center text-slate-400 text-sm italic">Sin datos en este periodo</p> : (Object.entries(metrics.salesByDate).sort((a,b) => b[1] - a[1]).map(([date, total]) => (<div key={date} className="flex justify-between p-4 border-b border-slate-50 last:border-0 hover:bg-slate-50"><span className="font-medium text-slate-600 text-sm flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-400"></div> {date}</span><span className="font-bold text-emerald-600">{formatMoney(total)}</span></div>)))}</div>
+                    <button onClick={() => setShowPreview(true)} className="w-full bg-slate-800 text-white py-3 rounded-xl font-bold shadow-lg">VER REPORTE COMPLETO</button>
                 </div>
+                {showPreview && <ReportViewer logic={logic} metrics={metrics} onClose={() => setShowPreview(false)} />}
             </div>
         );
     };
+
+
 
 
     const App = () => {
