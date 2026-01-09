@@ -992,10 +992,13 @@
         );
     };
 
-    const ClientsView = ({ logic }) => {
+        const ClientsView = ({ logic }) => {
         const [view, setView] = useState('list'); const [activeClient, setActiveClient] = useState(null); const [filter, setFilter] = useState(""); 
         
-        // CAMPOS NUEVOS
+        // --- NUEVO: ESTADO PARA EL FILTRO DE BOTONES ---
+        const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'debt', 'ready', 'accumulating', 'clean'
+
+        // CAMPOS NUEVOS REGISTRO
         const [newName, setNewName] = useState(""); const [newPhone, setNewPhone] = useState(""); 
         const [newCedula, setNewCedula] = useState(""); const [newProvince, setNewProvince] = useState(""); 
         const [newCity, setNewCity] = useState(""); const [newAddress, setNewAddress] = useState(""); 
@@ -1011,12 +1014,48 @@
         };
 
         if (view === 'detail' && activeClient) { const clientData = logic.clients.find(c => c.id === activeClient.id) || activeClient; return <ClientDetailComponent key={clientData.id} activeClient={clientData} logic={logic} onBack={() => setView('list')} />; }
-        const filteredList = logic.clients.filter(c => c.name.toLowerCase().includes(filter.toLowerCase()) || c.id.toLowerCase().includes(filter.toLowerCase()));
+        
+        // --- LÓGICA DE FILTRADO AVANZADO ---
+        const filteredList = logic.clients.filter(c => {
+            // 1. Filtro de Texto (Buscador)
+            const matchesText = c.name.toLowerCase().includes(filter.toLowerCase()) || c.id.toLowerCase().includes(filter.toLowerCase());
+            if (!matchesText) return false;
+
+            // 2. Filtro de Botones (Estados)
+            if (statusFilter === 'all') return true;
+
+            const cycle = logic.getClientCycle(c.id);
+            const status = logic.getClientStatus(c, cycle);
+
+            if (statusFilter === 'debt') return status.code === 'DEBT'; // Solo Deudores
+            if (statusFilter === 'ready') return status.code === 'READY' || status.code === 'MISSING'; // Listos para enviar o falta pago envío
+            if (statusFilter === 'accumulating') return (status.code === 'ACC_PAID' || status.code === 'ACC_AUTH') && cycle.itemsCount > 0; // Tienen prendas guardadas
+            if (statusFilter === 'clean') return cycle.itemsCount === 0 && cycle.clothingBalance >= -0.01; // 0 Prendas, 0 Deuda (Ya enviados o nuevos)
+
+            return true;
+        });
         
         return (
             <div className="flex flex-col h-full pb-20 landscape:pb-0">
                 <div className="p-4 bg-white sticky top-0 z-10 space-y-3 shadow-sm">
-                    <div className="flex gap-2"><div className="flex-1 bg-slate-100 rounded-xl flex items-center px-3"><Icon.Search /><input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Buscar por ID o Nombre..." className="bg-transparent w-full p-3 outline-none" /></div><button onClick={() => setView(view === 'new' ? 'list' : 'new')} className="bg-slate-900 text-white w-12 rounded-xl font-bold text-xl">{view === 'new' ? '×' : '+'}</button></div>
+                    {/* Buscador y Botón Nuevo */}
+                    <div className="flex gap-2">
+                        <div className="flex-1 bg-slate-100 rounded-xl flex items-center px-3"><Icon.Search /><input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Buscar por ID o Nombre..." className="bg-transparent w-full p-3 outline-none" /></div>
+                        <button onClick={() => setView(view === 'new' ? 'list' : 'new')} className="bg-slate-900 text-white w-12 rounded-xl font-bold text-xl">{view === 'new' ? '×' : '+'}</button>
+                    </div>
+
+                    {/* --- BARRA DE FILTROS INTELIGENTES --- */}
+                    {view !== 'new' && (
+                        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                            <button onClick={() => setStatusFilter('all')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold whitespace-nowrap transition-colors border ${statusFilter === 'all' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200'}`}>TODOS</button>
+                            <button onClick={() => setStatusFilter('ready')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold whitespace-nowrap transition-colors border ${statusFilter === 'ready' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-600 border-indigo-100'}`}>🟣 ALISTAR</button>
+                            <button onClick={() => setStatusFilter('debt')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold whitespace-nowrap transition-colors border ${statusFilter === 'debt' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-red-500 border-red-100'}`}>🔴 DEBEN</button>
+                            <button onClick={() => setStatusFilter('accumulating')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold whitespace-nowrap transition-colors border ${statusFilter === 'accumulating' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-emerald-600 border-emerald-100'}`}>🟢 ACUMULAN</button>
+                            <button onClick={() => setStatusFilter('clean')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold whitespace-nowrap transition-colors border ${statusFilter === 'clean' ? 'bg-slate-400 text-white border-slate-400' : 'bg-white text-slate-400 border-slate-200'}`}>⚪ LIMPIOS</button>
+                        </div>
+                    )}
+
+                    {/* Formulario Nuevo Cliente (Ocultable) */}
                     {view === 'new' && (
                         <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 animate-in slide-in-from-top duration-300 overflow-y-auto max-h-[70vh]">
                             <h3 className="font-bold mb-3">Nuevo Registro</h3>
@@ -1032,27 +1071,33 @@
                         </div>
                     )}
                 </div>
-                {/* LISTA CLIENTES EN REJILLA RESPONSIVE (Cascada en Vertical) */}
+
+                {/* LISTA CLIENTES (Con lógica h-auto para cascada en vertical) */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-2 landscape:grid landscape:grid-cols-2 landscape:gap-4 landscape:content-start">
-                    {filteredList.map(c => { 
-                        const status = logic.getClientStatus(c, logic.getClientCycle(c.id)); 
-                        return (
-                            <div key={c.id} onClick={() => { setActiveClient(c); setView('detail'); }} className="bg-white p-4 rounded-2xl border border-slate-100 flex justify-between items-center touch-card shadow-sm h-auto landscape:h-full">
-                                <div>
-                                    <div className="font-black text-xl text-slate-800 tracking-tight">{c.id}</div>
-                                    <div className="flex flex-col mt-0.5">
-                                        <span className="text-xs font-bold text-slate-500 uppercase">{c.name}</span>
-                                        {c.city && <span className="text-[10px] text-indigo-400 font-bold flex items-center gap-1"><i className="fas fa-map-marker-alt"></i> {c.city}</span>}
+                    {filteredList.length === 0 ? (
+                        <div className="text-center py-10 text-slate-400 italic text-sm col-span-2">No hay clientes con este filtro.</div>
+                    ) : (
+                        filteredList.map(c => { 
+                            const status = logic.getClientStatus(c, logic.getClientCycle(c.id)); 
+                            return (
+                                <div key={c.id} onClick={() => { setActiveClient(c); setView('detail'); }} className="bg-white p-4 rounded-2xl border border-slate-100 flex justify-between items-center touch-card shadow-sm h-auto landscape:h-full">
+                                    <div>
+                                        <div className="font-black text-xl text-slate-800 tracking-tight">{c.id}</div>
+                                        <div className="flex flex-col mt-0.5">
+                                            <span className="text-xs font-bold text-slate-500 uppercase">{c.name}</span>
+                                            {c.city && <span className="text-[10px] text-indigo-400 font-bold flex items-center gap-1"><i className="fas fa-map-marker-alt"></i> {c.city}</span>}
+                                        </div>
                                     </div>
+                                    <div className={`px-2 py-1 rounded text-[10px] font-bold border ${status.color}`}>{status.label}</div>
                                 </div>
-                                <div className={`px-2 py-1 rounded text-[10px] font-bold border ${status.color}`}>{status.label}</div>
-                            </div>
-                        ); 
-                    })}
+                            ); 
+                        })
+                    )}
                 </div>
             </div>
         );
     };
+
 
     const ReportViewer = ({ logic, onClose, metrics }) => {
         const [groupBy, setGroupBy] = useState('live'); 
