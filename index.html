@@ -259,7 +259,16 @@
 
     const formatMoney = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
     const capitalizeFirst = (str) => str.charAt(0).toUpperCase() + str.slice(1);
-    const getToday = () => new Date().toISOString().split('T')[0];
+    
+    // --- LÓGICA DE FECHA "BUSINESS DAY" (Madrugada) ---
+    // Si son antes de las 5:00 AM, cuenta como el día anterior.
+    const getToday = () => {
+        const now = new Date();
+        if (now.getHours() < 5) {
+            now.setDate(now.getDate() - 1);
+        }
+        return now.toISOString().split('T')[0];
+    };
 
     const safeISO = (dateStr) => {
         try {
@@ -326,27 +335,34 @@
         doc.save(`Adelita_Reporte_${getToday()}.pdf`);
     };
 
+    // --- NUEVO COMPONENTE DE FACTURA 3D ULTIMATE ---
     
-    // --- COMPONENTE DE FACTURA 3D CON MULTI-BANCO (REQ 5) ---
     const Invoice3DModal = ({ client, cycle, onClose }) => {
         const [items, setItems] = useState([]);
         const [activeBank, setActiveBank] = useState('pichincha');
 
         const BANKS = {
-            pichincha: { name: "Banco Pichincha", type: "Ahorros", num: "2205804691", owner: "Katherine Vallejos" },
-            guayaquil: { name: "Banco Guayaquil", type: "Ahorros", num: "0013258741", owner: "Adelita Store" }, // Ejemplo
-            pacifico: { name: "Banco del Pacífico", type: "Corriente", num: "7894561230", owner: "Adelita Store" } // Ejemplo
+            pichincha: { name: "Banco Pichincha", type: "Ahorros", num: "220422698", owner: "David Suarez" },
+            guayaquil: { name: "Banco Guayaquil", type: "Ahorros", num: "0032621435", owner: "David Suarez" }, 
+            pacifico: { name: "Banco del Pacífico", type: "ahorros", num: "7894561230", owner: "katherine Vallejos" }
         };
 
         useEffect(() => {
             const grouped = {};
             cycle.cycleSales.forEach(s => {
                 const key = `${s.item.trim().toLowerCase()}-${s.value}`;
-                if (!grouped[key]) grouped[key] = { qty: 0, desc: s.item, unit: s.value, total: 0 };
-                grouped[key].qty += 1; grouped[key].total += s.value;
+                if (!grouped[key]) {
+                    grouped[key] = { qty: 0, desc: s.item, unit: s.value, total: 0 };
+                }
+                grouped[key].qty += 1;
+                grouped[key].total += s.value;
             });
             const loadedItems = Object.values(grouped);
-            setItems(loadedItems.length === 0 ? [{qty: 1, desc: "Prenda...", unit: 0, total: 0}] : loadedItems);
+            if(loadedItems.length === 0) {
+                 setItems([{qty: 1, desc: "Prenda...", unit: 0, total: 0}]);
+            } else {
+                setItems(loadedItems);
+            }
         }, [cycle]);
 
         const handlePhotoDownload = () => {
@@ -354,28 +370,40 @@
             const controls = document.querySelector('.controls-panel');
             const btnClose = document.querySelector('.btn-close');
             const bankSel = document.querySelector('.bank-selector');
+            
             if (controls) controls.style.display = 'none';
             if (btnClose) btnClose.style.display = 'none';
-            if (bankSel) bankSel.style.display = 'none'; // Ocultar selector
+            if (bankSel) bankSel.style.display = 'none'; 
             
             window.scrollTo(0,0);
             const originalStyle = receipt.style.cssText;
-            receipt.style.height = 'auto'; receipt.style.overflow = 'visible'; receipt.style.maxHeight = 'none';
+            receipt.style.height = 'auto';
+            receipt.style.overflow = 'visible';
+            receipt.style.maxHeight = 'none';
 
             window.html2canvas(receipt, {
-                scale: 2, backgroundColor: null, useCORS: true, scrollY: -window.scrollY,
-                windowHeight: receipt.scrollHeight + 100, ignoreElements: (element) => element.classList.contains('delete-btn')
+                scale: 2, 
+                backgroundColor: null,
+                useCORS: true,
+                scrollY: -window.scrollY,
+                windowHeight: receipt.scrollHeight + 100,
+                ignoreElements: (element) => element.classList.contains('delete-btn')
             }).then(canvas => {
                 const link = document.createElement('a');
                 link.download = `Recibo_${client.id}_${new Date().toISOString().split('T')[0]}.png`;
-                link.href = canvas.toDataURL("image/png"); link.click();
+                link.href = canvas.toDataURL("image/png");
+                link.click();
+                
                 receipt.style.cssText = originalStyle;
                 if (controls) controls.style.display = 'flex';
                 if (btnClose) btnClose.style.display = 'flex';
                 if (bankSel) bankSel.style.display = 'flex';
             }).catch(err => {
-                alert("Error: " + err); receipt.style.cssText = originalStyle;
-                if (controls) controls.style.display = 'flex'; if (btnClose) btnClose.style.display = 'flex'; if (bankSel) bankSel.style.display = 'flex';
+                alert("Error generando imagen: " + err);
+                receipt.style.cssText = originalStyle;
+                if (controls) controls.style.display = 'flex';
+                if (btnClose) btnClose.style.display = 'flex';
+                if (bankSel) bankSel.style.display = 'flex';
             });
         };
 
@@ -385,6 +413,7 @@
         return (
             <div className="invoice-modal-container">
                 <button className="btn-float btn-close" onClick={onClose} title="Cerrar"><i className="fas fa-times"></i></button>
+
                 <div className="controls-panel" data-html2canvas-ignore="true">
                     <button className="btn-float btn-add" onClick={addItem} title="Añadir Prenda Manual"><i className="fas fa-plus"></i></button>
                     <button className="btn-float btn-photo" onClick={handlePhotoDownload} title="Descargar como Foto"><i className="fas fa-camera"></i></button>
@@ -394,21 +423,24 @@
                 <div id="receipt-wide">
                     <div className="top-accent-bar"></div>
                     <div className="header-wide">
-                        <div className="brand-section"><h1 contentEditable suppressContentEditableWarning>Adelita Store</h1><span>PRENDITAS CON AMOR & ESTILO</span></div>
+                        <div className="brand-section">
+                            <h1 contentEditable="true" suppressContentEditableWarning={true}>Adelita Store</h1>
+                            <span>PRENDITAS CON AMOR & ESTILO</span>
+                        </div>
                         <div className="date-badge">
                             <div className="label" style={{justifyContent: 'flex-end'}}>FECHA EMISIÓN</div>
-                            <div contentEditable suppressContentEditableWarning style={{fontWeight:'bold', fontSize: '16px', color:'#444'}}>{new Date().toLocaleDateString('es-ES')}</div>
+                            <div contentEditable="true" suppressContentEditableWarning={true} id="fecha-hoy" style={{fontWeight:'bold', fontSize: '16px', color:'#444'}}>{new Date().toLocaleDateString('es-ES')}</div>
                         </div>
                     </div>
                     <div className="info-container">
                         <div className="info-card card-client">
                             <span className="label"><i className="fas fa-user-circle"></i> CLIENTE VIP</span>
-                            <div className="input-text" style={{fontSize: '22px', fontWeight:'900', color:'#333'}} contentEditable suppressContentEditableWarning>{client.id}</div>
-                            <div className="input-text" style={{fontSize: '12px', color:'#666', marginTop:'4px'}} contentEditable suppressContentEditableWarning>{client.name}</div>
+                            <div className="input-text" style={{fontSize: '22px', fontWeight:'900', color:'#333'}} contentEditable="true" suppressContentEditableWarning={true}>{client.id}</div>
+                            <div className="input-text" style={{fontSize: '12px', color:'#666', marginTop:'4px'}} contentEditable="true" suppressContentEditableWarning={true}>{client.name}</div>
                         </div>
                         <div className="info-card card-lives">
                             <span className="label" style={{color:'#ff0050'}}><i className="fab fa-tiktok"></i> ACUMULADO</span>
-                            <div className="input-text" contentEditable suppressContentEditableWarning style={{color: '#c41e3a', fontSize: '18px'}}>{cycle.itemsCount} Prendas</div>
+                            <div className="input-text" contentEditable="true" suppressContentEditableWarning={true} style={{color: '#c41e3a', fontSize: '18px'}}>{cycle.itemsCount} Prendas</div>
                         </div>
                     </div>
                     <div className="grid-header"><div>#</div><div>DESCRIPCIÓN DE PRENDA</div><div>UNITARIO</div><div>TOTAL</div></div>
@@ -416,10 +448,10 @@
                         {items.map((item, idx) => (
                             <div className="item-row" key={idx}>
                                 <i className="fas fa-trash delete-btn" onClick={() => removeItem(idx)} data-html2canvas-ignore="true"></i>
-                                <div className="col-qty" contentEditable suppressContentEditableWarning>{item.qty}</div>
-                                <div className="col-desc" contentEditable suppressContentEditableWarning>{item.desc}</div>
-                                <div className="col-unit" contentEditable suppressContentEditableWarning>${Number(item.unit).toFixed(2)}</div>
-                                <div className="col-total" contentEditable suppressContentEditableWarning>${Number(item.total).toFixed(2)}</div>
+                                <div className="col-qty" contentEditable="true" suppressContentEditableWarning={true}>{item.qty}</div>
+                                <div className="col-desc" contentEditable="true" suppressContentEditableWarning={true}>{item.desc}</div>
+                                <div className="col-unit" contentEditable="true" suppressContentEditableWarning={true}>${Number(item.unit).toFixed(2)}</div>
+                                <div className="col-total" contentEditable="true" suppressContentEditableWarning={true}>${Number(item.total).toFixed(2)}</div>
                             </div>
                         ))}
                     </div>
@@ -427,23 +459,22 @@
                         <div className="shipping-inner">
                             <div style={{display:'flex', alignItems:'center'}}>
                                 <div className="shipping-icon-box"><i className="fas fa-truck-fast"></i></div>
-                                <div><div className="label" style={{color:'#2196f3', margin:0}}>LOGÍSTICA</div><div contentEditable suppressContentEditableWarning style={{fontWeight:600, fontSize:'14px'}}>{client.deliveryMethod ? client.deliveryMethod : 'Por Coordinar'}</div></div>
+                                <div><div className="label" style={{color:'#2196f3', margin:0}}>LOGÍSTICA</div><div contentEditable="true" suppressContentEditableWarning={true} style={{fontWeight:600, fontSize:'14px'}}>{client.deliveryMethod ? client.deliveryMethod : 'Por Coordinar'}</div></div>
                             </div>
-                            <div className="shipping-price-tag" contentEditable suppressContentEditableWarning>${client.shippingCost ? client.shippingCost.toFixed(2) : '0.00'}</div>
+                            <div className="shipping-price-tag" contentEditable="true" suppressContentEditableWarning={true}>${client.shippingCost ? client.shippingCost.toFixed(2) : '0.00'}</div>
                         </div>
                     </div>
                     <div className="footer-area">
                         <div className="divider-graphic"></div>
                         <div className="totals-flex">
                             <div className="totals-card">
-                                <div className="total-row"><span>Subtotal Prendas</span><span contentEditable suppressContentEditableWarning>${cycle.totalSales.toFixed(2)}</span></div>
-                                <div className="total-row"><span>Abono Previo</span><span contentEditable suppressContentEditableWarning style={{color:'#e74c3c'}}>-${cycle.totalNormalPaid.toFixed(2)}</span></div>
-                                <div className="final-total"><span className="final-label">TOTAL A PAGAR</span><span className="final-amount" contentEditable suppressContentEditableWarning>${ (cycle.totalSales - cycle.totalNormalPaid + (Math.max(0, (client.shippingCost || 0) - cycle.totalShippingPaid))).toFixed(2) }</span></div>
+                                <div className="total-row"><span>Subtotal Prendas</span><span contentEditable="true" suppressContentEditableWarning={true}>${cycle.totalSales.toFixed(2)}</span></div>
+                                <div className="total-row"><span>Abono Previo</span><span contentEditable="true" suppressContentEditableWarning={true} style={{color:'#e74c3c'}}>-${cycle.totalNormalPaid.toFixed(2)}</span></div>
+                                <div className="final-total"><span className="final-label">TOTAL A PAGAR</span><span className="final-amount" contentEditable="true" suppressContentEditableWarning={true}>${ (cycle.totalSales - cycle.totalNormalPaid + (Math.max(0, (client.shippingCost || 0) - cycle.totalShippingPaid))).toFixed(2) }</span></div>
                             </div>
                         </div>
                     </div>
                     
-                    {/* Selector de Bancos (Solo UI, se oculta al imprimir/foto) */}
                     <div className="bank-selector" data-html2canvas-ignore="true">
                         <button className={`bank-btn ${activeBank==='pichincha'?'active':''}`} onClick={()=>setActiveBank('pichincha')}>Pichincha</button>
                         <button className={`bank-btn ${activeBank==='guayaquil'?'active':''}`} onClick={()=>setActiveBank('guayaquil')}>Guayaquil</button>
@@ -459,7 +490,8 @@
         );
     };
 
-    // --- LÓGICA DE NEGOCIO ACTUALIZADA (REQ 6, 7 y 4) ---
+
+    // --- LÓGICA DE NEGOCIO (CONECTADA A FIREBASE) ---
     const useBusinessLogic = (user) => {
         const [clients, setClients] = useState([]);
         const [sales, setSales] = useState([]);
@@ -469,36 +501,56 @@
 
         useEffect(() => {
             if (!user) return;
-            const { onSnapshot, collection } = window.fs; const db = window.db;
-            const uC = onSnapshot(collection(db, 'clients'), (s) => setClients(s.docs.map(d => ({...d.data(), fireId: d.id}))));
-            const uS = onSnapshot(collection(db, 'sales'), (s) => setSales(s.docs.map(d => ({...d.data(), fireId: d.id}))));
-            const uP = onSnapshot(collection(db, 'payments'), (s) => setPayments(s.docs.map(d => ({...d.data(), fireId: d.id}))));
-            const uSh = onSnapshot(collection(db, 'shipments'), (s) => setShipments(s.docs.map(d => ({...d.data(), fireId: d.id}))));
-            const uE = onSnapshot(collection(db, 'expenses'), (s) => setExpenses(s.docs.map(d => ({...d.data(), fireId: d.id}))));
-            return () => { uC(); uS(); uP(); uSh(); uE(); };
+            const { onSnapshot, collection } = window.fs;
+            const db = window.db;
+
+            const unsubClients = onSnapshot(collection(db, 'clients'), (snap) => {
+                setClients(snap.docs.map(d => ({...d.data(), fireId: d.id})));
+            });
+            const unsubSales = onSnapshot(collection(db, 'sales'), (snap) => {
+                setSales(snap.docs.map(d => ({...d.data(), fireId: d.id})));
+            });
+            const unsubPayments = onSnapshot(collection(db, 'payments'), (snap) => {
+                setPayments(snap.docs.map(d => ({...d.data(), fireId: d.id})));
+            });
+            const unsubShipments = onSnapshot(collection(db, 'shipments'), (snap) => {
+                setShipments(snap.docs.map(d => ({...d.data(), fireId: d.id})));
+            });
+            const unsubExpenses = onSnapshot(collection(db, 'expenses'), (snap) => {
+                setExpenses(snap.docs.map(d => ({...d.data(), fireId: d.id})));
+            });
+
+            return () => {
+                unsubClients(); unsubSales(); unsubPayments(); unsubShipments(); unsubExpenses();
+            };
         }, [user]);
 
-        // AHORA LOS PAGOS Y GASTOS TIENEN 'account' Y 'category'
         const addPayment = (clientId, amount, detail, date, account = "pichincha") => {
              window.fs.addDoc(window.fs.collection(window.db, 'payments'), { 
                  id: Date.now() + Math.random(), clientId, amount: parseFloat(amount), date, detail, 
-                 account: account // Nuevo campo cuenta
+                 account: account 
              });
         };
         const addExpense = (detail, amount, dateStr, category = "negocio", account = "pichincha") => {
             window.fs.addDoc(window.fs.collection(window.db, 'expenses'), { 
                 id: Date.now(), detail, amount: parseFloat(amount), date: safeISO(dateStr), 
-                category: category, // 'negocio' o 'personal'
-                account: account    // De donde sale el dinero
+                category: category, 
+                account: account    
             });
         };
         
-        const addSale = (clientId, item, value, date) => { window.fs.addDoc(window.fs.collection(window.db, 'sales'), { id: Date.now() + Math.random(), clientId, item, value: parseFloat(value), date }); };
+        const addSale = (clientId, item, value, date) => {
+            window.fs.addDoc(window.fs.collection(window.db, 'sales'), { id: Date.now() + Math.random(), clientId, item, value: parseFloat(value), date });
+        };
         const addBatchSales = (clientId, item, value, date, quantity) => {
             const timestamp = Date.now();
-            for(let i=0; i < quantity; i++) window.fs.addDoc(window.fs.collection(window.db, 'sales'), { id: timestamp + i + Math.random(), clientId, item, value: parseFloat(value), date });
+            for(let i=0; i < quantity; i++) { 
+                window.fs.addDoc(window.fs.collection(window.db, 'sales'), { id: timestamp + i + Math.random(), clientId, item, value: parseFloat(value), date });
+            }
         };
-        const registerShipment = (clientId, guide, company, date) => { window.fs.addDoc(window.fs.collection(window.db, 'shipments'), { id: Date.now() + 500, clientId, guide, company, date }); };
+        const registerShipment = (clientId, guide, company, date) => {
+             window.fs.addDoc(window.fs.collection(window.db, 'shipments'), { id: Date.now() + 500, clientId, guide, company, date });
+        };
         const registerClient = (name, phone, cedula, province, city, address, initialAbono, dateStr, manualId) => {
             if (manualId && clients.some(c => c.id.toLowerCase() === manualId.toLowerCase())) { alert("ID ya existe"); return null; }
             const newId = manualId ? manualId.toUpperCase() : generateSmartID(name, clients.length);
@@ -506,7 +558,7 @@
             window.fs.addDoc(window.fs.collection(window.db, 'clients'), { 
                 id: newId, name, phone, cedula: cedula || "", province: province || "", city: city || "", address: address || "", 
                 registeredAt: dateISO, shippingCost: 0, deliveryMethod: '', confirmShipping: false, forceAccumulate: false,
-                requestShipment: false // Nuevo campo Req 4
+                requestShipment: false
             });
             if (initialAbono > 0) addPayment(newId, initialAbono, 'Abono Inicial', dateISO, 'efectivo');
             return newId;
@@ -514,10 +566,24 @@
 
         const updateClientLocal = (clientId, updates) => {
             const clientDoc = clients.find(c => c.id === clientId);
-            if (clientDoc && clientDoc.fireId) window.fs.updateDoc(window.fs.doc(window.db, "clients", clientDoc.fireId), updates);
+            if (clientDoc && clientDoc.fireId) {
+                const docRef = window.fs.doc(window.db, "clients", clientDoc.fireId);
+                window.fs.updateDoc(docRef, updates);
+            }
         };
-        const deleteClient = async (clientId) => { const c = clients.find(cl => cl.id === clientId); if(c && c.fireId) await window.fs.deleteDoc(window.fs.doc(window.db, "clients", c.fireId)); };
-        const deleteSale = async (saleFireId) => { if(saleFireId) await window.fs.deleteDoc(window.fs.doc(window.db, "sales", saleFireId)); };
+
+        const deleteClient = async (clientId) => {
+            const clientDoc = clients.find(c => c.id === clientId);
+            if(clientDoc && clientDoc.fireId) {
+                await window.fs.deleteDoc(window.fs.doc(window.db, "clients", clientDoc.fireId));
+            }
+        };
+
+        const deleteSale = async (saleFireId) => {
+            if(saleFireId) {
+                await window.fs.deleteDoc(window.fs.doc(window.db, "sales", saleFireId));
+            }
+        };
 
         const getClientCycle = (clientId) => {
             const clientShipments = shipments.filter(s => s.clientId === clientId).sort((a, b) => new Date(safeISO(b.date)) - new Date(safeISO(a.date)));
@@ -536,7 +602,6 @@
         };
 
         const getClientStatus = (client, cycleData) => {
-            // Lógica actualizada con Req 4 (requestShipment)
             if (client.requestShipment) return { code: 'READY', label: 'ALISTAR (Solicitó)', color: 'bg-indigo-600 text-white animate-pulse' };
             const { clothingBalance, totalShippingPaid } = cycleData;
             const shippingCost = client.shippingCost || 0;
@@ -552,7 +617,6 @@
 
         return { clients, sales, payments, shipments, expenses, setClients: updateClientLocal, getClientCycle, getClientStatus, registerClient, addSale, addBatchSales, addPayment, addExpense, registerShipment, deleteClient, deleteSale };
     };
-
 
     // --- COMPONENTES UI ---
 
@@ -647,26 +711,16 @@
         );
     };
     
+
     const ClientDetailComponent = ({ activeClient, logic, onBack }) => {
-        // --- ESTADOS DE LA INTERFAZ ---
-        const [payAmount, setPayAmount] = useState(""); 
-        const [payDate, setPayDate] = useState(getToday()); 
-        const [payBank, setPayBank] = useState('pichincha'); // Banco por defecto para NUEVOS pagos
-
-        const [shipPayAmount, setShipPayAmount] = useState(""); 
-        const [shipPayDate, setShipPayDate] = useState(getToday()); 
-        
-        const [orderViewMode, setOrderViewMode] = useState('grouped'); 
-        const [tabView, setTabView] = useState('cycle'); 
-        const [showWaModal, setShowWaModal] = useState(false); 
-        const [showInvoice, setShowInvoice] = useState(false);
-        const [isEditing, setIsEditing] = useState(false); // Edición de Cliente
-        
-        // --- ESTADOS PARA EDITAR VENTAS Y PAGOS ANTIGUOS ---
+        const [payAmount, setPayAmount] = useState(""); const [payDate, setPayDate] = useState(getToday()); const [payBank, setPayBank] = useState('pichincha');
+        const [shipPayAmount, setShipPayAmount] = useState(""); const [shipPayDate, setShipPayDate] = useState(getToday()); 
+        const [orderViewMode, setOrderViewMode] = useState('grouped'); const [tabView, setTabView] = useState('cycle'); 
+        const [showWaModal, setShowWaModal] = useState(false); const [showInvoice, setShowInvoice] = useState(false);
+        const [isEditing, setIsEditing] = useState(false);
         const [editingSale, setEditingSale] = useState(null); 
-        const [editingPayment, setEditingPayment] = useState(null); // <--- NUEVO: Estado para editar pagos
+        const [editingPayment, setEditingPayment] = useState(null);
 
-        // --- ESTADOS PARA EDICIÓN DE DATOS DEL CLIENTE ---
         const [editName, setEditName] = useState(activeClient.name);
         const [editPhone, setEditPhone] = useState(activeClient.phone);
         const [editCedula, setEditCedula] = useState(activeClient.cedula || "");
@@ -674,7 +728,6 @@
         const [editCity, setEditCity] = useState(activeClient.city || "");
         const [editAddress, setEditAddress] = useState(activeClient.address || "");
 
-        // --- CÁLCULOS DEL CICLO ---
         const cycle = logic.getClientCycle(activeClient.id);
         const status = logic.getClientStatus(activeClient, cycle);
         const shippingCost = activeClient.shippingCost || 0;
@@ -683,7 +736,6 @@
         const clothingDebt = Math.abs(Math.min(0, cycle.clothingBalance));
         const shippingBalance = shippingPaid - shippingCost;
 
-        // --- FUNCIONES DE GUARDADO ---
         const handleUpdateClient = (updates) => { logic.setClients(activeClient.id, updates); };
         
         const saveEdit = () => {
@@ -691,7 +743,6 @@
             setIsEditing(false);
         };
 
-        // Guardar edición de VENTA (Ropa)
         const handleSaveSaleEdit = async () => {
             if(!editingSale) return;
             try {
@@ -699,19 +750,17 @@
                 const docRef = window.fs.doc(window.db, "sales", editingSale.fireId);
                 await window.fs.updateDoc(docRef, { item: editingSale.item, value: parseFloat(editingSale.value), date: finalDateISO });
                 setEditingSale(null); 
-            } catch(e) { alert("Error al actualizar venta: " + e.message); }
+            } catch(e) { alert("Error al actualizar: " + e.message); }
         };
 
-        // Guardar edición de PAGO (Banco/Fecha) - NUEVO
         const handleSavePaymentEdit = async () => {
             if(!editingPayment) return;
             try {
                 const finalDateISO = smartDate(editingPayment.date, cycle.lastShipmentDate);
                 const docRef = window.fs.doc(window.db, "payments", editingPayment.fireId);
-                // Actualizamos el banco (account), el monto y la fecha
                 await window.fs.updateDoc(docRef, { 
                     amount: parseFloat(editingPayment.amount),
-                    account: editingPayment.account, // <--- Aquí se guarda el banco corregido
+                    account: editingPayment.account, 
                     date: finalDateISO 
                 });
                 setEditingPayment(null);
@@ -722,20 +771,12 @@
             if(confirm("⚠ ¿ESTÁS SEGURO? Se borrará el cliente y su historial. Esta acción es irreversible.")) { logic.deleteClient(activeClient.id); onBack(); }
         };
 
-        // --- MANEJADORES DE NUEVOS PAGOS ---
-        const handlePayment = () => { 
-            if(!payAmount) return; 
-            logic.addPayment(activeClient.id, payAmount, 'Abono Ropa', smartDate(payDate, cycle.lastShipmentDate), payBank); 
-            setPayAmount(""); 
-        };
+        const handlePayment = () => { if(!payAmount) return; logic.addPayment(activeClient.id, payAmount, 'Abono Ropa', smartDate(payDate, cycle.lastShipmentDate), payBank); setPayAmount(""); };
         
         const handleShippingPayment = () => {
             if (!shipPayAmount) return;
             const amount = parseFloat(shipPayAmount); const dateISO = smartDate(shipPayDate, cycle.lastShipmentDate);
-            if (amount > shippingPending + 0.01 && shippingPending > 0) { 
-                logic.addPayment(activeClient.id, shippingPending, 'Pago Envío (Auto)', dateISO, payBank); 
-                setTimeout(() => logic.addPayment(activeClient.id, amount - shippingPending, 'Abono Ropa (Excedente Envío)', dateISO, payBank), 50); 
-            } 
+            if (amount > shippingPending + 0.01 && shippingPending > 0) { logic.addPayment(activeClient.id, shippingPending, 'Pago Envío (Auto)', dateISO, payBank); setTimeout(() => logic.addPayment(activeClient.id, amount - shippingPending, 'Abono Ropa (Excedente Envío)', dateISO, payBank), 50); } 
             else if (shippingPending <= 0.01) { logic.addPayment(activeClient.id, amount, 'Abono Ropa', dateISO, payBank); } 
             else { logic.addPayment(activeClient.id, amount, 'Pago Envío', dateISO, payBank); }
             setShipPayAmount("");
@@ -786,46 +827,24 @@
 
         return (
             <div className="flex flex-col h-full bg-white relative">
-                {/* MODAL EDITAR VENTA */}
                 {editingSale && (
                     <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-6 animate-in fade-in" onClick={() => setEditingSale(null)}>
                         <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
                             <div className="text-center border-b pb-2 mb-2"><h3 className="font-bold text-xl text-slate-800">Editar Venta</h3></div>
-                            <div><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Fecha</label><input type="date" value={editingSale.date ? editingSale.date.split('T')[0] : ''} onChange={e => setEditingSale({...editingSale, date: e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl" /></div>
-                            <div className="grid grid-cols-3 gap-3"><div className="col-span-2"><input value={editingSale.item} onChange={e => setEditingSale({...editingSale, item: e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl" /></div><div><input type="number" step="0.01" value={editingSale.value} onChange={e => setEditingSale({...editingSale, value: e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl font-bold" /></div></div>
+                            <div><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Fecha del Live</label><input type="date" value={editingSale.date ? editingSale.date.split('T')[0] : ''} onChange={e => setEditingSale({...editingSale, date: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700" /></div>
+                            <div className="grid grid-cols-3 gap-3"><div className="col-span-2"><input value={editingSale.item} onChange={e => setEditingSale({...editingSale, item: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl" /></div><div><input type="number" step="0.01" value={editingSale.value} onChange={e => setEditingSale({...editingSale, value: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-emerald-600" /></div></div>
                             <div className="flex gap-2 pt-2"><button onClick={() => setEditingSale(null)} className="flex-1 py-3 bg-slate-100 font-bold rounded-xl">Cancelar</button><button onClick={handleSaveSaleEdit} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg">Guardar</button></div>
                         </div>
                     </div>
                 )}
 
-                {/* MODAL EDITAR PAGO (NUEVO PARA ASIGNAR BANCOS) */}
                 {editingPayment && (
                     <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-6 animate-in fade-in" onClick={() => setEditingPayment(null)}>
                         <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
-                            <div className="text-center border-b pb-2 mb-2">
-                                <h3 className="font-bold text-xl text-slate-800">Corregir Pago</h3>
-                                <p className="text-xs text-slate-400">Asigna el banco correcto a este abono</p>
-                            </div>
-                            
-                            <div>
-                                <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Banco / Cuenta</label>
-                                <select value={editingPayment.account || 'pichincha'} onChange={e => setEditingPayment({...editingPayment, account: e.target.value})} className="w-full p-3 bg-indigo-50 border border-indigo-100 rounded-xl font-bold text-indigo-700 outline-none">
-                                    <option value="pichincha">Banco Pichincha</option>
-                                    <option value="guayaquil">Banco Guayaquil</option>
-                                    <option value="pacifico">Banco Pacífico</option>
-                                    <option value="efectivo">Efectivo / Caja</option>
-                                </select>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                                <div><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Monto</label><input type="number" step="0.01" value={editingPayment.amount} onChange={e => setEditingPayment({...editingPayment, amount: e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl font-bold" /></div>
-                                <div><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Fecha</label><input type="date" value={editingPayment.date ? editingPayment.date.split('T')[0] : ''} onChange={e => setEditingPayment({...editingPayment, date: e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl" /></div>
-                            </div>
-                            
-                            <div className="flex gap-2 pt-2">
-                                <button onClick={() => setEditingPayment(null)} className="flex-1 py-3 bg-slate-100 font-bold rounded-xl">Cancelar</button>
-                                <button onClick={handleSavePaymentEdit} className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl shadow-lg">Guardar Cambios</button>
-                            </div>
+                            <div className="text-center border-b pb-2 mb-2"><h3 className="font-bold text-xl text-slate-800">Corregir Pago</h3><p className="text-xs text-slate-400">Asigna el banco correcto a este abono</p></div>
+                            <div><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Banco / Cuenta</label><select value={editingPayment.account || 'pichincha'} onChange={e => setEditingPayment({...editingPayment, account: e.target.value})} className="w-full p-3 bg-indigo-50 border border-indigo-100 rounded-xl font-bold text-indigo-700 outline-none"><option value="pichincha">Banco Pichincha</option><option value="guayaquil">Banco Guayaquil</option><option value="pacifico">Banco Pacífico</option><option value="efectivo">Efectivo / Caja</option></select></div>
+                            <div className="grid grid-cols-2 gap-3"><div><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Monto</label><input type="number" step="0.01" value={editingPayment.amount} onChange={e => setEditingPayment({...editingPayment, amount: e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl font-bold" /></div><div><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Fecha</label><input type="date" value={editingPayment.date ? editingPayment.date.split('T')[0] : ''} onChange={e => setEditingPayment({...editingPayment, date: e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl" /></div></div>
+                            <div className="flex gap-2 pt-2"><button onClick={() => setEditingPayment(null)} className="flex-1 py-3 bg-slate-100 font-bold rounded-xl">Cancelar</button><button onClick={handleSavePaymentEdit} className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl shadow-lg">Guardar Cambios</button></div>
                         </div>
                     </div>
                 )}
@@ -916,89 +935,31 @@
                         <div className="pb-4"><div className="flex justify-between items-end mb-3"><h3 className="text-xs font-bold text-slate-400 uppercase">Detalle Pedido</h3><div className="flex bg-slate-100 p-1 rounded-lg"><button onClick={() => setOrderViewMode('grouped')} className={`px-2 py-1 rounded-md text-[10px] flex items-center gap-1 ${orderViewMode==='grouped'?'bg-white shadow':''}`}>Lives</button><button onClick={() => setOrderViewMode('list')} className={`px-2 py-1 rounded-md text-[10px] flex items-center gap-1 ${orderViewMode==='list'?'bg-white shadow':''}`}>Lista</button></div></div>
                         <SalesListRenderer sales={cycle.cycleSales} viewMode={orderViewMode} onDeleteSale={logic.deleteSale} onEditSale={(sale) => setEditingSale(sale)} />
                         </div>
-                        
-                        {/* HISTORIAL DE PAGOS INTERACTIVO (CLIC PARA EDITAR) */}
-                        <div className="hidden landscape:block pt-4 border-t border-slate-100 mt-4">
-                            <h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Historial de Pagos</h3>
-                            <div className="bg-white border border-slate-100 rounded-xl overflow-hidden">
-                                {cycle.allPayments.map((p, i) => (
-                                    <div key={i} onClick={() => setEditingPayment(p)} className="flex justify-between p-3 border-b border-slate-50 text-sm hover:bg-indigo-50 cursor-pointer transition-colors group" title="Clic para editar banco">
-                                        <div>
-                                            <span className="block font-bold text-slate-700">{p.detail}</span>
-                                            <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                                                {new Date(safeISO(p.date)).toLocaleDateString()}
-                                                {/* Mostrar Banco o Alerta si falta */}
-                                                {p.account ? 
-                                                    <span className="bg-slate-100 px-1 rounded text-slate-500 uppercase">{p.account.substring(0,3)}</span> : 
-                                                    <span className="text-red-400 font-bold">⚠️ Sin Banco</span>
-                                                }
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-bold text-emerald-600">+${p.amount}</span>
-                                            <span className="text-slate-300 group-hover:text-indigo-500"><Icon.Edit /></span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
+                        <div className="hidden landscape:block pt-4 border-t border-slate-100 mt-4"><h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Historial de Pagos</h3><div className="bg-white border border-slate-100 rounded-xl overflow-hidden">{cycle.allPayments.map((p, i) => (<div key={i} onClick={() => setEditingPayment(p)} className="flex justify-between p-3 border-b border-slate-50 text-sm hover:bg-indigo-50 cursor-pointer transition-colors group" title="Clic para editar banco"><div><span className="block font-bold text-slate-700">{p.detail}</span><span className="text-[10px] text-slate-400 flex items-center gap-1">{new Date(safeISO(p.date)).toLocaleDateString()} {p.account ? <span className="bg-slate-100 px-1 rounded text-slate-500 uppercase">{p.account.substring(0,3)}</span> : <span className="text-red-400 font-bold">⚠️ Sin Banco</span>}</span></div><div className="flex items-center gap-2"><span className="font-bold text-emerald-600">+${p.amount}</span><span className="text-slate-300 group-hover:text-indigo-500"><Icon.Edit /></span></div></div>))}</div></div>
                     </div>
                 </div>
             </div>
         );
     };
 
-       
     const WarehouseView = ({ logic }) => {
         const [guide, setGuide] = useState(""); const [dispatchDate, setDispatchDate] = useState(getToday()); const [selectedClient, setSelectedClient] = useState(null);
-        
         const readyClients = logic.clients.map(c => ({...c, cycle: logic.getClientCycle(c.id)})).map(c => ({...c, status: logic.getClientStatus(c, c.cycle)})).filter(c => c.status.code === 'READY');
-        
         const handleDispatch = () => {
             if (!guide) return alert("Falta Guía");
-            const finalDate = smartDate(dispatchDate, logic.getClientCycle(selectedClient.id).lastShipmentDate);
-            const cycle = logic.getClientCycle(selectedClient.id); 
-            const clothingBalance = cycle.clothingBalance; 
-            const shippingBalance = cycle.totalShippingPaid - (selectedClient.shippingCost || 0);
-
+            const finalDate = smartDate(dispatchDate, logic.getClientCycle(selectedClient.id).lastShipmentDate); const cycle = logic.getClientCycle(selectedClient.id); const clothingBalance = cycle.clothingBalance; const shippingBalance = cycle.totalShippingPaid - (selectedClient.shippingCost || 0);
             if (clothingBalance > 0.01) logic.addPayment(selectedClient.id, clothingBalance, "Saldo a Favor Ropa (Arrastre)", new Date(new Date(finalDate).getTime() + 1000).toISOString());
             if (shippingBalance > 0.01) logic.addPayment(selectedClient.id, shippingBalance, "Vuelto Envío (Arrastre)", new Date(new Date(finalDate).getTime() + 1000).toISOString());
-            
-            logic.registerShipment(selectedClient.id, guide, selectedClient.deliveryMethod, finalDate);
-            logic.setClients(selectedClient.id, { confirmShipping: false, forceAccumulate: false });
-            
+            logic.registerShipment(selectedClient.id, guide, selectedClient.deliveryMethod, finalDate); logic.setClients(selectedClient.id, { confirmShipping: false, forceAccumulate: false, requestShipment: false });
             alert("✅ Despachado Correctamente"); setSelectedClient(null); setGuide("");
         };
-
         if (selectedClient) return (<div className="p-6 h-full flex flex-col bg-slate-100"><button onClick={() => setSelectedClient(null)} className="mb-4 font-bold text-slate-500">← Volver</button><div className="bg-white p-6 rounded-3xl shadow-xl border-l-8 border-indigo-600"><h2 className="text-4xl font-black mb-1 text-slate-800">{selectedClient.id}</h2><p className="text-slate-500 font-bold uppercase mb-6 text-sm">{selectedClient.name} • {selectedClient.deliveryMethod}</p><div className="space-y-4 mb-8"><div className="bg-slate-50 p-3 rounded-lg text-sm border"><div className="flex justify-between"><span>Ropa:</span><span className="text-emerald-600 font-bold">PAGADO</span></div><div className="flex justify-between"><span>Envío:</span><span className="text-emerald-600 font-bold">PAGADO</span></div></div><input value={guide} onChange={e => setGuide(e.target.value)} placeholder="Número de Guía / Tracking" className="w-full p-4 border-2 rounded-xl text-xl font-mono focus:border-indigo-600 outline-none" autoFocus /><div><label className="text-xs font-bold text-slate-400">Fecha Despacho</label><input type="date" value={dispatchDate} onChange={e => setDispatchDate(e.target.value)} className="w-full p-3 border rounded-xl" /></div></div><button onClick={handleDispatch} className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg text-lg flex items-center justify-center gap-2"><Icon.Check /> CONFIRMAR SALIDA</button></div></div>);
-        
-        return (
-            <div className="p-4 pb-24">
-                <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-700"><Icon.Box /> Listos para Enviar ({readyClients.length})</h2>
-                <div className="space-y-3">
-                    {readyClients.length === 0 && <div className="text-center py-12 text-slate-400 border border-dashed rounded-3xl">No hay paquetes listos</div>}
-                    {readyClients.map(c => (
-                        <div key={c.id} onClick={() => setSelectedClient(c)} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center touch-card cursor-pointer">
-                            <div>
-                                {/* CAMBIO AQUÍ: ID GRANDE */}
-                                <div className="font-black text-lg text-slate-800 tracking-tight">{c.id}</div>
-                                <div className="text-xs font-bold text-slate-500 uppercase mt-0.5">{c.name}</div>
-                                <div className={`inline-block px-2 py-0.5 mt-1 rounded text-[10px] font-bold border ${c.status.color}`}>{c.status.label}</div>
-                            </div>
-                            <button className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm">DESPACHAR</button>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        );
+        return (<div className="p-4 pb-24"><h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-700"><Icon.Box /> Listos para Enviar ({readyClients.length})</h2><div className="space-y-3">{readyClients.length === 0 && <div className="text-center py-12 text-slate-400 border border-dashed rounded-3xl">No hay paquetes listos</div>}{readyClients.map(c => (<div key={c.id} onClick={() => setSelectedClient(c)} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center touch-card cursor-pointer"><div><div className="font-black text-lg text-slate-800 tracking-tight">{c.id}</div><div className="text-xs font-bold text-slate-500 uppercase mt-0.5">{c.name}</div><div className={`inline-block px-2 py-0.5 mt-1 rounded text-[10px] font-bold border ${c.status.color}`}>{c.status.label}</div></div><button className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm">DESPACHAR</button></div>))}</div></div>);
     };
-
-
 
     const LiveView = ({ logic }) => {
         const [search, setSearch] = useState(""); const [found, setFound] = useState(null); const [item, setItem] = useState(""); const [price, setPrice] = useState(""); const [qty, setQty] = useState(1); const [msg, setMsg] = useState(null); const [suggestions, setSuggestions] = useState([]); const [saleDate, setSaleDate] = useState(getToday());
-        const ITEMS_COMMON = ["Blusa", "Pantalón", "Vestido", "Camiseta", "Falda", "Short", "Chaqueta"];
-        const QTY_OPTIONS = [1, 2, 3, 4, 5, 10]; const PRICE_OPTIONS = ["0.25", "0.50", "1.00", "1.25", "1.50", "1.75", "2.00"];
+        const ITEMS_COMMON = [ "Prenda", "Combo", "Blusa", "Pantalón", "Vestido", "Camiseta", "Falda", "Short", "Chaqueta"]; const QTY_OPTIONS = [1, 2, 3, 4, 5, 10]; const PRICE_OPTIONS = ["0.25", "0.50", "0.75", "1.00", "1.25", "1.50", "1.75", "2.00"];
 
         useEffect(() => {
             if (search.length > 0) { const matches = logic.clients.filter(c => c.id.toLowerCase().startsWith(search.toLowerCase()) || c.name.toLowerCase().includes(search.toLowerCase())).slice(0, 3); setSuggestions(matches); } else { setSuggestions([]); }
@@ -1031,7 +992,7 @@
         );
     };
 
-     const ClientsView = ({ logic }) => {
+    const ClientsView = ({ logic }) => {
         const [view, setView] = useState('list'); const [activeClient, setActiveClient] = useState(null); const [filter, setFilter] = useState(""); 
         
         // CAMPOS NUEVOS
@@ -1071,13 +1032,13 @@
                         </div>
                     )}
                 </div>
+                {/* LISTA CLIENTES EN REJILLA RESPONSIVE (Cascada en Vertical) */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-2 landscape:grid landscape:grid-cols-2 landscape:gap-4 landscape:content-start">
                     {filteredList.map(c => { 
                         const status = logic.getClientStatus(c, logic.getClientCycle(c.id)); 
                         return (
-                            <div key={c.id} onClick={() => { setActiveClient(c); setView('detail'); }} className="bg-white p-4 rounded-2xl border border-slate-100 flex justify-between items-center touch-card shadow-sm h-full">
+                            <div key={c.id} onClick={() => { setActiveClient(c); setView('detail'); }} className="bg-white p-4 rounded-2xl border border-slate-100 flex justify-between items-center touch-card shadow-sm h-auto landscape:h-full">
                                 <div>
-                                    {/* CAMBIO AQUÍ: ID GRANDE, NOMBRE PEQUEÑO */}
                                     <div className="font-black text-xl text-slate-800 tracking-tight">{c.id}</div>
                                     <div className="flex flex-col mt-0.5">
                                         <span className="text-xs font-bold text-slate-500 uppercase">{c.name}</span>
@@ -1093,63 +1054,146 @@
         );
     };
 
+    const ReportViewer = ({ logic, onClose, metrics }) => {
+        const [groupBy, setGroupBy] = useState('live'); 
+        const [showHelp, setShowHelp] = useState(false);
 
-    // --- MÓDULO DE ADMINISTRACIÓN (GERENCIA) ---
-
-        const ReportViewer = ({ logic, onClose, metrics }) => {
-        // REPORTE JERÁRQUICO REAL: FECHA -> CLIENTE -> ITEMS
-        const reportTree = useMemo(() => {
-            const tree = {};
-            logic.sales.forEach(sale => {
-                const dateRaw = new Date(safeISO(sale.date));
-                if(isNaN(dateRaw)) return;
-                const dateKey = dateRaw.toLocaleDateString(); // Nivel 1: Fecha
+        const reportData = useMemo(() => {
+            try {
+                const groups = {}; 
+                const debtors = [];
                 
-                if (!tree[dateKey]) tree[dateKey] = { total: 0, clients: {} };
-                tree[dateKey].total += sale.value;
+                logic.sales.forEach(sale => {
+                    const date = new Date(safeISO(sale.date)); 
+                    if (isNaN(date)) return;
+                    
+                    let key = ""; 
+                    let keyDisplay = "";
 
-                const clientKey = sale.clientId; // Nivel 2: Cliente
-                if (!tree[dateKey].clients[clientKey]) tree[dateKey].clients[clientKey] = { total: 0, items: [], name: logic.clients.find(c=>c.id===sale.clientId)?.name };
-                
-                tree[dateKey].clients[clientKey].total += sale.value;
-                tree[dateKey].clients[clientKey].items.push(sale); // Nivel 3: Items
-            });
-            return Object.entries(tree).sort((a,b) => new Date(b[0]) - new Date(a[0])); // Ordenar fechas desc
-        }, [logic.sales, logic.clients]);
+                    if (groupBy === 'client') {
+                        key = sale.clientId;
+                        const clientName = logic.clients.find(c => c.id === sale.clientId)?.name || "Desconocido";
+                        keyDisplay = `${sale.clientId} - ${clientName}`;
+                    } else {
+                        if (groupBy === 'live') key = date.toLocaleDateString();
+                        else if (groupBy === 'week') { const startOfYear = new Date(date.getFullYear(), 0, 1); const week = Math.ceil((((date - startOfYear) / 86400000) + startOfYear.getDay() + 1) / 7); key = `Semana ${week} - ${date.getFullYear()}`; }
+                        else if (groupBy === 'month') key = date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }); 
+                        else if (groupBy === 'year') key = date.getFullYear().toString();
+                        keyDisplay = key;
+                    }
+                    
+                    if (!groups[key]) groups[key] = { label: keyDisplay, total: 0, items: [] }; 
+                    groups[key].total += sale.value; 
+                    groups[key].items.push(sale);
+                });
+
+                logic.clients.forEach(client => { 
+                    try {
+                        const cycle = logic.getClientCycle(client.id); 
+                        if (cycle.clothingBalance < -0.01) { 
+                            debtors.push({ ...client, balance: cycle.clothingBalance }); 
+                        } 
+                    } catch(e) {}
+                });
+
+                return { groups, debtors: debtors.sort((a,b) => a.balance - b.balance) };
+            } catch (e) {
+                console.error("Error generando reporte:", e);
+                return { groups: {}, debtors: [] };
+            }
+        }, [logic.sales, logic.clients, groupBy]);
+
+        const handlePrint = () => { window.print(); };
 
         return (
-            <div className="fixed inset-0 bg-white z-[60] overflow-auto flex flex-col animate-in slide-in-from-bottom duration-300">
+            <div className="fixed inset-0 bg-white z-[60] overflow-auto flex flex-col animate-in slide-in-from-bottom duration-300" id="printable-area">
+                {showHelp && (<div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-6" onClick={() => setShowHelp(false)}><div className="bg-white rounded-2xl p-6 max-w-sm text-center shadow-2xl" onClick={e => e.stopPropagation()}><div className="text-4xl mb-4">📄</div><h3 className="font-bold text-lg mb-2">Guardar PDF (iPad)</h3><ol className="text-left text-sm text-slate-600 space-y-2 mb-6 list-decimal pl-4"><li>Toca <b>"Imprimir"</b>.</li><li>Haz <b>Zoom</b> sobre la hoja previa.</li><li>Toca <b>"Compartir"</b> y <b>"Guardar en Archivos"</b>.</li></ol><button onClick={() => setShowHelp(false)} className="bg-slate-900 text-white w-full py-3 rounded-xl font-bold">¡Entendido!</button></div></div>)}
+                
                 <div className="sticky top-0 bg-slate-900 text-white p-4 flex justify-between items-center no-print shadow-lg z-10">
-                    <h2 className="font-bold flex items-center gap-2"><Icon.FileText /> Reporte Jerárquico</h2>
-                    <button onClick={onClose} className="bg-white/10 px-4 py-2 rounded-lg font-bold text-xs"><Icon.Close /></button>
+                    <div className="flex flex-col md:flex-row md:items-center gap-4">
+                        <h2 className="font-bold flex items-center gap-2 text-sm md:text-base"><Icon.FileText /> Reporte</h2>
+                        <div className="flex bg-slate-800 rounded-lg p-1 overflow-x-auto max-w-[200px] md:max-w-none">
+                            <button onClick={() => setGroupBy('live')} className={`px-3 py-1 rounded text-xs whitespace-nowrap ${groupBy === 'live' ? 'bg-indigo-500 text-white font-bold' : 'text-slate-400 hover:text-white'}`}>Por Días</button>
+                            <button onClick={() => setGroupBy('client')} className={`px-3 py-1 rounded text-xs whitespace-nowrap ${groupBy === 'client' ? 'bg-pink-500 text-white font-bold' : 'text-slate-400 hover:text-white'}`}>Por Clientes</button>
+                            <div className="w-px bg-slate-700 mx-1"></div>
+                            <button onClick={() => setGroupBy('month')} className={`px-3 py-1 rounded text-xs whitespace-nowrap ${groupBy === 'month' ? 'bg-slate-600 text-white font-bold' : 'text-slate-400 hover:text-white'}`}>Mes</button>
+                        </div>
+                    </div>
+                    <div className="flex gap-2">
+                        <button onClick={() => setShowHelp(true)} className="bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 px-3 py-2 rounded-lg font-bold text-xs transition-colors border border-amber-500/50 flex items-center gap-1"><Icon.Info /> PDF?</button>
+                        <button onClick={handlePrint} className="bg-indigo-500 hover:bg-indigo-600 px-4 py-2 rounded-lg font-bold flex items-center gap-2 text-xs md:text-sm shadow-lg transition-colors"><Icon.Printer /> Imprimir</button>
+                        <button onClick={onClose} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg font-bold text-xs md:text-sm transition-colors"><Icon.Close /></button>
+                    </div>
                 </div>
+
                 <div className="p-4 md:p-8 max-w-5xl mx-auto w-full text-slate-800">
-                    <h1 className="text-2xl font-black text-slate-900 mb-6 border-b pb-4">Reporte Detallado</h1>
-                    {reportTree.map(([date, dateData]) => (
-                        <details key={date} className="group mb-4 border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
-                            <summary className="flex justify-between items-center p-4 bg-slate-50 cursor-pointer font-bold select-none hover:bg-slate-100">
-                                <span className="flex items-center gap-2 uppercase tracking-wide">📅 {date}</span>
-                                <span className="text-emerald-700 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-100">${dateData.total.toFixed(2)}</span>
-                            </summary>
-                            <div className="p-4 bg-white border-t border-slate-100 space-y-3">
-                                {Object.entries(dateData.clients).map(([clientId, clientData]) => (
-                                    <details key={clientId} className="border-l-4 border-indigo-100 pl-4 py-2">
-                                        <summary className="flex justify-between text-sm font-bold text-slate-700 cursor-pointer hover:text-indigo-600">
-                                            <span>👤 {clientId} <span className="font-normal text-slate-400">({clientData.name})</span></span>
-                                            <span>${clientData.total.toFixed(2)}</span>
-                                        </summary>
-                                        <div className="mt-2 pl-2 text-xs text-slate-500">
-                                            {clientData.items.map((it, i) => (
-                                                <div key={i} className="flex justify-between border-b border-slate-50 py-1">
-                                                    <span>{it.item}</span><span>${it.value.toFixed(2)}</span>
-                                                </div>
+                    <div className="text-center border-b-2 border-slate-900 pb-6 mb-8">
+                        <h1 className="text-2xl md:text-4xl font-extrabold text-slate-900 tracking-tight">Reporte ADELITA STORE</h1>
+                        <p className="text-slate-500 mt-2 font-medium text-xs md:text-sm">Agrupado por: {groupBy === 'client' ? 'CLIENTES' : 'FECHAS'} | Fecha: {new Date().toLocaleDateString()}</p>
+                    </div>
+
+                    {metrics && (
+                        <div className="grid grid-cols-3 gap-6 mb-10">
+                            <div className="p-4 bg-slate-50 rounded-xl text-center border"><div className="text-xs text-slate-400 uppercase font-bold">Ingresos Reales</div><div className="text-xl font-bold text-emerald-600">{formatMoney(metrics.totalCollected)}</div></div>
+                            <div className="p-4 bg-slate-50 rounded-xl text-center border"><div className="text-xs text-slate-400 uppercase font-bold">Gastos</div><div className="text-xl font-bold text-red-500">{formatMoney(metrics.totalExpenses)}</div></div>
+                            <div className="p-4 bg-slate-50 rounded-xl text-center border"><div className="text-xs text-slate-400 uppercase font-bold">Utilidad</div><div className="text-xl font-bold text-indigo-900">{formatMoney(metrics.profit)}</div></div>
+                        </div>
+                    )}
+
+                    <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-4 flex items-center gap-2"><Icon.Chart /> Detalle de Ventas</h3>
+                    
+                    <div className="space-y-4 mb-12">
+                        {Object.entries(reportData.groups).sort((a,b) => b[1].total - a[1].total).map(([key, data]) => (
+                            <details key={key} className="group bg-white border border-slate-200 rounded-xl overflow-hidden print:border-none print:break-inside-avoid shadow-sm open:shadow-md transition-shadow">
+                                <summary className="flex justify-between items-center p-3 md:p-4 bg-slate-50 cursor-pointer hover:bg-slate-100 font-bold list-none text-sm md:text-base select-none">
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-indigo-600 group-open:rotate-90 transition-transform no-print">▶</span>
+                                        <span className="uppercase tracking-wide text-slate-700">{data.label}</span>
+                                        <span className="text-[10px] bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-bold">{data.items.length} items</span>
+                                    </div>
+                                    <span className="text-emerald-700 text-lg">{formatMoney(data.total)}</span>
+                                </summary>
+                                <div className="p-4 bg-white border-t border-slate-100 text-xs md:text-sm animate-in slide-in-from-top-2 duration-200">
+                                    <table className="w-full">
+                                        <thead className="text-xs text-slate-400 uppercase text-left bg-slate-50"><tr><th className="p-2">ID</th><th className="p-2">Detalle</th><th className="p-2 text-right">Valor</th></tr></thead>
+                                        <tbody className="divide-y divide-slate-50">
+                                            {data.items.map((sale, i) => (
+                                                <tr key={i} className="hover:bg-slate-50">
+                                                    <td className="p-2 font-black text-slate-700 font-mono">{sale.clientId}</td>
+                                                    <td className="p-2">
+                                                        <span className="block font-bold">{sale.item}</span>
+                                                        <span className="text-[10px] text-slate-400">{new Date(safeISO(sale.date)).toLocaleDateString()}</span>
+                                                    </td>
+                                                    <td className="p-2 text-right font-bold text-slate-700">{formatMoney(sale.value)}</td>
+                                                </tr>
                                             ))}
-                                        </div>
-                                    </details>
-                                ))}
-                            </div>
-                        </details>
-                    ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </details>
+                        ))}
+                    </div>
+
+                    <div className="break-inside-avoid page-break-before">
+                        <h3 className="text-lg md:text-xl font-bold text-red-700 mb-4 flex items-center gap-2 border-b-2 border-red-100 pb-2"><Icon.Alert /> Cuentas por Cobrar (Calle)</h3>
+                        {reportData.debtors.length === 0 ? <p className="text-slate-400 italic">No hay deudores activos.</p> : (
+                            <table className="w-full text-left text-xs md:text-sm bg-red-50/30 rounded-xl overflow-hidden">
+                                <thead className="bg-red-100 text-red-800 uppercase text-[10px]"><tr><th className="p-3">ID / Cliente</th><th className="p-3">Teléfono</th><th className="p-3 text-right">Deuda</th></tr></thead>
+                                <tbody className="divide-y divide-red-100">
+                                    {reportData.debtors.map(d => (
+                                        <tr key={d.id}>
+                                            <td className="p-3">
+                                                <div className="font-black text-slate-800">{d.id}</div>
+                                                <div className="text-[10px] text-slate-500 uppercase">{d.name}</div>
+                                            </td>
+                                            <td className="p-3 text-slate-500">{d.phone}</td>
+                                            <td className="p-3 text-right font-bold text-red-600">{formatMoney(d.balance)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
                 </div>
             </div>
         );
@@ -1159,221 +1203,192 @@
         const [filter, setFilter] = useState('month'); 
         const [expDetail, setExpDetail] = useState(""); 
         const [expAmount, setExpAmount] = useState(""); 
-        // NUEVOS CAMPOS PARA CLASIFICAR GASTOS
-        const [expType, setExpType] = useState("negocio"); 
-        const [expAccount, setExpAccount] = useState("pichincha"); 
-        
-        const [showReport, setShowReport] = useState(false);
+        const [expDate, setExpDate] = useState(getToday()); 
+        const [showExportMenu, setShowExportMenu] = useState(false); 
+        const [showPreview, setShowPreview] = useState(false);
+        const [detailMode, setDetailMode] = useState(null); 
 
-        // --- CÁLCULOS FINANCIEROS AVANZADOS (REQ 6 y 7) ---
         const metrics = useMemo(() => {
             try {
-                let opsIncome = 0; // Ingresos solo de ropa (Operativo)
-                let totalIncome = 0; // Todo lo que entró al banco
-                let opsExpense = 0; // Gastos de negocio (Mercadería/Insumos)
-                let totalExpense = 0; // Todos los gastos (incluye personales)
-                
-                // Saldos por cuenta (Req 7)
-                let accounts = { pichincha: 0, guayaquil: 0, pacifico: 0, efectivo: 0 };
+                const safeSales = logic.sales || [];
+                const safePayments = logic.payments || [];
+                const safeExpenses = logic.expenses || [];
+                const safeClients = logic.clients || [];
 
-                // 1. PROCESAR PAGOS (INGRESOS)
-                logic.payments.forEach(p => {
-                    const amount = parseFloat(p.amount) || 0;
-                    
-                    // Sumar a la cuenta correspondiente
-                    if(p.account && accounts[p.account] !== undefined) {
-                        accounts[p.account] += amount;
-                    } else {
-                        accounts.pichincha += amount; // Por defecto si es antiguo
-                    }
+                const now = new Date(); 
+                const filterDate = new Date(); 
+                if (filter === 'week') filterDate.setDate(now.getDate() - 7); 
+                else if (filter === 'month') filterDate.setMonth(now.getMonth() - 1); 
+                else if (filter === 'year') filterDate.setFullYear(now.getFullYear(), 0, 1);
+                else if (filter === 'all') filterDate.setFullYear(2000); 
 
-                    // Clasificar Ingreso
-                    totalIncome += amount;
+                const filteredSales = safeSales.filter(s => new Date(safeISO(s.date)) >= filterDate); 
+                const filteredPayments = safePayments.filter(p => new Date(safeISO(p.date)) >= filterDate);
+                const filteredExpenses = safeExpenses.filter(e => new Date(safeISO(e.date)) >= filterDate);
+
+                const totalSales = filteredSales.reduce((acc, s) => acc + (s.value || 0), 0);
+
+                const realIncomePayments = filteredPayments.filter(p => {
                     const det = (p.detail || "").toLowerCase();
-                    // Si no es envío ni transferencia interna, es venta operativa
-                    if(!det.includes("envío") && !det.includes("transferencia")) {
-                        opsIncome += amount;
-                    }
+                    return !det.includes("envío") && !det.includes("envio") && !det.includes("transferencia");
                 });
+                const totalCollected = realIncomePayments.reduce((acc, p) => acc + (p.amount || 0), 0);
+                const totalExpenses = filteredExpenses.reduce((acc, e) => acc + (e.amount || 0), 0);
 
-                // 2. PROCESAR GASTOS (EGRESOS)
-                logic.expenses.forEach(e => {
-                    const amount = parseFloat(e.amount) || 0;
-
-                    // Restar de la cuenta correspondiente
-                    if(e.account && accounts[e.account] !== undefined) {
-                        accounts[e.account] -= amount;
-                    } else {
-                        accounts.pichincha -= amount; // Por defecto
-                    }
-
-                    totalExpense += amount;
-                    // Clasificar Gasto (Req 6)
-                    if(e.category === 'negocio' || !e.category) {
-                        opsExpense += amount;
-                    }
+                const debtorsList = [];
+                safeClients.forEach(c => {
+                    try {
+                        const cycle = logic.getClientCycle(c.id);
+                        if (cycle.clothingBalance < -0.01) {
+                            debtorsList.push({ ...c, debt: cycle.clothingBalance });
+                        }
+                    } catch (err) {}
                 });
+                const totalReceivable = debtorsList.reduce((acc, c) => acc + Math.abs(c.debt), 0);
+                const debtorsCount = debtorsList.length;
 
-                // 3. DEUDORES (Req 3 - ID Primero)
-                const debtors = logic.clients
-                    .map(c => {
-                        try {
-                            const cycle = logic.getClientCycle(c.id);
-                            return {...c, bal: cycle.clothingBalance};
-                        } catch(e) { return {...c, bal: 0}; }
-                    })
-                    .filter(c => c.bal < -0.01)
-                    .sort((a,b) => a.bal - b.bal); // Ordenar por deuda
+                const salesByDate = {}; 
+                filteredSales.forEach(s => { 
+                    const dateKey = new Date(safeISO(s.date)).toLocaleDateString(); 
+                    if (!salesByDate[dateKey]) salesByDate[dateKey] = 0; 
+                    salesByDate[dateKey] += s.value; 
+                });
 
                 return { 
-                    accounts, 
-                    debtors, 
-                    operatingProfit: opsIncome - opsExpense, // Utilidad del Negocio
-                    realCash: totalIncome - totalExpense // Dinero Real en Bolsillo
+                    totalSales, filteredSales,
+                    totalCollected, realIncomePayments,
+                    totalExpenses, filteredExpenses,
+                    totalReceivable, debtorsCount, debtorsList,
+                    profit: totalCollected - totalExpenses, 
+                    salesByDate 
                 };
 
             } catch (error) {
-                console.error("Error calculando métricas", error);
-                return { accounts: {}, debtors: [], operatingProfit:0, realCash:0 };
+                console.error("Error crítico en métricas:", error);
+                return { totalSales: 0, filteredSales:[], totalCollected: 0, realIncomePayments:[], totalExpenses: 0, filteredExpenses:[], totalReceivable: 0, debtorsCount: 0, debtorsList:[], profit: 0, salesByDate: {} };
             }
-        }, [logic.payments, logic.expenses, logic.clients]);
+        }, [logic.sales, logic.payments, logic.expenses, logic.clients, filter]);
 
-        const handleAddExpense = () => { 
-            if(!expDetail || !expAmount) return; 
-            // Guardamos con los nuevos campos: type (categoría) y account (cuenta)
-            logic.addExpense(expDetail, expAmount, getToday(), expType, expAccount); 
-            setExpDetail(""); setExpAmount(""); 
-            alert("✅ Gasto registrado correctamente"); 
+        const handleAddExpense = () => { if(!expDetail || !expAmount) return; logic.addExpense(expDetail, expAmount, expDate); setExpDetail(""); setExpAmount(""); alert("Gasto registrado"); };
+        
+        const handleExportCSV = () => { 
+            const rows = [["REPORTE GERENCIAL ADELITA STORE"], ["Periodo", filter.toUpperCase()], [""], ["INDICADOR", "VALOR"], ["Ventas Totales (Ropa)", metrics.totalSales], ["Recaudado Real (Banco)", metrics.totalCollected], ["Por Cobrar (Calle)", metrics.totalReceivable], ["Gastos Operativos", metrics.totalExpenses], ["Utilidad Neta", metrics.profit], [""], ["DETALLE VENTAS DIARIAS"], ["FECHA", "MONTO"]]; 
+            Object.entries(metrics.salesByDate).forEach(([d, t]) => rows.push([d, t])); 
+            exportToCSV(rows, "Reporte_Gerencia.csv"); 
+        };
+
+        const DetailModal = () => {
+            if (!detailMode) return null;
+            let title = ""; let items = []; let cols = []; let colorClass = "";
+
+            if (detailMode === 'sales') {
+                title = "Detalle de Ventas (Ropa)"; colorClass = "text-blue-600";
+                items = metrics.filteredSales.sort((a,b) => new Date(b.date) - new Date(a.date));
+                cols = ["Fecha", "Cliente", "Prenda", "Valor"];
+            } else if (detailMode === 'income') {
+                title = "Ingresos Reales (Banco)"; colorClass = "text-emerald-600";
+                items = metrics.realIncomePayments.sort((a,b) => new Date(b.date) - new Date(a.date));
+                cols = ["Fecha", "Cliente", "Detalle", "Monto"];
+            } else if (detailMode === 'debtors') {
+                title = "Cuentas por Cobrar (Calle)"; colorClass = "text-red-600";
+                items = metrics.debtorsList.sort((a,b) => a.debt - b.debt); 
+                cols = ["Cliente", "Teléfono", "Ciudad", "Deuda"];
+            } else if (detailMode === 'expenses') {
+                title = "Gastos Operativos"; colorClass = "text-orange-600";
+                items = metrics.filteredExpenses.sort((a,b) => new Date(b.date) - new Date(a.date));
+                cols = ["Fecha", "Detalle", "", "Monto"];
+            }
+
+            return (
+                <div className="fixed inset-0 bg-black/70 z-[70] flex items-center justify-center p-4 animate-in fade-in" onClick={() => setDetailMode(null)}>
+                    <div className="bg-white w-full max-w-4xl h-[80vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+                        <div className="p-5 border-b flex justify-between items-center bg-slate-50">
+                            <h3 className={`font-bold text-xl ${colorClass}`}>{title}</h3>
+                            <button onClick={() => setDetailMode(null)} className="w-8 h-8 rounded-full bg-slate-200 text-slate-500 font-bold flex items-center justify-center hover:bg-slate-300">×</button>
+                        </div>
+                        <div className="flex-1 overflow-auto p-0">
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-slate-100 text-slate-500 uppercase text-xs sticky top-0 font-bold">
+                                    <tr>{cols.map((c,i) => <th key={i} className="p-3">{c}</th>)}</tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {items.map((it, idx) => (
+                                        <tr key={idx} className="hover:bg-slate-50">
+                                            {detailMode === 'sales' && <><td className="p-3">{new Date(safeISO(it.date)).toLocaleDateString()}</td><td className="p-3 font-bold text-slate-700">{it.clientId}</td><td className="p-3">{it.item}</td><td className="p-3 font-bold text-right">${it.value.toFixed(2)}</td></>}
+                                            {detailMode === 'income' && <><td className="p-3">{new Date(safeISO(it.date)).toLocaleDateString()}</td><td className="p-3 font-bold text-slate-700">{logic.clients.find(c=>c.id===it.clientId)?.name || it.clientId}</td><td className="p-3">{it.detail}</td><td className="p-3 font-bold text-right text-emerald-600">+${it.amount.toFixed(2)}</td></>}
+                                            {detailMode === 'debtors' && <><td className="p-3 font-bold text-slate-700">{it.name} <span className="text-[10px] text-slate-400 block">{it.id}</span></td><td className="p-3">{it.phone}</td><td className="p-3">{it.city}</td><td className="p-3 font-bold text-right text-red-600">{it.debt.toFixed(2)}</td></>}
+                                            {detailMode === 'expenses' && <><td className="p-3">{new Date(safeISO(it.date)).toLocaleDateString()}</td><td className="p-3 font-bold text-slate-700">{it.detail}</td><td className="p-3"></td><td className="p-3 font-bold text-right text-orange-600">-${it.amount.toFixed(2)}</td></>}
+                                        </tr>
+                                    ))}
+                                    {items.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-slate-400 italic">No hay registros</td></tr>}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="p-4 border-t bg-slate-50 text-right font-bold text-slate-700">
+                             Total Registros: {items.length}
+                        </div>
+                    </div>
+                </div>
+            );
         };
 
         return (
-            <div className="h-full bg-slate-50 flex flex-col p-4 overflow-y-auto pb-24">
-                <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-                        <Icon.Chart /> Gerencia
-                    </h1>
-                    <button onClick={onClose} className="bg-white px-4 py-2 rounded-xl font-bold text-slate-500 shadow-sm border">
-                        Cerrar
-                    </button>
-                </div>
+            <div className="flex flex-col h-full bg-slate-50 pb-20 landscape:pb-0 landscape:flex-row font-sans relative">
+                <DetailModal />
 
-                {/* 1. TARJETAS DE SALDOS BANCARIOS (REQ 7) */}
-                <h3 className="text-xs font-bold text-slate-400 uppercase mb-2 ml-1">Saldos Disponibles (Cuentas)</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-                    {Object.entries(metrics.accounts).map(([acc, bal]) => (
-                        <div key={acc} className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col justify-between">
-                            <div className="text-[10px] uppercase font-bold text-slate-400 mb-1">{acc}</div>
-                            <div className={`text-lg font-black ${bal >= 0 ? 'text-slate-700' : 'text-red-500'}`}>
-                                {formatMoney(bal)}
-                            </div>
+                <div className="p-6 bg-slate-900 text-white shadow-lg landscape:w-1/3 landscape:flex landscape:flex-col landscape:justify-center">
+                    <h1 className="text-2xl font-bold flex items-center gap-2 mb-1"><Icon.Chart /> Gerencia</h1>
+                    <p className="text-slate-400 text-xs mb-6 uppercase tracking-widest">Panel Financiero</p>
+                    <div className="flex gap-2 mt-2 text-xs font-bold bg-slate-800 p-1 rounded-lg self-start"><button onClick={() => setFilter('week')} className={`px-3 py-1.5 rounded-md transition-colors ${filter === 'week' ? 'bg-indigo-500 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Semana</button><button onClick={() => setFilter('month')} className={`px-3 py-1.5 rounded-md transition-colors ${filter === 'month' ? 'bg-indigo-500 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Mes</button><button onClick={() => setFilter('year')} className={`px-3 py-1.5 rounded-md transition-colors ${filter === 'year' ? 'bg-indigo-500 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Año</button><button onClick={() => setFilter('all')} className={`px-3 py-1.5 rounded-md transition-colors ${filter === 'all' ? 'bg-indigo-500 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Todo</button></div>
+                    <div className="mt-8 border-t border-slate-700 pt-6">
+                        <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                            <p className="text-xs text-slate-400 font-bold uppercase mb-1">Caja Real (Utilidad)</p>
+                            <p className={`text-3xl font-black ${metrics.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatMoney(metrics.profit)}</p>
+                            <p className="text-[10px] text-slate-500 mt-1">*Recaudado menos Gastos (Sin envíos)</p>
                         </div>
-                    ))}
+                    </div>
+                    <div className="mt-auto pt-6 flex gap-3"><button onClick={onClose} className="text-slate-400 text-xs font-bold border border-slate-700 px-4 py-2 rounded hover:bg-slate-800">Volver</button><button onClick={() => window.fbAuth.signOut(window.auth)} className="text-red-400 text-xs font-bold border border-red-900/50 px-4 py-2 rounded hover:bg-red-900/20">Cerrar Sesión</button></div>
                 </div>
 
-                {/* 2. COMPARATIVA DE UTILIDAD (REQ 6) */}
-                <h3 className="text-xs font-bold text-slate-400 uppercase mb-2 ml-1">Salud Financiera</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                    {/* Tarjeta Negocio */}
-                    <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-lg relative overflow-hidden">
-                        <div className="absolute right-0 top-0 p-4 opacity-10"><Icon.Zap /></div>
-                        <div className="text-xs text-indigo-200 font-bold uppercase tracking-wider">Utilidad Operativa (Negocio)</div>
-                        <div className="text-3xl font-black mt-1 text-white">{formatMoney(metrics.operatingProfit)}</div>
-                        <div className="text-[10px] text-slate-400 mt-2 border-t border-slate-700 pt-2">
-                            Ingresos Ropa - Gastos Mercadería
+                {showExportMenu && (<div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6 animate-in fade-in" onClick={() => setShowExportMenu(false)}><div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-4 shadow-2xl" onClick={e => e.stopPropagation()}><h3 className="font-bold text-xl text-center text-slate-800 mb-2">Generar Reporte</h3><button onClick={() => { handleExportCSV(); setShowExportMenu(false); }} className="w-full flex items-center gap-4 p-4 bg-emerald-50 text-emerald-800 rounded-2xl font-bold hover:bg-emerald-100 transition-colors border border-emerald-100"><div className="bg-white p-3 rounded-xl shadow-sm"><Icon.List /></div><div className="text-left"><div className="text-base">Excel / CSV</div><div className="text-[10px] opacity-60 font-normal">Datos crudos para editar</div></div></button><button onClick={() => { setShowPreview(true); setShowExportMenu(false); }} className="w-full flex items-center gap-4 p-4 bg-indigo-50 text-indigo-800 rounded-2xl font-bold hover:bg-indigo-100 transition-colors border border-indigo-100"><div className="bg-white p-3 rounded-xl shadow-sm"><Icon.FileText /></div><div className="text-left"><div className="text-base">Visualizar / PDF</div><div className="text-[10px] opacity-60 font-normal">Ver y guardar reporte</div></div></button><button onClick={() => setShowExportMenu(false)} className="w-full py-3 text-slate-400 font-bold text-sm hover:text-slate-600">Cancelar</button></div></div>)}
+                {showPreview && <ReportViewer logic={logic} metrics={metrics} onClose={() => setShowPreview(false)} />}
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-6 landscape:w-2/3">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div onClick={() => setDetailMode('sales')} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 cursor-pointer hover:scale-[1.02] transition-transform active:scale-95 group">
+                            <div className="flex justify-between items-start mb-2"><div className="p-2 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-100"><Icon.Tag /></div><Icon.Search /></div>
+                            <p className="text-xs text-slate-400 font-bold uppercase">Ventas Ropa</p>
+                            <p className="text-xl md:text-2xl font-bold text-slate-800">{formatMoney(metrics.totalSales)}</p>
+                        </div>
+
+                        <div onClick={() => setDetailMode('income')} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 cursor-pointer hover:scale-[1.02] transition-transform active:scale-95 group">
+                            <div className="flex justify-between items-start mb-2"><div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-100"><Icon.Dollar /></div><Icon.Search /></div>
+                            <p className="text-xs text-slate-400 font-bold uppercase">Recaudado (Real)</p>
+                            <p className="text-xl md:text-2xl font-bold text-emerald-600">{formatMoney(metrics.totalCollected)}</p>
+                        </div>
+
+                        <div onClick={() => setDetailMode('debtors')} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden cursor-pointer hover:scale-[1.02] transition-transform active:scale-95 group">
+                            <div className="absolute top-0 right-0 p-2 opacity-10 text-red-600 transform translate-x-2 -translate-y-2"><svg className="w-16 h-16" fill="currentColor" viewBox="0 0 24 24"><path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>
+                            <div className="flex justify-between items-start mb-2"><div className="p-2 bg-red-50 text-red-600 rounded-lg group-hover:bg-red-100"><Icon.Users /></div><span className="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded-full">{metrics.debtorsCount} Clientes</span></div>
+                            <p className="text-xs text-slate-400 font-bold uppercase">Por Cobrar (Calle)</p>
+                            <p className="text-xl md:text-2xl font-bold text-red-500">{formatMoney(metrics.totalReceivable)}</p>
+                        </div>
+
+                        <div onClick={() => setDetailMode('expenses')} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 cursor-pointer hover:scale-[1.02] transition-transform active:scale-95 group">
+                            <div className="flex justify-between items-start mb-2"><div className="p-2 bg-orange-50 text-orange-600 rounded-lg group-hover:bg-orange-100"><Icon.List /></div><Icon.Search /></div>
+                            <p className="text-xs text-slate-400 font-bold uppercase">Gastos Operativos</p>
+                            <p className="text-xl md:text-2xl font-bold text-slate-800">{formatMoney(metrics.totalExpenses)}</p>
                         </div>
                     </div>
 
-                    {/* Tarjeta Personal/Real */}
-                    <div className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white p-5 rounded-2xl shadow-lg relative overflow-hidden">
-                        <div className="absolute right-0 top-0 p-4 opacity-10"><Icon.Dollar /></div>
-                        <div className="text-xs text-emerald-100 font-bold uppercase tracking-wider">Caja Real (Bolsillo)</div>
-                        <div className="text-3xl font-black mt-1 text-white">{formatMoney(metrics.realCash)}</div>
-                        <div className="text-[10px] text-emerald-200 mt-2 border-t border-emerald-500 pt-2">
-                            Dinero Real (Restando gastos personales)
-                        </div>
-                    </div>
+                    <button onClick={() => setShowExportMenu(true)} className="w-full bg-slate-800 text-white py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2"><Icon.Download /> DESCARGAR REPORTE PDF / EXCEL</button>
+
+                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200"><h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2">📉 Registrar Gasto</h3><div className="space-y-3"><input value={expDetail} onChange={e => setExpDetail(e.target.value)} placeholder="Concepto (ej: Paca Americana)" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl" /><div className="flex gap-2"><input type="number" inputMode="decimal" step="0.01" value={expAmount} onChange={e => setExpAmount(e.target.value)} placeholder="$ Monto" className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-red-500" /><input type="date" value={expDate} onChange={e => setExpDate(e.target.value)} className="w-32 p-3 bg-slate-50 border border-slate-200 rounded-xl" /></div><button onClick={handleAddExpense} className="w-full bg-slate-700 text-white py-3 rounded-xl font-bold shadow-md hover:bg-slate-600">Guardar Gasto</button></div></div>
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"><div className="p-4 border-b border-slate-100 font-bold text-slate-700 bg-slate-50/50">Ventas por Fecha (Lives)</div>{Object.entries(metrics.salesByDate).length === 0 ? <p className="p-8 text-center text-slate-400 text-sm italic">Sin datos en este periodo</p> : (Object.entries(metrics.salesByDate).sort((a,b) => b[1] - a[1]).map(([date, total]) => (<div key={date} className="flex justify-between p-4 border-b border-slate-50 last:border-0 hover:bg-slate-50"><span className="font-medium text-slate-600 text-sm flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-400"></div> {date}</span><span className="font-bold text-emerald-600">{formatMoney(total)}</span></div>)))}</div>
                 </div>
-
-                {/* 3. FORMULARIO DE GASTOS AVANZADO (REQ 6 & 7) */}
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6">
-                    <h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
-                        📉 Registrar Salida de Dinero
-                    </h3>
-                    <div className="space-y-3">
-                        <input 
-                            value={expDetail} 
-                            onChange={e => setExpDetail(e.target.value)} 
-                            placeholder="Motivo del Gasto (ej: Paca, Comida, Taxi)" 
-                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-indigo-500" 
-                        />
-                        
-                        <div className="grid grid-cols-2 gap-2">
-                            {/* Selector Tipo */}
-                            <div className="relative">
-                                <label className="absolute top-1 left-2 text-[8px] font-bold text-slate-400 uppercase">TIPO</label>
-                                <select value={expType} onChange={e=>setExpType(e.target.value)} className="w-full pt-4 pb-2 px-2 bg-slate-50 border rounded-xl text-sm font-bold text-slate-700 outline-none">
-                                    <option value="negocio">🏢 Negocio</option>
-                                    <option value="personal">🏠 Personal</option>
-                                </select>
-                            </div>
-
-                            {/* Selector Cuenta de Salida */}
-                            <div className="relative">
-                                <label className="absolute top-1 left-2 text-[8px] font-bold text-slate-400 uppercase">SALE DE</label>
-                                <select value={expAccount} onChange={e=>setExpAccount(e.target.value)} className="w-full pt-4 pb-2 px-2 bg-slate-50 border rounded-xl text-sm font-bold text-slate-700 outline-none">
-                                    <option value="pichincha">Pichincha</option>
-                                    <option value="guayaquil">Guayaquil</option>
-                                    <option value="pacifico">Pacífico</option>
-                                    <option value="efectivo">Efectivo</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div className="flex gap-2">
-                            <input 
-                                type="number" inputMode="decimal" step="0.01" 
-                                value={expAmount} onChange={e => setExpAmount(e.target.value)} 
-                                placeholder="$0.00" 
-                                className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-red-500 outline-none" 
-                            />
-                            <button onClick={handleAddExpense} className="bg-slate-800 text-white px-6 rounded-xl font-bold shadow-lg hover:bg-slate-700 active:scale-95 transition-all">
-                                Guardar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <button onClick={() => setShowReport(true)} className="w-full py-4 bg-indigo-50 text-indigo-700 font-bold rounded-xl border border-indigo-100 mb-8 flex items-center justify-center gap-2 hover:bg-indigo-100 transition-colors">
-                    <Icon.List /> Ver Reporte Detallado
-                </button>
-                
-                {/* 4. LISTA DE DEUDORES (REQ 3 - ID Primero) */}
-                <h3 className="text-xs font-bold text-slate-400 uppercase mb-2 ml-1">Cuentas por Cobrar ({metrics.debtors.length})</h3>
-                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                    {metrics.debtors.length === 0 ? (
-                        <div className="p-6 text-center text-slate-400 italic text-sm">¡Excelente! Nadie debe nada.</div>
-                    ) : (
-                        metrics.debtors.map(d => (
-                            <div key={d.id} className="flex justify-between items-center p-4 border-b border-slate-50 hover:bg-red-50/30 transition-colors group">
-                                <div>
-                                    <div className="font-black text-lg text-slate-800">{d.id}</div>
-                                    <div className="text-xs text-slate-500 font-bold uppercase">{d.name}</div>
-                                </div>
-                                <div className="text-right">
-                                    <div className="font-black text-red-500 text-lg">{formatMoney(d.bal)}</div>
-                                    <div className="text-[10px] text-red-300 font-bold">DEUDA</div>
-                                </div>
-                            </div>
-                        ))
-                    )}
-                </div>
-
-                {showReport && <ReportViewer logic={logic} metrics={metrics} onClose={() => setShowReport(false)} />}
             </div>
         );
     };
-
-
 
     const App = () => {
         const [user, setUser] = useState(null);
@@ -1417,5 +1432,6 @@
     if(window.firebaseLoaded) window.initReactApp();
 
 </script>
+
 </body>
 </html>
