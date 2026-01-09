@@ -260,49 +260,43 @@
     const formatMoney = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
     const capitalizeFirst = (str) => str.charAt(0).toUpperCase() + str.slice(1);
     
-    // --- LÓGICA DE FECHA "BUSINESS DAY" (Madrugada) ---
-    // Si son antes de las 5:00 AM, cuenta como el día anterior.
+        // --- PARCHE DE FECHAS CORREGIDAS ---
+    
+    // Genera la fecha HOY basándose en tu hora local (no UTC)
+    // Además, si es antes de las 5:00 AM, lo cuenta como el día anterior (Madrugada)
     const getToday = () => {
         const now = new Date();
-        if (now.getHours() < 5) {
-            now.setDate(now.getDate() - 1);
-        }
-        return now.toISOString().split('T')[0];
+        if (now.getHours() < 5) now.setDate(now.getDate() - 1);
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
     };
 
-    const safeISO = (dateStr) => {
-        try {
-            const d = new Date(dateStr || new Date());
-            if (isNaN(d.getTime())) return new Date().toISOString();
-            return new Date(d.getTime() + 12 * 60 * 60 * 1000).toISOString();
-        } catch (e) { return new Date().toISOString(); }
-    };
-    
-    const cleanDate = (dateStr) => {
-        try {
-            if (!dateStr) return new Date().toISOString();
-            const d = new Date(dateStr);
-            if (isNaN(d.getTime())) return new Date().toISOString();
-            return d.toISOString();
-        } catch (e) { return new Date().toISOString(); }
+    // Protege la fecha al convertirla, evitando cambios de zona horaria
+    const safeISO = (dStr) => {
+        if (!dStr) return new Date().toISOString();
+        try { 
+            // Truco: Agregamos la hora T12:00:00 para forzar mediodía y evitar saltos de día
+            const dateOnly = dStr.split('T')[0];
+            return new Date(dateOnly + 'T12:00:00').toISOString(); 
+        } catch(e) { return new Date().toISOString(); }
     };
 
-    const smartDate = (dateStr, lastShipmentDate = null) => {
-        try {
-            const selectedDate = new Date(dateStr || getToday());
-            let finalDate = new Date(selectedDate.getTime() + 12 * 60 * 60 * 1000); 
-            if (lastShipmentDate) {
-                const shipDate = new Date(cleanDate(lastShipmentDate));
-                if (!isNaN(shipDate.getTime())) {
-                    const shipDateStr = shipDate.toISOString().split('T')[0];
-                    if (dateStr === shipDateStr || (shipDate > finalDate)) {
-                        finalDate = new Date(shipDate.getTime() + 60 * 1000); 
-                    }
-                }
+    // Lógica inteligente para ordenar las ventas
+    const smartDate = (dStr, lSD) => {
+        const date = new Date((dStr || getToday()) + 'T12:00:00');
+        
+        if (lSD) {
+            const lastShip = new Date(lSD);
+            // Si la fecha elegida es igual o anterior al último envío, sumamos 1 minuto
+            if (!isNaN(lastShip) && date <= lastShip) {
+                return new Date(lastShip.getTime() + 60000).toISOString(); 
             }
-            return finalDate.toISOString();
-        } catch (e) { return new Date().toISOString(); }
+        }
+        return date.toISOString();
     };
+
     
     const exportToCSV = (data, filename) => {
         const csvContent = "\uFEFF" + data.map(e => e.join(",")).join("\n");
@@ -712,235 +706,93 @@
     };
     
 
-    const ClientDetailComponent = ({ activeClient, logic, onBack }) => {
+        const ClientDetailComponent = ({ activeClient, logic, onBack }) => {
         const [payAmount, setPayAmount] = useState(""); const [payDate, setPayDate] = useState(getToday()); const [payBank, setPayBank] = useState('pichincha');
-        const [shipPayAmount, setShipPayAmount] = useState(""); const [shipPayDate, setShipPayDate] = useState(getToday()); 
-        const [orderViewMode, setOrderViewMode] = useState('grouped'); const [tabView, setTabView] = useState('cycle'); 
-        const [showWaModal, setShowWaModal] = useState(false); const [showInvoice, setShowInvoice] = useState(false);
-        const [isEditing, setIsEditing] = useState(false);
-        const [editingSale, setEditingSale] = useState(null); 
-        const [editingPayment, setEditingPayment] = useState(null);
-
-        const [editName, setEditName] = useState(activeClient.name);
-        const [editPhone, setEditPhone] = useState(activeClient.phone);
-        const [editCedula, setEditCedula] = useState(activeClient.cedula || "");
-        const [editProvince, setEditProvince] = useState(activeClient.province || "");
-        const [editCity, setEditCity] = useState(activeClient.city || "");
-        const [editAddress, setEditAddress] = useState(activeClient.address || "");
-
-        const cycle = logic.getClientCycle(activeClient.id);
-        const status = logic.getClientStatus(activeClient, cycle);
-        const shippingCost = activeClient.shippingCost || 0;
-        const shippingPaid = cycle.totalShippingPaid;
-        const shippingPending = Math.max(0, shippingCost - shippingPaid);
-        const clothingDebt = Math.abs(Math.min(0, cycle.clothingBalance));
-        const shippingBalance = shippingPaid - shippingCost;
-
-        const handleUpdateClient = (updates) => { logic.setClients(activeClient.id, updates); };
+        const [shipPayAmount, setShipPayAmount] = useState(""); const [shipPayDate, setShipPayDate] = useState(getToday());
+        const [orderViewMode, setOrderViewMode] = useState('grouped'); const [tabView, setTabView] = useState('cycle'); const [showWaModal, setShowWaModal] = useState(false); const [showInvoice, setShowInvoice] = useState(false);
+        const [isEditing, setIsEditing] = useState(false); const [editingSale, setEditingSale] = useState(null); const [editingPayment, setEditingPayment] = useState(null);
         
-        const saveEdit = () => {
-            handleUpdateClient({ name: editName, phone: editPhone, cedula: editCedula, province: editProvince, city: editCity, address: editAddress });
-            setIsEditing(false);
-        };
+        // --- CANDADO DE SEGURIDAD (NUEVO) ---
+        const [isProcessing, setIsProcessing] = useState(false);
 
-        const handleSaveSaleEdit = async () => {
-            if(!editingSale) return;
-            try {
-                const finalDateISO = smartDate(editingSale.date, cycle.lastShipmentDate); 
-                const docRef = window.fs.doc(window.db, "sales", editingSale.fireId);
-                await window.fs.updateDoc(docRef, { item: editingSale.item, value: parseFloat(editingSale.value), date: finalDateISO });
-                setEditingSale(null); 
-            } catch(e) { alert("Error al actualizar: " + e.message); }
-        };
-
-        const handleSavePaymentEdit = async () => {
-            if(!editingPayment) return;
-            try {
-                const finalDateISO = smartDate(editingPayment.date, cycle.lastShipmentDate);
-                const docRef = window.fs.doc(window.db, "payments", editingPayment.fireId);
-                await window.fs.updateDoc(docRef, { 
-                    amount: parseFloat(editingPayment.amount),
-                    account: editingPayment.account, 
-                    date: finalDateISO 
-                });
-                setEditingPayment(null);
-            } catch(e) { alert("Error al actualizar pago: " + e.message); }
-        };
-
-        const deleteThisClient = () => {
-            if(confirm("⚠ ¿ESTÁS SEGURO? Se borrará el cliente y su historial. Esta acción es irreversible.")) { logic.deleteClient(activeClient.id); onBack(); }
-        };
-
-        const handlePayment = () => { if(!payAmount) return; logic.addPayment(activeClient.id, payAmount, 'Abono Ropa', smartDate(payDate, cycle.lastShipmentDate), payBank); setPayAmount(""); };
+        const [editName, setEditName] = useState(activeClient.name); const [editPhone, setEditPhone] = useState(activeClient.phone); const [editCedula, setEditCedula] = useState(activeClient.cedula||""); const [editProvince, setEditProvince] = useState(activeClient.province||""); const [editCity, setEditCity] = useState(activeClient.city||""); const [editAddress, setEditAddress] = useState(activeClient.address||"");
         
-        const handleShippingPayment = () => {
-            if (!shipPayAmount) return;
-            const amount = parseFloat(shipPayAmount); const dateISO = smartDate(shipPayDate, cycle.lastShipmentDate);
-            if (amount > shippingPending + 0.01 && shippingPending > 0) { logic.addPayment(activeClient.id, shippingPending, 'Pago Envío (Auto)', dateISO, payBank); setTimeout(() => logic.addPayment(activeClient.id, amount - shippingPending, 'Abono Ropa (Excedente Envío)', dateISO, payBank), 50); } 
-            else if (shippingPending <= 0.01) { logic.addPayment(activeClient.id, amount, 'Abono Ropa', dateISO, payBank); } 
-            else { logic.addPayment(activeClient.id, amount, 'Pago Envío', dateISO, payBank); }
-            setShipPayAmount("");
+        const cycle = logic.getClientCycle(activeClient.id); const status = logic.getClientStatus(activeClient, cycle);
+        const shippingCost = activeClient.shippingCost||0; const shippingPaid = cycle.totalShippingPaid; const shippingPending = Math.max(0, shippingCost - shippingPaid); const clothingDebt = Math.abs(Math.min(0, cycle.clothingBalance));
+        
+        const handleUpdateClient = (upd) => logic.setClients(activeClient.id, upd);
+        const saveEdit = () => { handleUpdateClient({name:editName,phone:editPhone,cedula:editCedula,province:editProvince,city:editCity,address:editAddress}); setIsEditing(false); };
+        const handleSaveSaleEdit = async () => { if(!editingSale)return; try{ await window.fs.updateDoc(window.fs.doc(window.db,"sales",editingSale.fireId),{item:editingSale.item,value:parseFloat(editingSale.value),date:smartDate(editingSale.date,cycle.lastShipmentDate)}); setEditingSale(null); }catch(e){alert(e);} };
+        const handleSavePaymentEdit = async () => { if(!editingPayment)return; try{ await window.fs.updateDoc(window.fs.doc(window.db,"payments",editingPayment.fireId),{amount:parseFloat(editingPayment.amount),account:editingPayment.account,date:smartDate(editingPayment.date,cycle.lastShipmentDate)}); setEditingPayment(null); }catch(e){alert(e);} };
+        const deleteThisClient = () => { if(confirm("⚠ Borrar cliente?")) { logic.deleteClient(activeClient.id); onBack(); } };
+        
+        // --- PAGOS BLINDADOS (Anti Doble-Click) ---
+        const handlePayment = async () => { 
+            if(!payAmount || isProcessing) return; 
+            setIsProcessing(true); // 🔒 BLOQUEO
+            await logic.addPayment(activeClient.id, payAmount, 'Abono Ropa', smartDate(payDate, cycle.lastShipmentDate), payBank); 
+            setPayAmount(""); 
+            setTimeout(()=>setIsProcessing(false), 500); // 🔓 DESBLOQUEO
         };
 
-        const handlePayWithBalance = () => { 
-            if (cycle.clothingBalance < shippingPending) return alert("Saldo insuficiente"); 
-            const dateISO = smartDate(getToday(), cycle.lastShipmentDate); 
-            logic.addPayment(activeClient.id, -shippingPending, 'Transferencia a Envío', dateISO, 'efectivo'); 
-            logic.addPayment(activeClient.id, shippingPending, 'Pago Envío (Saldo)', dateISO, 'efectivo'); 
-            alert("✅ Envío pagado con saldo"); 
+        const handleShippingPayment = async () => { 
+            if(!shipPayAmount || isProcessing) return; 
+            setIsProcessing(true); // 🔒 BLOQUEO
+            const a=parseFloat(shipPayAmount); const d=smartDate(shipPayDate,cycle.lastShipmentDate); 
+            if(a>shippingPending+0.01&&shippingPending>0){logic.addPayment(activeClient.id,shippingPending,'Pago Envío (Auto)',d,payBank);setTimeout(()=>logic.addPayment(activeClient.id,a-shippingPending,'Abono Ropa (Exc)',d,payBank),50);} 
+            else if(shippingPending<=0.01){logic.addPayment(activeClient.id,a,'Abono Ropa',d,payBank);} 
+            else {logic.addPayment(activeClient.id,a,'Pago Envío',d,payBank);} 
+            setShipPayAmount(""); 
+            setTimeout(()=>setIsProcessing(false), 500); // 🔓 DESBLOQUEO
         };
 
-        const handleRouteSelect = (route) => { let cost = 0; if (route === 'Servientrega') cost = 5; if (route === 'Domicilio') cost = 3; if (route === 'Ibarra') cost = cycle.totalSales >= 25 ? 0 : 3; handleUpdateClient({ deliveryMethod: route, shippingCost: cost }); };
-        const cycleStartDateStr = cycle.lastShipmentDate.toLocaleDateString() === '12/31/1969' ? 'Inicio' : new Date(safeISO(cycle.lastShipmentDate)).toLocaleDateString();
-
+        const handlePayWithBalance = async () => { 
+            if(cycle.clothingBalance<shippingPending || isProcessing) return alert("Saldo insuficiente"); 
+            setIsProcessing(true); // 🔒 BLOQUEO
+            const d=smartDate(getToday(),cycle.lastShipmentDate); 
+            logic.addPayment(activeClient.id,-shippingPending,'Transferencia a Envío',d,'efectivo'); 
+            logic.addPayment(activeClient.id,shippingPending,'Pago Envío (Saldo)',d,'efectivo'); 
+            alert("Pagado con saldo"); 
+            setTimeout(()=>setIsProcessing(false), 1000); // 🔓 DESBLOQUEO SEGURO
+        };
+        
+        const handleRouteSelect = (r) => { let c=0; if(r==='Servientrega')c=5; if(r==='Domicilio')c=3; if(r==='Ibarra')c=cycle.totalSales>=25?0:3; handleUpdateClient({deliveryMethod:r,shippingCost:c}); };
         const generateWaMessage = () => {
-            try {
-                const sortedSales = [...cycle.cycleSales].sort((a, b) => new Date(safeISO(a.date)) - new Date(safeISO(b.date)));
-                const groups = {}; 
-                sortedSales.forEach(s => { 
-                    const date = new Date(safeISO(s.date)); if(isNaN(date)) return; 
-                    const d = date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'numeric' }); 
-                    if (!groups[d]) groups[d] = { count: 0, total: 0 }; groups[d].count++; groups[d].total += s.value; 
-                });
-                
-                let msg = `¡Hola! 👋 Aquí te adjunto la fotito de tus prendas separadas.\n\n`; 
-                Object.entries(groups).forEach(([d, v]) => msg += `Live ${d} 📸\n📝 RESUMEN: ${v.count} prendas\n💲 Subtotal: $${v.total.toFixed(2)}\n\n`);
-                
-                const clothesPayments = cycle.cyclePayments.filter(p => !p.detail || !p.detail.includes("Pago Envío")); 
-                if (clothesPayments.length > 0) { msg += `💸 *ABONOS ROPA:*\n`; clothesPayments.forEach(p => msg += `✅ $${p.amount.toFixed(2)}\n`); msg += `\n`; }
-                
-                msg += `📊 *RESUMEN DE CUENTA:*\nTotal Ropa: $${cycle.totalSales.toFixed(2)}\n(-) Total Abonos: $${cycle.totalNormalPaid.toFixed(2)}\n--------------------------\n`;
-                if (clothingDebt > 0.01) msg += `🔸 Ropa Pendiente: $${clothingDebt.toFixed(2)}\n`; else msg += `🔹 Ropa: PAGADA (Saldo a favor: $${cycle.clothingBalance.toFixed(2)})\n`;
-                if (activeClient.deliveryMethod) { if (shippingBalance < -0.01) msg += `🔸 Envío (${activeClient.deliveryMethod}): Pendiente $${Math.abs(shippingBalance).toFixed(2)}\n`; else msg += `🔹 Envío: CUBIERTO ✅\n`; }
-                
-                const totalTotal = clothingDebt + Math.abs(Math.min(0, shippingBalance));
-                if (totalTotal > 0.01) { 
-                    msg += `\n*🔴 TOTAL A TRANSFERIR: $${totalTotal.toFixed(2)}*\n\n🏦 *BANCO PICHINCHA*\n🔢 2204226498\n👤 Bryan David Suárez\n🆔 1003300751\n\n`; 
-                    msg += `Ayúdanos con la fotito del comprobante 📸.\nUna vez realizado el pago, por favor confírmanos tu decisión:\n1️⃣ ACUMULAR\n2️⃣ ENVIAR`;
-                } else { 
-                    msg += `\n*🟢 TODO PAGADO. ¡Gracias!*\n\n`; msg += `Responde:\n1️⃣ ACUMULAR\n2️⃣ ENVIAR`;
-                }
-                return msg;
-            } catch(e) { return "Error generando mensaje."; }
+            const sorted=[...cycle.cycleSales].sort((a,b)=>new Date(safeISO(a.date))-new Date(safeISO(b.date))); const g={}; sorted.forEach(s=>{const d=new Date(safeISO(s.date));if(isNaN(d))return;const k=d.toLocaleDateString('es-ES',{weekday:'long',day:'numeric'});if(!g[k])g[k]={c:0,t:0};g[k].c++;g[k].t+=s.value;});
+            let msg=`¡Hola! 👋 Aquí te adjunto la fotito de tus prendas.\n\n`; Object.entries(g).forEach(([d,v])=>msg+=`Live ${d} 📸\n📝 ${v.c} prendas - $${v.t.toFixed(2)}\n\n`);
+            const pay=cycle.cyclePayments.filter(p=>!p.detail||!p.detail.includes("Pago Envío")); if(pay.length>0){msg+=`💸 *ABONOS ROPA:*\n`;pay.forEach(p=>msg+=`✅ $${p.amount.toFixed(2)}\n`);msg+='\n';}
+            msg+=`📊 *RESUMEN:*\nTotal Ropa: $${cycle.totalSales.toFixed(2)}\n(-) Abonos: $${cycle.totalNormalPaid.toFixed(2)}\n`; if(clothingDebt>0.01)msg+=`🔸 Ropa Pendiente: $${clothingDebt.toFixed(2)}\n`; else msg+=`🔹 Ropa: PAGADA (Saldo: $${cycle.clothingBalance.toFixed(2)})\n`;
+            if(activeClient.deliveryMethod){ const sb=cycle.totalShippingPaid-(activeClient.shippingCost||0); if(sb<-0.01)msg+=`🔸 Envío (${activeClient.deliveryMethod}): Pendiente $${Math.abs(sb).toFixed(2)}\n`; else msg+=`🔹 Envío: CUBIERTO ✅\n`; }
+            const tot=clothingDebt+Math.abs(Math.min(0,cycle.totalShippingPaid-(activeClient.shippingCost||0))); if(tot>0.01) msg+=`\n*🔴 TOTAL A TRANSFERIR: $${tot.toFixed(2)}*\n\n🏦 *BANCO PICHINCHA*\n🔢 2204226498\n👤 Katherine Vallejos\n\n`; else msg+=`\n*🟢 TODO PAGADO.*\n\n`;
+            msg+=`Responde:\n1️⃣ ACUMULAR\n2️⃣ ENVIAR`; return msg;
         };
-        const copyToClipboard = () => { navigator.clipboard.writeText(generateWaMessage()).then(() => alert("Copiado!"), () => alert("Error copiar")); };
+        const copyToClipboard = () => navigator.clipboard.writeText(generateWaMessage()).then(()=>alert("Copiado!"),()=>alert("Error"));
 
         return (
             <div className="flex flex-col h-full bg-white relative">
-                {editingSale && (
-                    <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-6 animate-in fade-in" onClick={() => setEditingSale(null)}>
-                        <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
-                            <div className="text-center border-b pb-2 mb-2"><h3 className="font-bold text-xl text-slate-800">Editar Venta</h3></div>
-                            <div><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Fecha del Live</label><input type="date" value={editingSale.date ? editingSale.date.split('T')[0] : ''} onChange={e => setEditingSale({...editingSale, date: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700" /></div>
-                            <div className="grid grid-cols-3 gap-3"><div className="col-span-2"><input value={editingSale.item} onChange={e => setEditingSale({...editingSale, item: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl" /></div><div><input type="number" step="0.01" value={editingSale.value} onChange={e => setEditingSale({...editingSale, value: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-emerald-600" /></div></div>
-                            <div className="flex gap-2 pt-2"><button onClick={() => setEditingSale(null)} className="flex-1 py-3 bg-slate-100 font-bold rounded-xl">Cancelar</button><button onClick={handleSaveSaleEdit} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg">Guardar</button></div>
-                        </div>
-                    </div>
-                )}
-
-                {editingPayment && (
-                    <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-6 animate-in fade-in" onClick={() => setEditingPayment(null)}>
-                        <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
-                            <div className="text-center border-b pb-2 mb-2"><h3 className="font-bold text-xl text-slate-800">Corregir Pago</h3><p className="text-xs text-slate-400">Asigna el banco correcto a este abono</p></div>
-                            <div><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Banco / Cuenta</label><select value={editingPayment.account || 'pichincha'} onChange={e => setEditingPayment({...editingPayment, account: e.target.value})} className="w-full p-3 bg-indigo-50 border border-indigo-100 rounded-xl font-bold text-indigo-700 outline-none"><option value="pichincha">Banco Pichincha</option><option value="guayaquil">Banco Guayaquil</option><option value="pacifico">Banco Pacífico</option><option value="efectivo">Efectivo / Caja</option></select></div>
-                            <div className="grid grid-cols-2 gap-3"><div><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Monto</label><input type="number" step="0.01" value={editingPayment.amount} onChange={e => setEditingPayment({...editingPayment, amount: e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl font-bold" /></div><div><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Fecha</label><input type="date" value={editingPayment.date ? editingPayment.date.split('T')[0] : ''} onChange={e => setEditingPayment({...editingPayment, date: e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl" /></div></div>
-                            <div className="flex gap-2 pt-2"><button onClick={() => setEditingPayment(null)} className="flex-1 py-3 bg-slate-100 font-bold rounded-xl">Cancelar</button><button onClick={handleSavePaymentEdit} className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl shadow-lg">Guardar Cambios</button></div>
-                        </div>
-                    </div>
-                )}
-                
+                {editingSale && (<div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-6 animate-in fade-in" onClick={()=>setEditingSale(null)}><div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-4" onClick={e=>e.stopPropagation()}><h3 className="font-bold text-center">Editar Venta</h3><input type="date" value={editingSale.date?editingSale.date.split('T')[0]:''} onChange={e=>setEditingSale({...editingSale,date:e.target.value})} className="w-full p-2 border rounded" /><input value={editingSale.item} onChange={e=>setEditingSale({...editingSale,item:e.target.value})} className="w-full p-2 border rounded" /><input type="number" step="0.01" value={editingSale.value} onChange={e=>setEditingSale({...editingSale,value:e.target.value})} className="w-full p-2 border rounded font-bold" /><div className="flex gap-2"><button onClick={()=>setEditingSale(null)} className="flex-1 bg-slate-100 p-2 rounded">Cancelar</button><button onClick={handleSaveSaleEdit} className="flex-1 bg-indigo-600 text-white p-2 rounded">Guardar</button></div></div></div>)}
+                {editingPayment && (<div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-6 animate-in fade-in" onClick={()=>setEditingPayment(null)}><div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-4" onClick={e=>e.stopPropagation()}><h3 className="font-bold text-center">Corregir Pago</h3><select value={editingPayment.account||'pichincha'} onChange={e=>setEditingPayment({...editingPayment,account:e.target.value})} className="w-full p-3 bg-indigo-50 border rounded font-bold text-indigo-700"><option value="pichincha">Pichincha</option><option value="guayaquil">Guayaquil</option><option value="pacifico">Pacífico</option><option value="efectivo">Efectivo</option></select><div className="grid grid-cols-2 gap-3"><input type="number" step="0.01" value={editingPayment.amount} onChange={e=>setEditingPayment({...editingPayment,amount:e.target.value})} className="w-full p-2 border rounded" /><input type="date" value={editingPayment.date?editingPayment.date.split('T')[0]:''} onChange={e=>setEditingPayment({...editingPayment,date:e.target.value})} className="w-full p-2 border rounded" /></div><div className="flex gap-2"><button onClick={()=>setEditingPayment(null)} className="flex-1 bg-slate-100 p-2 rounded">Cancelar</button><button onClick={handleSavePaymentEdit} className="flex-1 bg-emerald-600 text-white p-2 rounded">Guardar</button></div></div></div>)}
                 <div className="p-4 border-b flex items-center justify-between sticky top-0 bg-white z-10"><button onClick={onBack} className="text-slate-500 font-bold">← Atrás</button><div className={`text-xs px-3 py-1 rounded-full border font-bold flex items-center gap-1 ${status.color}`}>{status.label}</div></div>
-                {showWaModal && (<div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6" onClick={() => setShowWaModal(false)}><div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}><h3 className="font-bold text-lg mb-4 flex items-center gap-2 text-emerald-600"><Icon.Message /> Mensaje de Cobro</h3><textarea readOnly className="w-full h-64 p-3 bg-slate-50 border rounded-xl text-sm font-mono mb-4 resize-none focus:outline-none" value={generateWaMessage()}></textarea><button onClick={copyToClipboard} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg hover:bg-emerald-700 active:scale-95 transition-all"><Icon.Copy /> Copiar Mensaje</button></div></div>)}
-                {showInvoice && (<Invoice3DModal client={activeClient} cycle={cycle} onClose={() => setShowInvoice(false)} />)}
-
+                {showWaModal && (<div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6" onClick={()=>setShowWaModal(false)}><div className="bg-white rounded-2xl p-6 w-full max-w-md" onClick={e=>e.stopPropagation()}><h3 className="font-bold text-lg mb-4 flex items-center gap-2 text-emerald-600"><Icon.Message /> Cobro WhatsApp</h3><textarea readOnly className="w-full h-64 p-3 bg-slate-50 border rounded text-sm font-mono mb-4 resize-none" value={generateWaMessage()}></textarea><button onClick={copyToClipboard} className="w-full bg-emerald-600 text-white py-3 rounded font-bold">Copiar Mensaje</button></div></div>)}
+                {showInvoice && (<Invoice3DModal client={activeClient} cycle={cycle} onClose={()=>setShowInvoice(false)} />)}
                 <div className="flex-1 overflow-y-auto p-4 landscape:grid landscape:grid-cols-2 landscape:gap-6 landscape:overflow-hidden">
                     <div className="space-y-6 landscape:overflow-y-auto landscape:pr-2">
                         <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                                {isEditing ? (
-                                    <div className="space-y-2 mb-2 animate-in fade-in bg-slate-50 p-3 rounded-xl border border-indigo-100">
-                                        <div className="font-bold text-xs text-indigo-400 uppercase mb-2">Editar Información</div>
-                                        <input value={editName} onChange={e=>setEditName(e.target.value)} className="w-full border p-2 rounded mb-2" placeholder="Nombre" />
-                                        <div className="grid grid-cols-2 gap-2 mb-2"><input value={editPhone} onChange={e=>setEditPhone(e.target.value)} className="w-full border p-2 rounded" placeholder="Teléfono" /><input value={editCedula} onChange={e=>setEditCedula(e.target.value)} className="w-full border p-2 rounded" placeholder="Cédula/RUC" /></div>
-                                        <div className="grid grid-cols-2 gap-2 mb-2"><input value={editProvince} onChange={e=>setEditProvince(e.target.value)} className="w-full border p-2 rounded" placeholder="Provincia" /><input value={editCity} onChange={e=>setEditCity(e.target.value)} className="w-full border p-2 rounded" placeholder="Ciudad" /></div>
-                                        <textarea value={editAddress} onChange={e=>setEditAddress(e.target.value)} className="w-full border p-2 rounded mb-2 text-sm h-16 resize-none" placeholder="Dirección de envío completa..." />
-                                        <div className="flex gap-2"><button onClick={saveEdit} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex-1">Guardar</button><button onClick={() => setIsEditing(false)} className="bg-slate-300 text-slate-700 px-3 py-2 rounded-lg text-sm font-bold">Cancelar</button><button onClick={deleteThisClient} className="bg-red-100 text-red-600 px-3 py-2 rounded-lg text-sm font-bold border border-red-200"><Icon.Trash /></button></div>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <h1 className="text-4xl font-black text-slate-800 tracking-tighter mb-1">{activeClient.id}</h1>
-                                        <div className="flex flex-col gap-1 text-sm text-slate-500">
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-bold text-slate-600 uppercase tracking-wide">{activeClient.name}</span>
-                                                <button onClick={() => setIsEditing(true)} className="text-slate-300 hover:text-slate-600 text-sm"><Icon.Edit /></button>
-                                            </div>
-                                            <div className="flex gap-2 text-xs"><span>📞 {activeClient.phone}</span></div>
-                                            {(activeClient.city || activeClient.province) && (<div className="flex items-center gap-1 text-indigo-600 font-medium text-xs"><i className="fas fa-map-marker-alt"></i> {activeClient.city}, {activeClient.province}</div>)}
-                                        </div>
-                                        {activeClient.address && (<div className="mt-3 bg-blue-50 p-3 rounded-lg border border-blue-100 text-xs text-blue-800"><span className="font-bold block mb-1">📍 Dirección de Envío:</span>{activeClient.address}{activeClient.cedula && <span className="block mt-1 font-mono opacity-75">CI/RUC: {activeClient.cedula}</span>}</div>)}
-                                    </>
-                                )}
-                            </div>
-                            <div className="flex gap-2 ml-4"><button onClick={() => setShowInvoice(true)} className="bg-indigo-100 text-indigo-700 p-2 rounded-xl hover:bg-indigo-200 transition-colors shadow-sm"><Icon.FileText /></button><button onClick={() => setShowWaModal(true)} className="bg-emerald-100 text-emerald-700 p-2 rounded-xl hover:bg-emerald-200 transition-colors shadow-sm"><Icon.Message /></button><button onClick={deleteThisClient} className="bg-red-100 text-red-600 p-2 rounded-xl hover:bg-red-200 transition-colors shadow-sm"><Icon.Trash /></button></div>
+                            <div className="flex-1">{isEditing ? (<div className="space-y-2 mb-2 bg-slate-50 p-3 rounded-xl border border-indigo-100"><input value={editName} onChange={e=>setEditName(e.target.value)} className="w-full border p-2 rounded" placeholder="Nombre" /><div className="grid grid-cols-2 gap-2"><input value={editPhone} onChange={e=>setEditPhone(e.target.value)} className="w-full border p-2 rounded" placeholder="Tel" /><input value={editCedula} onChange={e=>setEditCedula(e.target.value)} className="w-full border p-2 rounded" placeholder="CI/RUC" /></div><div className="grid grid-cols-2 gap-2"><input value={editProvince} onChange={e=>setEditProvince(e.target.value)} className="w-full border p-2 rounded" placeholder="Prov" /><input value={editCity} onChange={e=>setEditCity(e.target.value)} className="w-full border p-2 rounded" placeholder="Ciudad" /></div><textarea value={editAddress} onChange={e=>setEditAddress(e.target.value)} className="w-full border p-2 rounded h-16" placeholder="Dirección" /><div className="flex gap-2"><button onClick={saveEdit} className="bg-emerald-600 text-white px-4 py-2 rounded font-bold flex-1">Guardar</button><button onClick={()=>setIsEditing(false)} className="bg-slate-300 text-slate-700 px-3 py-2 rounded font-bold">Cancelar</button></div></div>) : (<><h1 className="text-4xl font-black text-slate-800 tracking-tighter mb-1">{activeClient.id}</h1><div className="flex flex-col gap-1 text-sm text-slate-500"><div className="flex items-center gap-2"><span className="font-bold text-slate-600 uppercase">{activeClient.name}</span><button onClick={()=>setIsEditing(true)} className="text-slate-300 hover:text-slate-600 text-sm"><Icon.Edit /></button></div><div className="flex gap-2 text-xs"><span>📞 {activeClient.phone}</span></div>{(activeClient.city||activeClient.province)&&(<div className="text-indigo-600 font-medium text-xs">📍 {activeClient.city}, {activeClient.province}</div>)}</div>{activeClient.address&&(<div className="mt-3 bg-blue-50 p-3 rounded-lg border border-blue-100 text-xs text-blue-800">{activeClient.address}</div>)}</>)}</div>
+                            <div className="flex gap-2 ml-4"><button onClick={()=>setShowInvoice(true)} className="bg-indigo-100 text-indigo-700 p-2 rounded-xl"><Icon.FileText /></button><button onClick={()=>setShowWaModal(true)} className="bg-emerald-100 text-emerald-700 p-2 rounded-xl"><Icon.Message /></button><button onClick={deleteThisClient} className="bg-red-100 text-red-600 p-2 rounded-xl"><Icon.Trash /></button></div>
                         </div>
-                        <div className="flex border-b border-slate-200 landscape:hidden"><button onClick={() => setTabView('cycle')} className={`flex-1 py-2 text-sm text-center ${tabView === 'cycle' ? 'tab-active' : 'tab-inactive'}`}>Ciclo Actual</button><button onClick={() => setTabView('all')} className={`flex-1 py-2 text-sm text-center ${tabView === 'all' ? 'tab-active' : 'tab-inactive'}`}>Historial</button></div>
-                        {(tabView === 'cycle' || window.innerWidth > 768) && (
-                            <>
-                                <div className={`p-5 rounded-3xl border-2 ${clothingDebt > 0 ? 'border-red-100 bg-red-50' : 'border-slate-100 bg-white shadow-sm'}`}><div className="flex justify-between mb-2"><div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Saldo Ropa</div><div className="text-[10px] bg-slate-100 px-2 py-1 rounded text-slate-500 font-bold">Ciclo: {cycleStartDateStr}</div></div><div className="flex justify-between items-end"><div className={`text-3xl font-bold ${cycle.clothingBalance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{formatMoney(cycle.clothingBalance)}</div><div className="text-right text-xs text-slate-500"><div>Ventas: -{formatMoney(cycle.totalSales)}</div><div>Abonos Ropa: +{formatMoney(cycle.totalNormalPaid)}</div></div></div>
-                                
-                                <div className="mt-4 flex flex-col gap-2 bg-white p-2 rounded-xl border border-slate-200">
-                                    <div className="flex gap-2">
-                                        <select value={payBank} onChange={e=>setPayBank(e.target.value)} className="text-xs bg-slate-100 rounded-lg p-2 font-bold text-slate-600 outline-none flex-1">
-                                            <option value="pichincha">Pichincha</option><option value="guayaquil">Guayaquil</option><option value="pacifico">Pacífico</option><option value="efectivo">Efectivo</option>
-                                        </select>
-                                        <div className="relative w-28 h-8 flex-shrink-0 bg-slate-100 rounded-lg flex items-center justify-center">
-                                            <span className="text-lg">📅</span>
-                                            <input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} className="input-overlay-trigger" />
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <input type="number" inputMode="decimal" step="0.01" value={payAmount} onChange={e => setPayAmount(e.target.value)} className="w-full text-lg font-bold text-slate-700 outline-none px-2" placeholder="$0.00" />
-                                        <button onClick={handlePayment} className="bg-emerald-600 text-white rounded-lg font-bold text-xs px-4 shadow-sm whitespace-nowrap">+ ABONAR</button>
-                                    </div>
-                                </div>
-                                </div>
-                                
-                                <div className={`p-5 rounded-3xl border-2 space-y-4 ${shippingPending > 0.01 && activeClient.confirmShipping ? 'border-orange-200 bg-orange-50' : 'border-slate-200 bg-white'}`}><h3 className="font-bold text-slate-700 flex items-center gap-2"><Icon.Box /> Estado Envío</h3><div className="flex justify-between items-center text-sm"><span className="text-slate-500">Costo ({activeClient.deliveryMethod || '-'}):</span><span className="font-bold">${shippingCost.toFixed(2)}</span></div><div className="flex justify-between items-center text-sm border-b pb-2"><span className="text-slate-500">Pagado:</span><span className="font-bold text-emerald-600">${shippingPaid.toFixed(2)}</span></div>
-                                
-                                <div className="bg-white p-3 rounded-xl border border-slate-200 mt-2">
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase">Pagar Envío (Divisor)</label>
-                                    <div className="flex gap-2 mt-1 items-center">
-                                        <div className="relative w-8 h-8 flex-shrink-0 bg-slate-100 rounded-lg flex items-center justify-center">
-                                            <span className="text-lg">📅</span>
-                                            <input type="date" value={shipPayDate} onChange={e => setShipPayDate(e.target.value)} className="input-overlay-trigger" />
-                                        </div>
-                                        <input type="number" inputMode="decimal" step="0.01" value={shipPayAmount} onChange={e => setShipPayAmount(e.target.value)} className="w-full border border-slate-200 rounded-lg px-2 py-1 text-sm outline-none relative z-20" placeholder="$" />
-                                        <button onClick={handleShippingPayment} className="bg-indigo-600 text-white rounded-lg font-bold text-xs py-1.5 px-2 shadow-sm hover:bg-indigo-700 relative z-20">PAGAR</button>
-                                        {cycle.clothingBalance >= shippingPending && shippingPending > 0.01 && <button onClick={handlePayWithBalance} className="bg-emerald-600 text-white rounded-lg font-bold text-[10px] px-2 py-1.5 shadow-sm hover:bg-emerald-700 ml-1 relative z-20 whitespace-nowrap">USAR SALDO</button>}
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-3 pt-2"><div><label className="text-xs font-bold text-slate-400">Ruta</label><select className="w-full mt-1 p-2 rounded-xl border bg-white text-xs" value={activeClient.deliveryMethod} onChange={e => handleRouteSelect(e.target.value)}><option value="">-</option><option value="Servientrega">Servientrega</option><option value="Domicilio">Domicilio</option><option value="Cayambe">Cayambe</option><option value="Ibarra">Ibarra</option><option value="Retiro">Retiro</option></select></div><div><label className="text-xs font-bold text-slate-400">Costo Real</label><input type="number" inputMode="decimal" step="0.01" className="w-full mt-1 p-2 rounded-xl border bg-white text-xs" value={activeClient.shippingCost} onChange={e => handleUpdateClient({ shippingCost: parseFloat(e.target.value) })} /></div></div>
-                                
-                                <div className="space-y-2 pt-2 border-t">
-                                    <div className="flex items-center justify-between"><span className="font-bold text-xs text-slate-700">Confirmar para Bodega</span><input type="checkbox" className="w-5 h-5" checked={activeClient.confirmShipping} onChange={e => handleUpdateClient({ confirmShipping: e.target.checked })} /></div>
-                                    <div className="flex items-center justify-between bg-indigo-50 p-2 rounded-lg border border-indigo-100"><span className="font-bold text-xs text-indigo-700">⚠️ Solicitó Envío (Alistar)</span><input type="checkbox" className="w-5 h-5 accent-indigo-600" checked={activeClient.requestShipment || false} onChange={e => handleUpdateClient({ requestShipment: e.target.checked })} /></div>
-                                </div>
-
-                                </div>
-                            </>
-                        )}
-                    </div>
-                    <div className="landscape:block landscape:overflow-y-auto landscape:h-full">
-                        <div className="pb-4"><div className="flex justify-between items-end mb-3"><h3 className="text-xs font-bold text-slate-400 uppercase">Detalle Pedido</h3><div className="flex bg-slate-100 p-1 rounded-lg"><button onClick={() => setOrderViewMode('grouped')} className={`px-2 py-1 rounded-md text-[10px] flex items-center gap-1 ${orderViewMode==='grouped'?'bg-white shadow':''}`}>Lives</button><button onClick={() => setOrderViewMode('list')} className={`px-2 py-1 rounded-md text-[10px] flex items-center gap-1 ${orderViewMode==='list'?'bg-white shadow':''}`}>Lista</button></div></div>
-                        <SalesListRenderer sales={cycle.cycleSales} viewMode={orderViewMode} onDeleteSale={logic.deleteSale} onEditSale={(sale) => setEditingSale(sale)} />
+                        <div className="flex border-b border-slate-200 landscape:hidden"><button onClick={()=>setTabView('cycle')} className={`flex-1 py-2 text-sm text-center ${tabView==='cycle'?'tab-active':'tab-inactive'}`}>Ciclo</button><button onClick={()=>setTabView('all')} className={`flex-1 py-2 text-sm text-center ${tabView==='all'?'tab-active':'tab-inactive'}`}>Historial</button></div>
+                        {(tabView==='cycle'||window.innerWidth>768) && (<><div className={`p-5 rounded-3xl border-2 ${clothingDebt>0?'border-red-100 bg-red-50':'border-slate-100 bg-white shadow-sm'}`}><div className="flex justify-between mb-2"><div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Saldo Ropa</div><div className="text-[10px] bg-slate-100 px-2 py-1 rounded text-slate-500 font-bold">Ciclo</div></div><div className="flex justify-between items-end"><div className={`text-3xl font-bold ${cycle.clothingBalance<0?'text-red-600':'text-emerald-600'}`}>{formatMoney(cycle.clothingBalance)}</div><div className="text-right text-xs text-slate-500"><div>Ventas: -{formatMoney(cycle.totalSales)}</div><div>Abonos: +{formatMoney(cycle.totalNormalPaid)}</div></div></div><div className="mt-4 flex flex-col gap-2 bg-white p-2 rounded-xl border border-slate-200"><div className="flex gap-2"><select value={payBank} onChange={e=>setPayBank(e.target.value)} className="text-xs bg-slate-100 rounded p-2 font-bold text-slate-600 flex-1"><option value="pichincha">Pichincha</option><option value="guayaquil">Guayaquil</option><option value="pacifico">Pacífico</option><option value="efectivo">Efectivo</option></select><input type="date" value={payDate} onChange={e=>setPayDate(e.target.value)} className="bg-slate-100 rounded text-xs p-2" /></div><div className="flex gap-2"><input type="number" step="0.01" value={payAmount} onChange={e=>setPayAmount(e.target.value)} className="w-full text-lg font-bold text-slate-700 px-2" placeholder="$0.00" /><button onClick={handlePayment} disabled={isProcessing} className={`bg-emerald-600 text-white rounded font-bold text-xs px-4 whitespace-nowrap ${isProcessing?'opacity-50':''}`}>{isProcessing?'...':'+ ABONAR'}</button></div></div></div><div className={`p-5 rounded-3xl border-2 space-y-4 ${shippingPending>0.01&&activeClient.confirmShipping?'border-orange-200 bg-orange-50':'border-slate-200 bg-white'}`}><h3 className="font-bold text-slate-700 flex items-center gap-2"><Icon.Box /> Envío</h3><div className="flex justify-between text-sm"><span className="text-slate-500">Costo:</span><span className="font-bold">${shippingCost.toFixed(2)}</span></div><div className="flex justify-between text-sm border-b pb-2"><span className="text-slate-500">Pagado:</span><span className="font-bold text-emerald-600">${shippingPaid.toFixed(2)}</span></div><div className="bg-white p-3 rounded-xl border border-slate-200 mt-2"><label className="text-[10px] font-bold text-slate-400">Pagar Envío</label><div className="flex gap-2 mt-1"><input type="date" value={shipPayDate} onChange={e=>setShipPayDate(e.target.value)} className="w-8" /><input type="number" step="0.01" value={shipPayAmount} onChange={e=>setShipPayAmount(e.target.value)} className="w-full border rounded px-2 text-sm" placeholder="$" /><button onClick={handleShippingPayment} disabled={isProcessing} className={`bg-indigo-600 text-white rounded font-bold text-xs px-2 ${isProcessing?'opacity-50':''}`}>PAGAR</button>{cycle.clothingBalance>=shippingPending&&shippingPending>0.01&&<button onClick={handlePayWithBalance} disabled={isProcessing} className="bg-emerald-600 text-white rounded font-bold text-[10px] px-2 whitespace-nowrap">SALDO</button>}</div></div><div className="grid grid-cols-2 gap-3 pt-2"><div><label className="text-xs font-bold text-slate-400">Ruta</label><select className="w-full mt-1 p-2 rounded border bg-white text-xs" value={activeClient.deliveryMethod} onChange={e=>handleRouteSelect(e.target.value)}><option value="">-</option><option value="Servientrega">Servientrega</option><option value="Domicilio">Domicilio</option><option value="Cayambe">Cayambe</option><option value="Ibarra">Ibarra</option><option value="Retiro">Retiro</option></select></div><div><label className="text-xs font-bold text-slate-400">Costo</label><input type="number" step="0.01" className="w-full mt-1 p-2 rounded border bg-white text-xs" value={activeClient.shippingCost} onChange={e=>handleUpdateClient({shippingCost:parseFloat(e.target.value)})} /></div></div><div className="space-y-2 pt-2 border-t"><div className="flex justify-between"><span className="font-bold text-xs text-slate-700">Confirmar Bodega</span><input type="checkbox" className="w-5 h-5" checked={activeClient.confirmShipping} onChange={e=>handleUpdateClient({confirmShipping:e.target.checked})} /></div><div className="flex justify-between bg-indigo-50 p-2 rounded border border-indigo-100"><span className="font-bold text-xs text-indigo-700">⚠️ Solicitó (Alistar)</span><input type="checkbox" className="w-5 h-5" checked={activeClient.requestShipment||false} onChange={e=>handleUpdateClient({requestShipment:e.target.checked})} /></div></div></div></>)}
                         </div>
-                        <div className="hidden landscape:block pt-4 border-t border-slate-100 mt-4"><h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Historial de Pagos</h3><div className="bg-white border border-slate-100 rounded-xl overflow-hidden">{cycle.allPayments.map((p, i) => (<div key={i} onClick={() => setEditingPayment(p)} className="flex justify-between p-3 border-b border-slate-50 text-sm hover:bg-indigo-50 cursor-pointer transition-colors group" title="Clic para editar banco"><div><span className="block font-bold text-slate-700">{p.detail}</span><span className="text-[10px] text-slate-400 flex items-center gap-1">{new Date(safeISO(p.date)).toLocaleDateString()} {p.account ? <span className="bg-slate-100 px-1 rounded text-slate-500 uppercase">{p.account.substring(0,3)}</span> : <span className="text-red-400 font-bold">⚠️ Sin Banco</span>}</span></div><div className="flex items-center gap-2"><span className="font-bold text-emerald-600">+${p.amount}</span><span className="text-slate-300 group-hover:text-indigo-500"><Icon.Edit /></span></div></div>))}</div></div>
+                        <div className="landscape:block landscape:overflow-y-auto landscape:h-full">
+                            <div className="pb-4"><div className="flex justify-between items-end mb-3"><h3 className="text-xs font-bold text-slate-400 uppercase">Detalle Pedido</h3><div className="flex bg-slate-100 p-1 rounded-lg"><button onClick={()=>setOrderViewMode('grouped')} className={`px-2 py-1 rounded text-[10px] ${orderViewMode==='grouped'?'bg-white shadow':''}`}>Lives</button><button onClick={()=>setOrderViewMode('list')} className={`px-2 py-1 rounded text-[10px] ${orderViewMode==='list'?'bg-white shadow':''}`}>Lista</button></div></div><SalesListRenderer sales={cycle.cycleSales} viewMode={orderViewMode} onDeleteSale={logic.deleteSale} onEditSale={(s)=>setEditingSale(s)} /></div>
+                            <div className="hidden landscape:block pt-4 border-t border-slate-100 mt-4"><h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Historial Pagos</h3><div className="bg-white border border-slate-100 rounded-xl overflow-hidden">{cycle.allPayments.map((p,i)=>(<div key={i} onClick={()=>setEditingPayment(p)} className="flex justify-between p-3 border-b border-slate-50 text-sm hover:bg-indigo-50 cursor-pointer" title="Editar Banco"><div><span className="block font-bold text-slate-700">{p.detail}</span><span className="text-[10px] text-slate-400">{new Date(safeISO(p.date)).toLocaleDateString()} {p.account?<span className="bg-slate-100 px-1 rounded uppercase">{p.account.substring(0,3)}</span>:<span className="text-red-400">⚠️</span>}</span></div><span className="font-bold text-emerald-600">+${p.amount}</span></div>))}</div></div>
+                        </div>
                     </div>
                 </div>
-            </div>
-        );
-    };
+            );
+        };
+
 
     const WarehouseView = ({ logic }) => {
         const [guide, setGuide] = useState(""); const [dispatchDate, setDispatchDate] = useState(getToday()); const [selectedClient, setSelectedClient] = useState(null);
