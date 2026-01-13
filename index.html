@@ -222,7 +222,7 @@
 <script type="text/babel">
 
     // --- ICONOS SVG ---
-    const Icon = {
+        const Icon = {
         Zap: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>,
         Box: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>,
         Users: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
@@ -243,8 +243,10 @@
         Lock: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>,
         List: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>,
         Edit: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>,
-        Trash: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+        Trash: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
+        Truck: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 012-2h5a2 2 0 012 2" /></svg>
     };
+
 
     const { useState, useEffect, useMemo, useRef } = React;
 
@@ -479,6 +481,8 @@
     // --- LÓGICA DE NEGOCIO (CONECTADA A FIREBASE) ---
 
     // --- LÓGICA DE NEGOCIO REPARADA (CEREBRO) ---
+      // --- LÓGICA DE NEGOCIO (CON MEMORIA DE BARRIDO) ---
+    // --- LÓGICA DE NEGOCIO REPARADA ---
     const useBusinessLogic = (user) => {
         const [clients, setClients] = useState([]);
         const [sales, setSales] = useState([]);
@@ -497,19 +501,20 @@
             return () => { uC(); uS(); uP(); uSh(); uE(); };
         }, [user]);
 
-        // FUNCIONES DE GUARDADO (Ahora retornan promesas para confirmar guardado)
+        // --- FUNCIONES ---
+        
+        const markInteraction = (clientId, extraUpdates = {}) => {
+            const todayISO = new Date().toISOString(); 
+            updateClientLocal(clientId, { lastInteraction: todayISO, ...extraUpdates });
+        };
+
         const addPayment = (clientId, amount, detail, date, account = "pichincha") => {
-             return window.fs.addDoc(window.fs.collection(window.db, 'payments'), { 
-                 id: Date.now() + Math.random(), clientId, amount: parseFloat(amount), date, detail, account 
-             });
+             return window.fs.addDoc(window.fs.collection(window.db, 'payments'), { id: Date.now() + Math.random(), clientId, amount: parseFloat(amount), date, detail, account });
         };
         const addExpense = (detail, amount, dateStr, category = "negocio", account = "pichincha") => {
-            return window.fs.addDoc(window.fs.collection(window.db, 'expenses'), { 
-                id: Date.now(), detail, amount: parseFloat(amount), date: safeISO(dateStr), category, account
-            });
+            return window.fs.addDoc(window.fs.collection(window.db, 'expenses'), { id: Date.now(), detail, amount: parseFloat(amount), date: safeISO(dateStr), category, account });
         };
         const addSale = (clientId, item, value, date) => window.fs.addDoc(window.fs.collection(window.db, 'sales'), { id: Date.now() + Math.random(), clientId, item, value: parseFloat(value), date });
-        
         const addBatchSales = (clientId, item, value, date, quantity) => {
             const timestamp = Date.now();
             for(let i=0; i < quantity; i++) window.fs.addDoc(window.fs.collection(window.db, 'sales'), { id: timestamp + i + Math.random(), clientId, item, value: parseFloat(value), date });
@@ -522,7 +527,8 @@
             const dateISO = safeISO(dateStr);
             window.fs.addDoc(window.fs.collection(window.db, 'clients'), { 
                 id: newId, name, phone, cedula: cedula || "", province: province || "", city: city || "", address: address || "", 
-                registeredAt: dateISO, shippingCost: 0, deliveryMethod: '', confirmShipping: false, forceAccumulate: false, requestShipment: false
+                registeredAt: dateISO, shippingCost: 0, deliveryMethod: '', confirmShipping: false, forceAccumulate: false, requestShipment: false,
+                lastInteraction: null, promiseDate: null, packageReady: false 
             });
             if (initialAbono > 0) addPayment(newId, initialAbono, 'Abono Inicial', dateISO, 'efectivo');
             return newId;
@@ -551,22 +557,40 @@
             return { clothingBalance, totalSales, totalNormalPaid, totalShippingPaid, itemsCount: cycleSales.length, lastShipmentDate, cycleSales, cyclePayments, allSales, allPayments };
         };
 
-        const getClientStatus = (client, cycleData) => {
-            if (client.requestShipment) return { code: 'READY', label: 'ALISTAR (Solicitó)', color: 'bg-indigo-600 text-white animate-pulse' };
+            const getClientStatus = (client, cycleData) => {
             const { clothingBalance, totalShippingPaid } = cycleData;
             const shippingCost = client.shippingCost || 0;
             const shippingBalance = totalShippingPaid - shippingCost;
-            if (clothingBalance < -0.01 && !client.forceAccumulate) return { code: 'DEBT', label: 'DEBE ROPA', color: 'bg-red-100 text-red-700 border-red-200' };
-            if (client.confirmShipping) {
-                if (shippingBalance >= -0.01) return { code: 'READY', label: 'LISTO ENVÍO', color: 'bg-indigo-600 text-white animate-pulse' };
-                else return { code: 'MISSING', label: 'FALTA PAGO ENVÍO', color: 'bg-orange-100 text-orange-700 border-orange-200' };
+            
+            // 1. BODEGA FÍSICA
+            if (client.packageReady) {
+                if (clothingBalance < -0.01 || (client.deliveryMethod && shippingBalance < -0.01)) {
+                    return { code: 'PACKED_DEBT', label: '📦 BODEGA (DEBE)', color: 'bg-red-100 text-red-700 border-red-200' };
+                }
+                return { code: 'READY_TO_GO', label: '🚀 EN BODEGA', color: 'bg-indigo-100 text-indigo-700 border-indigo-200' };
             }
-            if (clothingBalance < 0 && client.forceAccumulate) return { code: 'ACC_AUTH', label: 'ACUMULANDO (AUT)', color: 'bg-amber-100 text-amber-700 border-amber-200' };
-            return { code: 'ACC_PAID', label: 'ACUMULANDO', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
+
+            // 2. ACUMULANDO (Tiene prendas)
+            if (cycleData.itemsCount > 0) {
+                // CORRECCIÓN: Si tiene prendas PERO DEBE dinero -> Es Rojo (Deuda)
+                if(clothingBalance < -0.01) {
+                    return { code: 'ACCUMULATING_DEBT', label: '🔴 ACUMULA (DEBE)', color: 'bg-red-100 text-red-700 border-red-200' };
+                }
+                // Si tiene prendas y ESTÁ AL DÍA -> Es Verde
+                return { code: 'ACCUMULATING', label: '🟢 ACUMULANDO', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
+            }
+
+            // 3. DEUDA VIEJA (Sin prendas nuevas, solo saldo viejo)
+            if (clothingBalance < -0.01) return { code: 'OLD_DEBT', label: '🔴 DEUDA ANTIGUA', color: 'bg-red-100 text-red-700 border-red-200' };
+
+            // 4. LIMPIO
+            return { code: 'CLEAN', label: '⚪ LIMPIO', color: 'bg-slate-100 text-slate-500 border-slate-200' };
         };
 
-        return { clients, sales, payments, shipments, expenses, setClients: updateClientLocal, getClientCycle, getClientStatus, registerClient, addSale, addBatchSales, addPayment, addExpense, registerShipment, deleteClient, deleteSale };
+        return { clients, sales, payments, shipments, expenses, setClients: updateClientLocal, getClientCycle, getClientStatus, registerClient, addSale, addBatchSales, addPayment, addExpense, registerShipment, deleteClient, deleteSale, markInteraction };
     };
+
+
 
     // --- COMPONENTES UI ---
 
@@ -612,56 +636,198 @@
         );
     };
 
-       const SalesListRenderer = ({ sales, viewMode, emptyMessage = "Sin registros", onDeleteSale, onEditSale }) => {
-        const groupedSales = useMemo(() => {
-            const groups = {};
-            sales.forEach(sale => {
-                const dateObj = new Date(safeISO(sale.date));
-                const dateKey = capitalizeFirst(dateObj.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' }));
-                if (!groups[dateKey]) groups[dateKey] = [];
-                groups[dateKey].push(sale);
-            });
-            return groups;
-        }, [sales]);
+    // --- COMPONENTE ACORDEÓN PARA LIVES (NUEVO) ---
+        // 1. NIVEL LIVE (Hijo)
+    // --- COMPONENTES AUXILIARES PARA LA LISTA (MATRIOSKA) ---
+    
+    // 1. NIVEL LIVE (Hijo) - Acordeón de prendas
+    const SalesAccordionGroup = ({ dateKey, items, onDelete, onEdit }) => {
+        const [isOpen, setIsOpen] = useState(false); 
+        const total = items.reduce((a, b) => a + b.value, 0);
 
-        const handleDelete = (s) => {
-            if(confirm(`¿Eliminar ${s.item} ($${s.value})?`)) { onDeleteSale(s.fireId); }
-        };
-
-        if (sales.length === 0) return <div className="p-4 text-center text-slate-300 italic text-sm">{emptyMessage}</div>;
         return (
-            <div className="bg-white border border-slate-100 rounded-xl overflow-hidden h-full">
-                {viewMode === 'grouped' && Object.entries(groupedSales).map(([dateKey, items], grpIdx) => (
-                    <div key={grpIdx}>
-                        <div className="bg-slate-50 px-4 py-2 text-[10px] font-bold text-indigo-600 uppercase border-b border-slate-100 flex justify-between"><span>📅 {dateKey}</span><span>{items.length} items</span></div>
-                        {items.map((s, idx) => (
-                            <div key={idx} className="flex justify-between items-center p-3 border-b border-slate-50 text-sm last:border-0 hover:bg-slate-50 group">
-                                <span className="flex-1">{s.item}</span>
-                                <span className="font-medium mr-3">${s.value}</span>
-                                <div className="flex gap-1">
-                                    <button onClick={() => onEditSale && onEditSale(s)} className="text-slate-300 hover:text-indigo-500 transition-colors p-2 rounded-full hover:bg-indigo-50"><Icon.Edit /></button>
-                                    <button onClick={() => handleDelete(s)} className="text-slate-300 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-50"><Icon.Trash /></button>
+            <div className="border-b border-slate-100 last:border-0 ml-2 border-l-2 border-l-indigo-100 pl-2 my-1">
+                <div onClick={() => setIsOpen(!isOpen)} className={`py-2 px-2 flex justify-between items-center cursor-pointer transition-all rounded-lg ${isOpen ? 'bg-indigo-50' : 'hover:bg-slate-50'}`}>
+                    <div className="flex items-center gap-2">
+                         <div className={`text-indigo-400 text-[10px] transform transition-transform ${isOpen ? 'rotate-90' : 'rotate-0'}`}>▶</div>
+                         <div className="flex flex-col">
+                            <span className="text-xs font-bold text-slate-700 uppercase">{dateKey}</span>
+                            <span className="text-[10px] text-slate-400 font-bold">{items.length} pds</span>
+                         </div>
+                    </div>
+                    <span className="text-xs font-bold text-slate-700">${total.toFixed(2)}</span>
+                </div>
+                {isOpen && (
+                    <div className="animate-in slide-in-from-top-1 pl-4 pr-1 space-y-1 mt-1">
+                        {items.map((s, i) => (
+                            <div key={i} className="flex justify-between items-center py-2 border-b border-slate-50 last:border-0 text-xs hover:bg-white group">
+                                <span className="font-medium text-slate-600 truncate flex-1">{s.item}</span>
+                                <span className="font-bold text-slate-800 mr-2">${s.value.toFixed(2)}</span>
+                                <div className="flex gap-1 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={(e)=>{e.stopPropagation();onEdit(s)}} className="text-indigo-400 p-1"><Icon.Edit /></button>
+                                    <button onClick={(e)=>{e.stopPropagation();onDelete(s)}} className="text-red-400 p-1"><Icon.Trash /></button>
                                 </div>
                             </div>
                         ))}
-                        <div className="bg-white px-4 py-1 border-b border-slate-200 text-right text-[10px] font-bold text-slate-500">Subtotal: ${items.reduce((acc, curr) => acc + curr.value, 0).toFixed(2)}</div>
                     </div>
-                ))}
-                {viewMode === 'list' && sales.map((s, idx) => (
-                    <div key={idx} className="flex justify-between items-center p-3 border-b border-slate-50 text-sm hover:bg-slate-50 group">
-                        <div className="flex-1"><span className="block">{s.item}</span><span className="text-[10px] text-slate-400">{new Date(safeISO(s.date)).toLocaleDateString()}</span></div>
-                        <span className="font-medium mr-3">${s.value}</span>
-                        <div className="flex gap-1">
-                             <button onClick={() => onEditSale && onEditSale(s)} className="text-slate-300 hover:text-indigo-500 transition-colors p-2 rounded-full hover:bg-indigo-50"><Icon.Edit /></button>
-                             <button onClick={() => handleDelete(s)} className="text-slate-300 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-50"><Icon.Trash /></button>
-                        </div>
-                    </div>
-                ))}
+                )}
             </div>
         );
     };
+
+    // 2. NIVEL CICLO (Padre) - Acordeón de envíos
+    const CycleAccordionGroup = ({ title, subtitle, sales, onDelete, onEdit, defaultOpen = false, color = "slate" }) => {
+        const [isOpen, setIsOpen] = useState(defaultOpen);
+        const total = sales.reduce((a, b) => a + b.value, 0);
+
+        // Agrupar por Lives dentro del ciclo
+        const groupedByLive = useMemo(() => {
+            const sorted = [...sales].sort((a,b) => new Date(safeISO(b.date)) - new Date(safeISO(a.date)));
+            const map = new Map();
+            sorted.forEach(s => {
+                const k = capitalizeFirst(new Date(safeISO(s.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' }));
+                if(!map.has(k)) map.set(k, []); map.get(k).push(s);
+            });
+            return Array.from(map.entries());
+        }, [sales]);
+
+        const bgHeader = color === 'emerald' ? 'bg-emerald-50 border-emerald-100' : (color === 'indigo' ? 'bg-indigo-50 border-indigo-100' : 'bg-white border-slate-200');
+        const textTitle = color === 'emerald' ? 'text-emerald-800' : (color === 'indigo' ? 'text-indigo-800' : 'text-slate-700');
+
+        return (
+            <div className={`border rounded-xl mb-4 overflow-hidden shadow-sm transition-all ${isOpen ? 'ring-2 ring-slate-100' : ''} ${color === 'slate' ? 'border-slate-200' : 'border-emerald-200'}`}>
+                <div onClick={() => setIsOpen(!isOpen)} className={`p-4 flex justify-between items-center cursor-pointer ${bgHeader}`}>
+                    <div className="flex items-center gap-3">
+                        <div className={`text-xl transform transition-transform ${isOpen ? 'rotate-90' : ''}`}>{color === 'emerald' ? '📦' : '📁'}</div>
+                        <div>
+                            <div className={`font-black uppercase text-sm ${textTitle}`}>{title}</div>
+                            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wide">{subtitle}</div>
+                        </div>
+                    </div>
+                    <div className="text-right">
+                        <div className={`font-black text-lg ${textTitle}`}>${total.toFixed(2)}</div>
+                        <div className="text-[10px] text-slate-500">{sales.length} items</div>
+                    </div>
+                </div>
+                {isOpen && (
+                    <div className="bg-white p-2 border-t border-slate-100">
+                        {groupedByLive.map(([key, items], i) => (
+                            <SalesAccordionGroup key={i} dateKey={key} items={items} onDelete={onDelete} onEdit={onEdit} />
+                        ))}
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    // 3. RENDERIZADOR MAESTRO (Principal)
+    const SalesListRenderer = ({ sales, shipments = [], isHistory = false, viewMode, emptyMessage = "Sin registros", onDeleteSale, onEditSale }) => {
+        
+        // Lógica de Agrupación por Ciclos (Solo para Historial)
+        const cyclesData = useMemo(() => {
+            if (!isHistory) return null;
+            const safeShipments = Array.isArray(shipments) ? shipments : [];
+            const sortedShipments = [...safeShipments].sort((a, b) => new Date(safeISO(b.date)) - new Date(safeISO(a.date)));
+            const buckets = [];
+            let remainingSales = [...sales].sort((a,b) => new Date(safeISO(b.date)) - new Date(safeISO(a.date)));
+
+            // 1. Ciclo Actual (Lo que aún no se envía)
+            const lastShipDate = sortedShipments.length > 0 ? new Date(safeISO(sortedShipments[0].date)) : new Date(0);
+            const currentSales = remainingSales.filter(s => new Date(safeISO(s.date)) > lastShipDate);
+            if (currentSales.length > 0 || sortedShipments.length === 0) {
+                buckets.push({ title: "CICLO ACTUAL (BODEGA)", subtitle: "En proceso...", sales: currentSales, type: 'current' });
+            }
+
+            // 2. Ciclos Pasados (Históricos)
+            sortedShipments.forEach((ship, index) => {
+                const shipDate = new Date(safeISO(ship.date));
+                const prevShipDate = sortedShipments[index + 1] ? new Date(safeISO(sortedShipments[index + 1].date)) : new Date(0);
+                
+                const bucketSales = remainingSales.filter(s => {
+                    const d = new Date(safeISO(s.date));
+                    return d <= shipDate && d > prevShipDate;
+                });
+
+                if (bucketSales.length > 0) {
+                    buckets.push({ 
+                        title: `ENVÍO: ${new Date(safeISO(ship.date)).toLocaleDateString()}`, 
+                        subtitle: `${ship.company || 'Retiro'} - Guía: ${ship.guide || 'S/N'}`, 
+                        sales: bucketSales,
+                        type: 'history'
+                    });
+                }
+            });
+
+            return buckets;
+        }, [sales, shipments, isHistory]);
+
+        if (sales.length === 0) return <div className="p-8 text-center text-slate-300 italic text-sm border-2 border-dashed border-slate-100 rounded-xl m-4">{emptyMessage}</div>;
+
+        // VISTA HISTORIAL (CON CICLOS)
+        if (isHistory && viewMode !== 'list') {
+            return (
+                <div className="flex flex-col h-full bg-slate-50/50 p-2 rounded-xl">
+                    {cyclesData && cyclesData.map((cycle, idx) => (
+                        <CycleAccordionGroup 
+                            key={idx}
+                            title={cycle.title}
+                            subtitle={cycle.subtitle}
+                            sales={cycle.sales}
+                            defaultOpen={cycle.type === 'current'}
+                            color={cycle.type === 'current' ? 'emerald' : 'slate'}
+                            onDelete={onDeleteSale}
+                            onEdit={onEditSale}
+                        />
+                    ))}
+                    {(!cyclesData || cyclesData.length === 0) && <div className="text-center p-4 text-slate-400">Calculando historial...</div>}
+                </div>
+            );
+        }
+
+        // VISTA CICLO ACTUAL (LIVES NORMALES) O MODO LISTA
+        const groupedSalesSimple = useMemo(() => {
+            const sorted = [...sales].sort((a,b) => new Date(safeISO(b.date)) - new Date(safeISO(a.date)));
+            const map = new Map();
+            sorted.forEach(s => {
+                const k = capitalizeFirst(new Date(safeISO(s.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' }));
+                if(!map.has(k)) map.set(k, []); map.get(k).push(s);
+            });
+            return Array.from(map.entries());
+        }, [sales]);
+
+        return (
+            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm h-full flex flex-col">
+                {viewMode === 'grouped' ? (
+                    <div className="overflow-y-auto">
+                        {groupedSalesSimple.map(([dateKey, items], idx) => (
+                            <SalesAccordionGroup key={idx} dateKey={dateKey} items={items} onDelete={onDeleteSale} onEdit={onEditSale} />
+                        ))}
+                    </div>
+                ) : (
+                    <div className="overflow-y-auto">
+                        {[...sales].sort((a,b) => new Date(safeISO(b.date)) - new Date(safeISO(a.date))).map((s, idx) => (
+                            <div key={idx} className="flex justify-between items-center p-3 border-b border-slate-50 text-sm hover:bg-slate-50 group">
+                                <div className="flex-1">
+                                    <span className="block font-bold text-slate-700">{s.item}</span>
+                                    <span className="text-[10px] text-slate-400 flex items-center gap-1">📅 {new Date(safeISO(s.date)).toLocaleDateString()}</span>
+                                </div>
+                                <span className="font-bold text-slate-800 mr-3">${s.value.toFixed(2)}</span>
+                                <div className="flex gap-1">
+                                     <button onClick={()=>onEditSale(s)} className="text-slate-300 hover:text-indigo-500 p-2 rounded-full"><Icon.Edit /></button>
+                                     <button onClick={()=>onDeleteSale(s.fireId)} className="text-slate-300 hover:text-red-500 p-2 rounded-full"><Icon.Trash /></button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+
+
     
-       const ClientDetailComponent = ({ activeClient, logic, onBack }) => {
+        const ClientDetailComponent = ({ activeClient, logic, onBack }) => {
         // --- ESTADOS INTERNOS ---
         const [payAmount, setPayAmount] = useState("");
         const [payDate, setPayDate] = useState(getToday()); 
@@ -672,8 +838,11 @@
         const [orderViewMode, setOrderViewMode] = useState('grouped'); 
         const [tabView, setTabView] = useState('cycle');
         
-        // MODALES
-        const [showWaModal, setShowWaModal] = useState(false); // <--- ESTE ES EL QUE FALTABA
+        // --- ESTADOS PARA WHATSAPP V3 ---
+        const [waTab, setWaTab] = useState('direct'); 
+        const [waSubTab, setWaSubTab] = useState('full'); 
+        const [waSelectedDates, setWaSelectedDates] = useState([]); 
+        const [showWaModal, setShowWaModal] = useState(false);
         const [showInvoice, setShowInvoice] = useState(false);
         
         // EDICIÓN
@@ -682,7 +851,7 @@
         const [editingPayment, setEditingPayment] = useState(null);
         const [isProcessing, setIsProcessing] = useState(false);
 
-        // CAMPOS DE EDICIÓN
+        // CAMPOS DE EDICIÓN CLIENTE
         const [editName, setEditName] = useState(activeClient.name); 
         const [editPhone, setEditPhone] = useState(activeClient.phone); 
         const [editCedula, setEditCedula] = useState(activeClient.cedula||""); 
@@ -691,11 +860,10 @@
         const [editAddress, setEditAddress] = useState(activeClient.address||"");
         const [promiseDate, setPromiseDate] = useState(activeClient.promiseDate || "");
 
-        // --- CÁLCULOS SEGUROS (PARA QUE NO DE ERROR EL MENSAJE) ---
+        // --- CÁLCULOS ---
         const cycle = logic.getClientCycle(activeClient.id); 
         const status = logic.getClientStatus(activeClient, cycle);
         
-        // Convertimos todo a número por seguridad
         const shippingCost = Number(activeClient.shippingCost) || 0; 
         const shippingPaid = Number(cycle.totalShippingPaid) || 0; 
         const shippingPending = Math.max(0, shippingCost - shippingPaid); 
@@ -709,29 +877,63 @@
         const handleUpdateClient = (upd) => logic.setClients(activeClient.id, upd);
         const saveEdit = () => { handleUpdateClient({name:editName,phone:editPhone,cedula:editCedula,province:editProvince,city:editCity,address:editAddress}); setIsEditing(false); };
         
-        const handleSaveSaleEdit = async () => { if(!editingSale)return; try{ await window.fs.updateDoc(window.fs.doc(window.db,"sales",editingSale.fireId),{item:editingSale.item,value:parseFloat(editingSale.value),date:smartDate(editingSale.date,cycle.lastShipmentDate)}); setEditingSale(null); }catch(e){alert(e);} };
-        const handleSavePaymentEdit = async () => { if(!editingPayment)return; try{ await window.fs.updateDoc(window.fs.doc(window.db,"payments",editingPayment.fireId),{amount:parseFloat(editingPayment.amount),account:editingPayment.account,date:smartDate(editingPayment.date,cycle.lastShipmentDate)}); setEditingPayment(null); }catch(e){alert(e);} };
-        const deleteThisClient = () => { if(confirm("⚠ Borrar cliente?")) { logic.deleteClient(activeClient.id); onBack(); } };
-
-        // --- LÓGICA DE BARRIDO ---
-        const handleDecision = (type) => {
-            // Protección por si no has pegado el parche de lógica
-            if(logic.markInteraction) {
-                if(type === 'acumular') logic.markInteraction(activeClient.id, { forceAccumulate: true, confirmShipping: false, requestShipment: false });
-                if(type === 'enviar') logic.markInteraction(activeClient.id, { requestShipment: true, confirmShipping: true, forceAccumulate: false });
-                if(type === 'visto') logic.markInteraction(activeClient.id);
-            } else {
-                // Fallback por si la función no existe aún
-                if(type === 'acumular') handleUpdateClient({ forceAccumulate: true });
-                if(type === 'enviar') handleUpdateClient({ requestShipment: true });
-            }
-            onBack(); 
+        const handleSaveSaleEdit = async () => { 
+            if(!editingSale) return; 
+            try{ 
+                await window.fs.updateDoc(window.fs.doc(window.db,"sales",editingSale.fireId), {
+                    item: editingSale.item,
+                    value: parseFloat(editingSale.value),
+                    date: safeISO(editingSale.date)
+                }); 
+                setEditingSale(null); 
+            } catch(e){ alert("Error al guardar venta: " + e.message); } 
         };
+
+        // --- FUNCIÓN DE GUARDADO BLINDADA (Búsqueda de Rescate) ---
+        const handleSavePaymentEdit = async () => { 
+            if(!editingPayment) return; 
+            
+            // 1. Intentamos obtener el ID directo
+            let targetFireId = editingPayment.fireId;
+
+            // 2. Si no existe (caso pagos antiguos), hacemos BÚSQUEDA DE RESCATE
+            if (!targetFireId) {
+                console.log("⚠️ ID perdido, iniciando búsqueda de rescate...");
+                // Buscamos en la memoria global de pagos uno que coincida con el ID numérico (timestamp)
+                const foundPayment = logic.payments.find(p => p.id === editingPayment.id);
+                if (foundPayment && foundPayment.fireId) {
+                    targetFireId = foundPayment.fireId;
+                    console.log("✅ Pago encontrado: " + targetFireId);
+                }
+            }
+
+            // 3. Si aún así no aparece, lanzamos alerta
+            if(!targetFireId) { 
+                alert("⛔ ERROR CRÍTICO: No se encuentra el ID de este pago antiguo en la base de datos. \n\nSolución: Borra este pago y créalo de nuevo."); 
+                return; 
+            }
+            
+            try { 
+                await window.fs.updateDoc(window.fs.doc(window.db, "payments", targetFireId), {
+                    amount: parseFloat(editingPayment.amount),
+                    account: editingPayment.account,
+                    date: safeISO(editingPayment.date)
+                }); 
+                setEditingPayment(null);
+                // Feedback visual sutil
+                const btn = document.getElementById('save-btn-feedback');
+                if(btn) btn.innerText = "¡Guardado!";
+            } catch(e) { 
+                alert("Error al guardar pago: " + e.message); 
+            } 
+        };
+
+        const deleteThisClient = () => { if(confirm("⚠ Borrar cliente?")) { logic.deleteClient(activeClient.id); onBack(); } };
 
         const handlePromiseChange = (date) => {
             setPromiseDate(date);
             logic.setClients(activeClient.id, { promiseDate: date });
-            if(date && logic.markInteraction) logic.markInteraction(activeClient.id);
+            if(logic.markInteraction) logic.markInteraction(activeClient.id);
         };
 
         // --- PAGOS ---
@@ -774,69 +976,115 @@
             if (route === 'Ibarra') cost = cycle.totalSales >= 25 ? 0 : 3; handleUpdateClient({ deliveryMethod: route, shippingCost: cost }); };
         const cycleStartDateStr = cycle.lastShipmentDate.toLocaleDateString() === '12/31/1969' ? 'Inicio' : new Date(safeISO(cycle.lastShipmentDate)).toLocaleDateString();
         
-        // --- GENERADOR DE MENSAJE (FIXED) ---
+        // --- GENERADOR DE MENSAJE V3 ---
         const generateWaMessage = () => {
             try {
-                const sales = cycle.cycleSales || [];
-                const payments = cycle.cyclePayments || [];
-                
-                // Agrupación Segura
-                const groups = {}; 
-                sales.forEach(s => { 
-                    let d = "Varios";
-                    try { if(s.date) d = new Date(safeISO(s.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'numeric' }); } catch(e){}
-                    if (!groups[d]) groups[d] = { count: 0, total: 0 }; 
-                    groups[d].count++; 
-                    groups[d].total += (Number(s.value) || 0); 
+                let allSales = [...cycle.cycleSales].sort((a,b) => new Date(safeISO(a.date)) - new Date(safeISO(b.date)));
+                let allPayments = [...cycle.cyclePayments].sort((a,b) => new Date(safeISO(a.date)) - new Date(safeISO(b.date)));
+                let salesToShow = [];
+
+                if (waTab === 'direct') {
+                    salesToShow = allSales; 
+                } else if (waTab === 'summary' || (waTab === 'audit' && waSubTab === 'full')) {
+                    salesToShow = allSales;
+                } else if (waTab === 'audit' && waSubTab === 'manual') {
+                    salesToShow = allSales.filter(s => {
+                        const d = new Date(safeISO(s.date)).toLocaleDateString('es-ES');
+                        return waSelectedDates.includes(d);
+                    });
+                }
+
+                const groups = {};
+                salesToShow.forEach(s => {
+                    const dKey = new Date(safeISO(s.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'numeric' });
+                    const dShort = new Date(safeISO(s.date)).toLocaleDateString('es-ES');
+                    if (!groups[dKey]) groups[dKey] = { rawDate: dShort, count: 0, total: 0 };
+                    groups[dKey].count++;
+                    groups[dKey].total += s.value;
                 });
 
-                // Texto
-                let msg = `¡Hola! 👋 Aquí te adjunto la fotito de tus prendas separadas.\n\n`;
-                Object.entries(groups).forEach(([d, v]) => msg += `Live ${d} 📸\n📝 RESUMEN: ${v.count} prendas\n💲 Subtotal: $${v.total.toFixed(2)}\n\n`);
-                
-                const clothesPayments = payments.filter(p => !p.detail || !p.detail.includes("Pago Envío")); 
-                if (clothesPayments.length > 0) { 
-                    msg += `💸 *ABONOS ROPA:*\n`;
-                    clothesPayments.forEach(p => msg += `✅ $${(Number(p.amount)||0).toFixed(2)}\n`); 
-                    msg += `\n`; 
+                const totalSalesShown = salesToShow.reduce((acc, s) => acc + s.value, 0);
+                const totalPayments = cycle.totalNormalPaid; 
+                const prevBalance = 0; 
+                const finalBalance = (prevBalance + totalSalesShown) - totalPayments;
+                const shippingPending = activeClient.deliveryMethod ? Math.max(0, shippingCost - shippingPaid) : 0;
+                const grandTotal = Math.max(0, finalBalance + shippingPending);
+
+                let msg = `Hola ${activeClient.name} (${activeClient.id}) 👋\n\n`;
+
+                if (waTab === 'direct') {
+                    msg += `*ESTADO DE CUENTA RAPIDO*\nTe comparto el valor pendiente a la fecha:\n\n💰 *TOTAL A TRANSFERIR: $${grandTotal.toFixed(2)}*\n`;
+                    if(shippingPending > 0) msg += `(Incluye saldo ropa y envío)\n`;
+                } else {
+                    const title = waTab === 'summary' ? "RESUMEN DE CUENTA 📄" : (waSubTab === 'manual' ? "CUENTA PARCIAL (SELECCIONADA) ✂️" : "AUDITORÍA CICLO COMPLETO 🧐");
+                    msg += `*${title}*\n\n*DETALLE DE LIVES:*\n`;
+                    if (Object.keys(groups).length === 0) msg += `(No hay prendas seleccionadas)\n`;
+                    Object.entries(groups).forEach(([dateName, data]) => { msg += `🗓️ ${capitalizeFirst(dateName)}\n   ▪️ ${data.count} prendas ...... $${data.total.toFixed(2)}\n`; });
+                    msg += `----------------------------------\nSubtotal Ropa: $${totalSalesShown.toFixed(2)}\n\n`;
+
+                    if (allPayments.length > 0) {
+                        msg += `*ABONOS REALIZADOS:*\n`;
+                        allPayments.filter(p => !p.detail.includes("Envío")).forEach(p => { const pDate = new Date(safeISO(p.date)).toLocaleDateString('es-ES'); msg += `   ✅ ${pDate}: $${p.amount.toFixed(2)} (${p.detail})\n`; });
+                        msg += `Total Abonos: -$${totalPayments.toFixed(2)}\n\n`;
+                    } else { msg += `*ABONOS:* $0.00\n\n`; }
+
+                    msg += `📊 *BALANCE FINAL:*\n   Saldo Ropa: $${finalBalance.toFixed(2)}\n`;
+                    if (activeClient.deliveryMethod) { if (shippingPending > 0) msg += `   Envío (${activeClient.deliveryMethod}): $${shippingPending.toFixed(2)}\n`; else msg += `   Envío: PAGADO ✅\n`; }
+                    msg += `\n💰 *TOTAL A TRANSFERIR: $${grandTotal.toFixed(2)}*\n`;
                 }
-                
-                // Usamos las variables seguras calculadas arriba
-                msg += `📊 *RESUMEN DE CUENTA:*\nTotal Ropa: $${(Number(cycle.totalSales)||0).toFixed(2)}\n(-) Total Abonos: $${(Number(cycle.totalNormalPaid)||0).toFixed(2)}\n--------------------------\n`;
-                
-                if (clothingDebt > 0.01) msg += `🔸 Ropa Pendiente: $${clothingDebt.toFixed(2)}\n`; 
-                else msg += `🔹 Ropa: PAGADA (Saldo a favor: $${clothingBalance.toFixed(2)})\n`;
-                
-                if (activeClient.deliveryMethod) { 
-                    const shipBal = shippingPaid - shippingCost; 
-                    const pendingShip = Math.max(0, shippingCost - shippingPaid);
-                    if (pendingShip > 0.01) msg += `🔸 Envío (${activeClient.deliveryMethod}): Pendiente $${pendingShip.toFixed(2)}\n`;
-                    else msg += `🔹 Envío: CUBIERTO ✅\n`; 
-                }
-                
-                const totalTotal = clothingDebt + Math.max(0, shippingCost - shippingPaid);
-                
-                if (totalTotal > 0.01) { 
-                    msg += `\n*🔴 TOTAL A TRANSFERIR: $${totalTotal.toFixed(2)}*\n\n🏦 *BANCO PICHINCHA*\n🔢 2204226498\n👤 Bryan David Suárez\n🆔 1003300751\n\n`;
-                    msg += `Ayúdanos con la fotito del comprobante 📸.\nUna vez realizado el pago, por favor confírmanos tu decisión:\n1️⃣ ACUMULAR\n2️⃣ ENVIAR`;
-                } else { 
-                    msg += `\n*🟢 TODO PAGADO. ¡Gracias!*\n\n`; msg += `Responde:\n1️⃣ ACUMULAR\n2️⃣ ENVIAR`;
-                }
+
+                if (grandTotal > 0.01) {
+                    msg += `\n----------------------------------\n🏦 *DATOS BANCARIOS:*\nBanco Pichincha\nCuenta Ahorros\n2204226498\nBryan David Suárez\nCI: 1003300751\n\n📸 Por favor envía foto del comprobante.\n`;
+                } else { msg += `\n🎉 *¡TU CUENTA ESTÁ AL DÍA!*\n`; }
                 return msg;
-            } catch(e) { 
-                console.error(e);
-                return "Error calculando mensaje. Revisa los datos."; 
-            }
+            } catch(e) { console.error(e); return "Error generando mensaje."; }
         };
 
-        const copyToClipboard = () => { 
-            navigator.clipboard.writeText(generateWaMessage()).then(() => alert("Copiado!"), () => alert("Error copiar")); 
-            if(logic.markInteraction) logic.markInteraction(activeClient.id); 
-        };
+        // --- ORDENAMIENTO (NUEVO ARRIBA) ---
+        const sortedHistoryPayments = [...cycle.allPayments].sort((a, b) => {
+            const dateA = new Date(safeISO(a.date));
+            const dateB = new Date(safeISO(b.date));
+            return dateB - dateA; 
+        });
 
         return (
             <div className="flex flex-col h-full bg-white relative">
                 {/* --- MODALES --- */}
+                {showWaModal && (
+                    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setShowWaModal(false)}>
+                        <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                            <div className="bg-slate-50 p-4 border-b">
+                                <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-lg text-slate-700 flex items-center gap-2"><Icon.Message /> Generador WhatsApp</h3><button onClick={() => setShowWaModal(false)} className="w-8 h-8 rounded-full bg-slate-200 text-slate-500 font-bold hover:bg-slate-300">×</button></div>
+                                <div className="flex p-1 bg-slate-200 rounded-xl gap-1">
+                                    <button onClick={() => setWaTab('direct')} className={`flex-1 py-2 rounded-lg text-[10px] font-bold transition-all ${waTab==='direct'?'bg-white shadow text-slate-800':'text-slate-500'}`}>A. DIRECTO</button>
+                                    <button onClick={() => setWaTab('summary')} className={`flex-1 py-2 rounded-lg text-[10px] font-bold transition-all ${waTab==='summary'?'bg-white shadow text-indigo-600':'text-slate-500'}`}>B. RESUMIDO</button>
+                                    <button onClick={() => setWaTab('audit')} className={`flex-1 py-2 rounded-lg text-[10px] font-bold transition-all ${waTab==='audit'?'bg-white shadow text-pink-600':'text-slate-500'}`}>C. AUDITORÍA</button>
+                                </div>
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-4 bg-white">
+                                {waTab === 'audit' && (
+                                    <div className="mb-4 animate-in slide-in-from-top-2">
+                                        <div className="flex gap-2 mb-3"><button onClick={() => setWaSubTab('full')} className={`flex-1 py-1.5 border-2 rounded-lg text-xs font-bold ${waSubTab==='full'?'border-pink-500 text-pink-600 bg-pink-50':'border-slate-100 text-slate-400'}`}>C.1 Ciclo Completo</button><button onClick={() => setWaSubTab('manual')} className={`flex-1 py-1.5 border-2 rounded-lg text-xs font-bold ${waSubTab==='manual'?'border-pink-500 text-pink-600 bg-pink-50':'border-slate-100 text-slate-400'}`}>C.2 Selección Manual</button></div>
+                                        {waSubTab === 'manual' && (
+                                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2 max-h-40 overflow-y-auto">
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase sticky top-0 bg-slate-50 pb-1">Selecciona los Lives a cobrar:</p>
+                                                {Object.entries(cycle.cycleSales.reduce((acc, s) => { const d = new Date(safeISO(s.date)).toLocaleDateString('es-ES'); if(!acc[d]) acc[d] = 0; acc[d] += s.value; return acc; }, {})).sort((a,b) => { const da = a[0].split('/').reverse().join(''); const db = b[0].split('/').reverse().join(''); return da.localeCompare(db); }).map(([date, total]) => (
+                                                    <label key={date} className="flex items-center gap-3 p-2 bg-white rounded-lg border border-slate-100 cursor-pointer hover:bg-pink-50"><input type="checkbox" className="w-5 h-5 accent-pink-500" checked={waSelectedDates.includes(date)} onChange={e => { if(e.target.checked) setWaSelectedDates([...waSelectedDates, date]); else setWaSelectedDates(waSelectedDates.filter(d => d !== date)); }} /><div className="flex-1 flex justify-between text-xs"><span className="font-bold text-slate-700">Live {date}</span><span className="font-mono text-slate-500">${total.toFixed(2)}</span></div></label>
+                                                ))}
+                                                {cycle.cycleSales.length === 0 && <p className="text-xs italic text-slate-400">No hay ventas en este ciclo.</p>}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                                <textarea id="wa-textarea" readOnly className="w-full h-64 p-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-mono resize-none focus:outline-none focus:border-indigo-500 text-slate-600" value={generateWaMessage()}></textarea>
+                            </div>
+                            <div className="p-4 border-t bg-slate-50">
+                                <button onClick={() => { const txt = document.getElementById('wa-textarea'); txt.select(); txt.setSelectionRange(0, 99999); try { const successful = document.execCommand('copy'); if(successful) alert("¡Mensaje copiado! 📋"); else alert("Error al copiar manual"); } catch(err) { alert("No se pudo copiar automáticamente"); } }} className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg hover:bg-emerald-700 active:scale-95 transition-all text-lg"><Icon.Copy /> COPIAR AL PORTAPAPELES</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {editingSale && (
                     <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-6 animate-in fade-in" onClick={() => setEditingSale(null)}>
                         <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
@@ -853,27 +1101,17 @@
                             <div className="text-center border-b pb-2 mb-2"><h3 className="font-bold text-xl text-slate-800">Corregir Pago</h3><p className="text-xs text-slate-400">Asigna el banco correcto a este abono</p></div>
                              <div><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Banco / Cuenta</label><select value={editingPayment.account || 'pichincha'} onChange={e => setEditingPayment({...editingPayment, account: e.target.value})} className="w-full p-3 bg-indigo-50 border border-indigo-100 rounded-xl font-bold text-indigo-700 outline-none"><option value="pichincha">Banco Pichincha</option><option value="guayaquil">Banco Guayaquil</option><option value="pacifico">Banco Pacífico</option><option value="efectivo">Efectivo / Caja</option></select></div>
                             <div className="grid grid-cols-2 gap-3"><div><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Monto</label><input type="number" step="0.01" value={editingPayment.amount} onChange={e => setEditingPayment({...editingPayment, amount: e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl font-bold" /></div><div><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Fecha</label><input type="date" value={editingPayment.date ? editingPayment.date.split('T')[0] : ''} onChange={e => setEditingPayment({...editingPayment, date: e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl" /></div></div>
-                            <div className="flex gap-2 pt-2"><button onClick={() => setEditingPayment(null)} className="flex-1 py-3 bg-slate-100 font-bold rounded-xl">Cancelar</button><button onClick={handleSavePaymentEdit} className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl shadow-lg">Guardar Cambios</button></div>
+                            <div className="flex gap-2 pt-2"><button onClick={() => setEditingPayment(null)} className="flex-1 py-3 bg-slate-100 font-bold rounded-xl">Cancelar</button><button id="save-btn-feedback" onClick={handleSavePaymentEdit} className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl shadow-lg">Guardar Cambios</button></div>
                         </div>
                     </div>
                 )}
                 
-                {/* --- MODAL WHATSAPP (Aquí estaba el fallo antes, ahora está incluido) --- */}
-                {showWaModal && (
-                    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6" onClick={() => setShowWaModal(false)}>
-                        <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
-                            <h3 className="font-bold text-lg mb-4 flex items-center gap-2 text-emerald-600"><Icon.Message /> Mensaje de Cobro</h3>
-                            <textarea readOnly className="w-full h-64 p-3 bg-slate-50 border rounded-xl text-sm font-mono mb-4 resize-none focus:outline-none" value={generateWaMessage()}></textarea>
-                            <button onClick={copyToClipboard} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg hover:bg-emerald-700 active:scale-95 transition-all"><Icon.Copy /> Copiar Mensaje</button>
-                        </div>
-                    </div>
-                )}
-
                 <div className="p-4 border-b flex items-center justify-between sticky top-0 bg-white z-10"><button onClick={onBack} className="text-slate-500 font-bold">← Atrás</button><div className={`text-xs px-3 py-1 rounded-full border font-bold flex items-center gap-1 ${status.color}`}>{status.label}</div></div>
                 {showInvoice && (<Invoice3DModal client={activeClient} cycle={cycle} onClose={() => setShowInvoice(false)} />)}
 
+                {/* --- CONTENIDO PRINCIPAL --- */}
                 <div className="flex-1 overflow-y-auto p-4 landscape:grid landscape:grid-cols-2 landscape:gap-6 landscape:overflow-hidden">
-                    <div className="space-y-6 landscape:overflow-y-auto landscape:pr-2 pb-24">
+                    <div className="space-y-6 landscape:overflow-y-auto landscape:pr-2 pb-6">
                         <div className="flex justify-between items-start">
                             <div className="flex-1">
                                 {isEditing ? (
@@ -896,7 +1134,6 @@
                                             <div className="flex gap-2 text-xs"><span>📞 {activeClient.phone}</span></div>
                                             {(activeClient.city || activeClient.province) && (<div className="flex items-center gap-1 text-indigo-600 font-medium text-xs"><i className="fas fa-map-marker-alt"></i> {activeClient.city}, {activeClient.province}</div>)}
                                             
-                                            {/* PROMESA PAGO */}
                                             <div className="flex items-center gap-2 mt-2">
                                                 <label className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-1 rounded">📅 Promesa Pago:</label>
                                                 <input type="date" value={promiseDate} onChange={e => handlePromiseChange(e.target.value)} className="text-xs border-b border-dashed border-amber-300 outline-none text-amber-800 font-bold bg-transparent" />
@@ -908,7 +1145,6 @@
                             </div>
                             <div className="flex gap-2 ml-4">
                                 <button onClick={() => setShowInvoice(true)} className="bg-indigo-100 text-indigo-700 p-2 rounded-xl hover:bg-indigo-200 transition-colors shadow-sm" title="Ver Factura"><Icon.FileText /></button>
-                                {/* BOTÓN WHATSAPP QUE ABRE MODAL */}
                                 <button onClick={() => setShowWaModal(true)} className="bg-emerald-100 text-emerald-700 p-2 rounded-xl hover:bg-emerald-200 transition-colors shadow-sm" title="Ver Mensaje"><Icon.Message /></button>
                             </div>
                         </div>
@@ -951,37 +1187,170 @@
                         <div className="pb-4"><div className="flex justify-between items-end mb-3"><h3 className="text-xs font-bold text-slate-400 uppercase">Detalle Pedido {tabView==='history'?'(HISTORIAL)':'(ACTUAL)'}</h3><div className="flex bg-slate-100 p-1 rounded-lg"><button onClick={() => setOrderViewMode('grouped')} className={`px-2 py-1 rounded-md text-[10px] flex items-center gap-1 ${orderViewMode==='grouped'?'bg-white shadow':''}`}>Lives</button><button onClick={() => setOrderViewMode('list')} className={`px-2 py-1 rounded-md text-[10px] flex items-center gap-1 ${orderViewMode==='list'?'bg-white shadow':''}`}>Lista</button></div></div>
                         <SalesListRenderer sales={displayedSales} viewMode={orderViewMode} onDeleteSale={logic.deleteSale} onEditSale={(sale) => setEditingSale(sale)} />
                         </div>
-                        <div className="hidden landscape:block pt-4 border-t border-slate-100 mt-4"><h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Historial de Pagos</h3><div className="bg-white border border-slate-100 rounded-xl overflow-hidden">{cycle.allPayments.map((p, i) => (<div key={i} onClick={() => setEditingPayment(p)} className="flex justify-between p-3 border-b border-slate-50 text-sm hover:bg-indigo-50 cursor-pointer transition-colors group" title="Clic para editar banco"><div><span className="block font-bold text-slate-700">{p.detail}</span><span className="text-[10px] text-slate-400 flex items-center gap-1">{new Date(safeISO(p.date)).toLocaleDateString()} {p.account ? <span className="bg-slate-100 px-1 rounded text-slate-500 uppercase">{p.account.substring(0,3)}</span> : <span className="text-red-400 font-bold">⚠️ Sin Banco</span>}</span></div><div className="flex items-center gap-2"><span className="font-bold text-emerald-600">+${p.amount}</span><span className="text-slate-300 group-hover:text-indigo-500"><Icon.Edit /></span></div></div>))}</div></div>
+                        <div className="hidden landscape:block pt-4 border-t border-slate-100 mt-4"><h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Historial de Pagos</h3><div className="bg-white border border-slate-100 rounded-xl overflow-hidden">{sortedHistoryPayments.map((p, i) => (<div key={i} onClick={() => setEditingPayment(p)} className="flex justify-between p-3 border-b border-slate-50 text-sm hover:bg-indigo-50 cursor-pointer transition-colors group" title="Clic para editar banco"><div><span className="block font-bold text-slate-700">{p.detail}</span><span className="text-[10px] text-slate-400 flex items-center gap-1">{new Date(safeISO(p.date)).toLocaleDateString()} {p.account ? <span className="bg-slate-100 px-1 rounded text-slate-500 uppercase">{p.account.substring(0,3)}</span> : <span className="text-red-400 font-bold">⚠️ Sin Banco</span>}</span></div><div className="flex items-center gap-2"><span className="font-bold text-emerald-600">+${p.amount}</span><span className="text-slate-300 group-hover:text-indigo-500"><Icon.Edit /></span></div></div>))}</div></div>
                     </div>
-                </div>
-
-                {/* --- BARRA DE DECISIÓN FINAL (BARRIDO) --- */}
-                <div className="fixed bottom-0 left-0 w-full p-4 bg-white border-t border-slate-200 z-[60] flex gap-2 justify-center shadow-[0_-5px_15px_rgba(0,0,0,0.05)] landscape:w-1/2 landscape:left-0 landscape:border-r">
-                    <button onClick={() => handleDecision('visto')} className="px-4 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-xs flex flex-col items-center gap-1 hover:bg-slate-200 active:scale-95 transition-all"><Icon.Check /> SOLO VISTO</button>
-                    <button onClick={() => handleDecision('acumular')} className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm flex flex-col items-center gap-1 shadow-lg shadow-emerald-200 active:scale-95 transition-all"><i className="fas fa-box"></i> SEGUIR ACUMULANDO</button>
-                    <button onClick={() => handleDecision('enviar')} className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm flex flex-col items-center gap-1 shadow-lg shadow-indigo-200 active:scale-95 transition-all"><i className="fas fa-truck-fast"></i> SOLICITAR ENVÍO</button>
                 </div>
             </div>
         );
     };
+
     
 
 
+     // --- NUEVA BODEGA (Mesa de Empaque + Zona de Despacho) ---
+        // --- NUEVA BODEGA (Mesa de Empaque + Zona de Despacho) ---
+     // --- BODEGA INTELIGENTE (Con Arrastre de Deudas y Saldos) ---
     const WarehouseView = ({ logic }) => {
-        const [guide, setGuide] = useState(""); const [dispatchDate, setDispatchDate] = useState(getToday()); const [selectedClient, setSelectedClient] = useState(null);
-        const readyClients = logic.clients.map(c => ({...c, cycle: logic.getClientCycle(c.id)})).map(c => ({...c, status: logic.getClientStatus(c, c.cycle)})).filter(c => c.status.code === 'READY');
-        const handleDispatch = () => {
-            if (!guide) return alert("Falta Guía");
-            const finalDate = smartDate(dispatchDate, logic.getClientCycle(selectedClient.id).lastShipmentDate); const cycle = logic.getClientCycle(selectedClient.id); const clothingBalance = cycle.clothingBalance; const shippingBalance = cycle.totalShippingPaid - (selectedClient.shippingCost || 0);
-            if (clothingBalance > 0.01) logic.addPayment(selectedClient.id, clothingBalance, "Saldo a Favor Ropa (Arrastre)", new Date(new Date(finalDate).getTime() + 1000).toISOString());
-            if (shippingBalance > 0.01) logic.addPayment(selectedClient.id, shippingBalance, "Vuelto Envío (Arrastre)", new Date(new Date(finalDate).getTime() + 1000).toISOString());
-            logic.registerShipment(selectedClient.id, guide, selectedClient.deliveryMethod, finalDate); logic.setClients(selectedClient.id, { confirmShipping: false, forceAccumulate: false, requestShipment: false });
-            alert("✅ Despachado Correctamente"); setSelectedClient(null); setGuide("");
+        const [mode, setMode] = useState('packing');
+        const [guide, setGuide] = useState("");
+        const [dispatchDate, setDispatchDate] = useState(getToday());
+        const [selectedClient, setSelectedClient] = useState(null);
+        
+        // FILTROS
+        const clientsToPack = logic.clients
+            .map(c => ({ ...c, cycle: logic.getClientCycle(c.id) }))
+            .filter(c => c.cycle.itemsCount > 0 && !c.packageReady)
+            .sort((a, b) => b.cycle.itemsCount - a.cycle.itemsCount);
+        
+        const clientsToDispatch = logic.clients
+            .map(c => ({ ...c, cycle: logic.getClientCycle(c.id) }))
+            .filter(c => c.packageReady === true)
+            .map(c => ({ ...c, status: logic.getClientStatus(c, c.cycle) }));
+        
+        // ACCIONES
+        const markAsPacked = (client) => {
+            logic.setClients(client.id, { packageReady: true });
         };
-        if (selectedClient) return (<div className="p-6 h-full flex flex-col bg-slate-100"><button onClick={() => setSelectedClient(null)} className="mb-4 font-bold text-slate-500">← Volver</button><div className="bg-white p-6 rounded-3xl shadow-xl border-l-8 border-indigo-600"><h2 className="text-4xl font-black mb-1 text-slate-800">{selectedClient.id}</h2><p className="text-slate-500 font-bold uppercase mb-6 text-sm">{selectedClient.name} • {selectedClient.deliveryMethod}</p><div className="space-y-4 mb-8"><div className="bg-slate-50 p-3 rounded-lg text-sm border"><div className="flex justify-between"><span>Ropa:</span><span className="text-emerald-600 font-bold">PAGADO</span></div><div className="flex justify-between"><span>Envío:</span><span className="text-emerald-600 font-bold">PAGADO</span></div></div><input value={guide} onChange={e => setGuide(e.target.value)} placeholder="Número de Guía / Tracking" className="w-full p-4 border-2 rounded-xl text-xl font-mono focus:border-indigo-600 outline-none" autoFocus /><div><label className="text-xs font-bold text-slate-400">Fecha Despacho</label><input type="date" value={dispatchDate} onChange={e => setDispatchDate(e.target.value)} className="w-full p-3 border rounded-xl" /></div></div><button onClick={handleDispatch} className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg text-lg flex items-center justify-center gap-2"><Icon.Check /> CONFIRMAR SALIDA</button></div></div>);
-        return (<div className="p-4 pb-24"><h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-700"><Icon.Box /> Listos para Enviar ({readyClients.length})</h2><div className="space-y-3">{readyClients.length === 0 && <div className="text-center py-12 text-slate-400 border border-dashed rounded-3xl">No hay paquetes listos</div>}{readyClients.map(c => (<div key={c.id} onClick={() => setSelectedClient(c)} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center touch-card cursor-pointer"><div><div className="font-black text-lg text-slate-800 tracking-tight">{c.id}</div><div className="text-xs font-bold text-slate-500 uppercase mt-0.5">{c.name}</div><div className={`inline-block px-2 py-0.5 mt-1 rounded text-[10px] font-bold border ${c.status.color}`}>{c.status.label}</div></div><button className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm">DESPACHAR</button></div>))}</div></div>);
-    };
+        
+        const undoPacking = (client) => {
+            logic.setClients(client.id, { packageReady: false });
+            setSelectedClient(null);
+        };
+        
+        const handleDispatch = () => {
+            if (!guide) return alert("Falta número de Guía / Nota");
+            
+            // 1. Congelamos los datos ANTES de cerrar
+            const cycle = logic.getClientCycle(selectedClient.id);
+            const balanceAtClosing = cycle.clothingBalance; // Positivo (sobra) o Negativo (debe)
+            
+            // 2. Definimos fechas (Un segundo de diferencia para que el arrastre quede en el futuro)
+            const closeDateISO = smartDate(dispatchDate, cycle.lastShipmentDate);
+            const nextCycleDateISO = new Date(new Date(closeDateISO).getTime() + 5000).toISOString(); // 5 seg después
+            
+            // 3. Registramos el envío (AQUÍ SE CORTA LA HOJA)
+            logic.registerShipment(selectedClient.id, guide, selectedClient.deliveryMethod, closeDateISO);
+            
+            // 4. LÓGICA DE ARRASTRE (La magia contable)
+            if (balanceAtClosing > 0.01) {
+                // CASO A: Le sobró plata -> Se la pasamos al nuevo ciclo como Abono
+                logic.addPayment(selectedClient.id, balanceAtClosing, "Saldo a Favor (Arrastre)", nextCycleDateISO);
+            } else if (balanceAtClosing < -0.01) {
+                // CASO B: Quedó debiendo -> Se lo cargamos al nuevo ciclo como Venta (Deuda)
+                // Usamos addSale para que cuente como deuda negativa
+                logic.addSale(selectedClient.id, "Deuda Ciclo Anterior", Math.abs(balanceAtClosing), nextCycleDateISO);
+                // Ojo: Esto hará que el cliente empiece en ROJO en el nuevo ciclo
+            }
+            
+            // 5. Limpiamos marcas
+            logic.setClients(selectedClient.id, { packageReady: false, confirmShipping: false, forceAccumulate: false });
+            
+            alert(`✅ Enviado. ${balanceAtClosing < -0.01 ? 'OJO: La deuda se arrastró al nuevo ciclo.' : ''}`);
+            setSelectedClient(null);
+            setGuide("");
+        };
+        
+        if (selectedClient) {
+            const cycle = logic.getClientCycle(selectedClient.id);
+            const status = logic.getClientStatus(selectedClient, cycle);
+            const isDebt = status.code === 'PACKED_DEBT';
+            
+            return (
+                <div className="p-6 h-full flex flex-col bg-slate-100">
+                    <button onClick={() => setSelectedClient(null)} className="mb-4 font-bold text-slate-500">← Volver</button>
+                    <div className={`bg-white p-6 rounded-3xl shadow-xl border-l-8 ${isDebt ? 'border-red-500' : 'border-emerald-500'}`}>
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <h2 className="text-4xl font-black mb-1 text-slate-800">{selectedClient.id}</h2>
+                                <p className="text-slate-500 font-bold uppercase mb-6 text-sm">{selectedClient.name}</p>
+                            </div>
+                            <button onClick={() => undoPacking(selectedClient)} className="text-xs font-bold text-red-400 border border-red-200 px-3 py-2 rounded-lg hover:bg-red-50">↩️ Desempacar</button>
+                        </div>
+                        
+                        {isDebt && (
+                            <div className="bg-red-50 p-4 rounded-xl border border-red-100 mb-6 animate-pulse">
+                                <h3 className="text-red-700 font-black flex items-center gap-2"><Icon.Alert /> DEUDA PENDIENTE</h3>
+                                <p className="text-red-600 text-sm mt-1">Debe <b>{formatMoney(Math.abs(cycle.clothingBalance))}</b>.</p>
+                                <p className="text-red-800 font-bold text-xs mt-2">ALERTA: Si despachas, esta deuda se cargará automáticamente al nuevo ciclo.</p>
+                            </div>
+                        )}
 
+                        <div className="space-y-4 mb-8">
+                            <div className="bg-slate-50 p-3 rounded-lg text-sm border">
+                                <div className="flex justify-between"><span>Método:</span><span className="font-bold">{selectedClient.deliveryMethod || 'No definido'}</span></div>
+                                <div className="flex justify-between mt-1"><span>Prendas:</span><span className="font-bold">{cycle.itemsCount} unid.</span></div>
+                                <div className="flex justify-between mt-1 border-t pt-1"><span>Balance Final:</span><span className={`font-bold ${cycle.clothingBalance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{formatMoney(cycle.clothingBalance)}</span></div>
+                            </div>
+                            <input value={guide} onChange={e => setGuide(e.target.value)} placeholder="Escanea Guía / Tracking..." className="w-full p-4 border-2 rounded-xl text-xl font-mono focus:border-indigo-600 outline-none" autoFocus />
+                            <div><label className="text-xs font-bold text-slate-400">Fecha Salida</label><input type="date" value={dispatchDate} onChange={e => setDispatchDate(e.target.value)} className="w-full p-3 border rounded-xl" /></div>
+                        </div>
+                        <button onClick={handleDispatch} className={`w-full py-4 rounded-xl font-bold shadow-lg text-lg flex items-center justify-center gap-2 text-white ${isDebt ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}>
+                            {isDebt ? <span><Icon.Alert /> DESPACHAR CON DEUDA</span> : <span><Icon.Check /> CONFIRMAR SALIDA</span>}
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+        
+        return (
+            <div className="flex flex-col h-full bg-[#f0f2f5]">
+                <div className="flex bg-white shadow-sm z-10">
+                    <button onClick={() => setMode('packing')} className={`flex-1 py-4 text-xs font-black uppercase tracking-widest border-b-4 transition-colors ${mode==='packing' ? 'border-purple-600 text-purple-700 bg-purple-50' : 'border-transparent text-slate-400'}`}>
+                        1. Mesa Empaque ({clientsToPack.length})
+                    </button>
+                    <button onClick={() => setMode('dispatch')} className={`flex-1 py-4 text-xs font-black uppercase tracking-widest border-b-4 transition-colors ${mode==='dispatch' ? 'border-indigo-600 text-indigo-700 bg-indigo-50' : 'border-transparent text-slate-400'}`}>
+                        2. Zona Despacho ({clientsToDispatch.length})
+                    </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 pb-24">
+                    {mode === 'packing' && (
+                        <div className="space-y-3">
+                            {clientsToPack.length === 0 && <div className="text-center py-12 text-slate-400 italic">✨ Todo empacado.</div>}
+                            {clientsToPack.map(c => (
+                                <div key={c.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center animate-in slide-in-from-bottom duration-300">
+                                    <div className="flex-1">
+                                        <div className="font-black text-lg text-slate-800">{c.id}</div>
+                                        <div className="text-xs font-bold text-slate-500 uppercase">{c.name}</div>
+                                        <div className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-[10px] font-bold"><Icon.Box /> {c.cycle.itemsCount} prendas</div>
+                                    </div>
+                                    <button onClick={() => markAsPacked(c)} className="bg-purple-600 text-white px-4 py-3 rounded-xl font-bold text-xs shadow-md active:scale-95 transition-transform flex flex-col items-center gap-1">
+                                        <Icon.Check /> <span>LISTO</span>
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {mode === 'dispatch' && (
+                        <div className="space-y-3">
+                            {clientsToDispatch.length === 0 && <div className="text-center py-12 text-slate-400 italic">Nada por despachar.</div>}
+                            {clientsToDispatch.map(c => (
+                                <div key={c.id} onClick={() => setSelectedClient(c)} className={`p-4 rounded-2xl shadow-sm border flex justify-between items-center cursor-pointer transition-transform hover:scale-[1.02] ${c.status.code === 'PACKED_DEBT' ? 'bg-white border-l-4 border-l-red-500 border-slate-100' : 'bg-white border-l-4 border-l-emerald-500 border-slate-100'}`}>
+                                    <div>
+                                        <div className="font-black text-lg text-slate-800">{c.id}</div>
+                                        <div className="text-xs font-bold text-slate-500 uppercase">{c.name}</div>
+                                        <div className={`mt-1 inline-block px-2 py-0.5 rounded text-[10px] font-bold border ${c.status.color}`}>{c.status.label}</div>
+                                    </div>
+                                    <div className="text-right text-2xl text-slate-300"><Icon.Truck /></div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    };
     const LiveView = ({ logic }) => {
         const [search, setSearch] = useState(""); const [found, setFound] = useState(null); const [item, setItem] = useState(""); const [price, setPrice] = useState(""); const [qty, setQty] = useState(1); const [msg, setMsg] = useState(null); const [suggestions, setSuggestions] = useState([]); const [saleDate, setSaleDate] = useState(getToday());
         const ITEMS_COMMON = [ "Prenda", "Combo", "Blusa", "Pantalón", "Vestido", "Camiseta", "Falda", "Short", "Chaqueta"]; const QTY_OPTIONS = [1, 2, 3, 4, 5, 10]; const PRICE_OPTIONS = ["0.25", "0.50", "0.75", "1.00", "1.25", "1.50", "1.75", "2.00"];
@@ -1017,13 +1386,15 @@
         );
     };
 
-        const ClientsView = ({ logic }) => {
-        const [view, setView] = useState('list'); const [activeClient, setActiveClient] = useState(null); const [filter, setFilter] = useState(""); 
-        
-        // --- NUEVO: ESTADO PARA EL FILTRO DE BOTONES ---
-        const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'debt', 'ready', 'accumulating', 'clean'
+    // --- VISTA CLIENTES CORREGIDA (ACUMULANDO Y DEBEN) ---
+      // --- VISTA CLIENTES CORREGIDA (Lógica Estricta de Deudas) ---
+    const ClientsView = ({ logic }) => {
+        const [view, setView] = useState('list');
+        const [activeClient, setActiveClient] = useState(null); 
+        const [filter, setFilter] = useState(""); 
+        const [statusFilter, setStatusFilter] = useState('all'); 
 
-        // CAMPOS NUEVOS REGISTRO
+        // CAMPOS NUEVO REGISTRO
         const [newName, setNewName] = useState(""); const [newPhone, setNewPhone] = useState(""); 
         const [newCedula, setNewCedula] = useState(""); const [newProvince, setNewProvince] = useState(""); 
         const [newCity, setNewCity] = useState(""); const [newAddress, setNewAddress] = useState(""); 
@@ -1032,30 +1403,39 @@
         const handleRegister = () => { 
             if (!newName) return; 
             const res = logic.registerClient(newName, newPhone, newCedula, newProvince, newCity, newAddress, newAbono, regDate, manualId); 
-            if(res) { 
-                setNewName(""); setNewPhone(""); setNewCedula(""); setNewProvince(""); setNewCity(""); setNewAddress(""); 
-                setNewAbono(""); setManualId(""); setView('list'); 
-            } 
+            if(res) { setNewName(""); setNewPhone(""); setNewCedula(""); setNewProvince(""); setNewCity(""); setNewAddress(""); setNewAbono(""); setManualId(""); setView('list'); } 
         };
 
-        if (view === 'detail' && activeClient) { const clientData = logic.clients.find(c => c.id === activeClient.id) || activeClient; return <ClientDetailComponent key={clientData.id} activeClient={clientData} logic={logic} onBack={() => setView('list')} />; }
+        if (view === 'detail' && activeClient) { 
+            const clientData = logic.clients.find(c => c.id === activeClient.id) || activeClient; 
+            return <ClientDetailComponent key={clientData.id} activeClient={clientData} logic={logic} onBack={() => setView('list')} />; 
+        }
         
-        // --- LÓGICA DE FILTRADO AVANZADO ---
         const filteredList = logic.clients.filter(c => {
-            // 1. Filtro de Texto (Buscador)
             const matchesText = c.name.toLowerCase().includes(filter.toLowerCase()) || c.id.toLowerCase().includes(filter.toLowerCase());
             if (!matchesText) return false;
-
-            // 2. Filtro de Botones (Estados)
-            if (statusFilter === 'all') return true;
-
+            
             const cycle = logic.getClientCycle(c.id);
             const status = logic.getClientStatus(c, cycle);
 
-            if (statusFilter === 'debt') return status.code === 'DEBT'; // Solo Deudores
-            if (statusFilter === 'ready') return status.code === 'READY' || status.code === 'MISSING'; // Listos para enviar o falta pago envío
-            if (statusFilter === 'accumulating') return (status.code === 'ACC_PAID' || status.code === 'ACC_AUTH') && cycle.itemsCount > 0; // Tienen prendas guardadas
-            if (statusFilter === 'clean') return cycle.itemsCount === 0 && cycle.clothingBalance >= -0.01; // 0 Prendas, 0 Deuda (Ya enviados o nuevos)
+            // --- LÓGICA DE FILTROS ESTRICTA ---
+            if (statusFilter === 'all') return true;
+            
+            // 1. FILTRO ACUMULANDO: 
+            // - Tiene prendas (> 0)
+            // - Y ESTÁ AL DÍA (No debe nada, balance >= -0.01)
+            if (statusFilter === 'accumulating') {
+                return cycle.itemsCount > 0 && cycle.clothingBalance >= -0.01;
+            }
+            
+            // 2. FILTRO DEBEN: 
+            // - Tiene saldo negativo (Sea porque acumula y no paga, o deuda vieja)
+            if (statusFilter === 'debt') {
+                return cycle.clothingBalance < -0.01;
+            }
+
+            // 3. FILTRO LIMPIOS: 
+            if (statusFilter === 'clean') return status.code === 'CLEAN';
 
             return true;
         });
@@ -1063,24 +1443,25 @@
         return (
             <div className="flex flex-col h-full pb-20 landscape:pb-0">
                 <div className="p-4 bg-white sticky top-0 z-10 space-y-3 shadow-sm">
-                    {/* Buscador y Botón Nuevo */}
                     <div className="flex gap-2">
-                        <div className="flex-1 bg-slate-100 rounded-xl flex items-center px-3"><Icon.Search /><input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Buscar por ID o Nombre..." className="bg-transparent w-full p-3 outline-none" /></div>
+                        <div className="flex-1 bg-slate-100 rounded-xl flex items-center px-3"><Icon.Search /><input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Buscar ID / Nombre..." className="bg-transparent w-full p-3 outline-none" /></div>
                         <button onClick={() => setView(view === 'new' ? 'list' : 'new')} className="bg-slate-900 text-white w-12 rounded-xl font-bold text-xl">{view === 'new' ? '×' : '+'}</button>
                     </div>
 
-                    {/* --- BARRA DE FILTROS INTELIGENTES --- */}
                     {view !== 'new' && (
                         <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-                            <button onClick={() => setStatusFilter('all')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold whitespace-nowrap transition-colors border ${statusFilter === 'all' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200'}`}>TODOS</button>
-                            <button onClick={() => setStatusFilter('ready')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold whitespace-nowrap transition-colors border ${statusFilter === 'ready' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-600 border-indigo-100'}`}>🟣 ALISTAR</button>
-                            <button onClick={() => setStatusFilter('debt')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold whitespace-nowrap transition-colors border ${statusFilter === 'debt' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-red-500 border-red-100'}`}>🔴 DEBEN</button>
-                            <button onClick={() => setStatusFilter('accumulating')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold whitespace-nowrap transition-colors border ${statusFilter === 'accumulating' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-emerald-600 border-emerald-100'}`}>🟢 ACUMULAN</button>
-                            <button onClick={() => setStatusFilter('clean')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold whitespace-nowrap transition-colors border ${statusFilter === 'clean' ? 'bg-slate-400 text-white border-slate-400' : 'bg-white text-slate-400 border-slate-200'}`}>⚪ LIMPIOS</button>
+                            <button onClick={() => setStatusFilter('all')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold whitespace-nowrap border ${statusFilter === 'all' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200'}`}>TODOS</button>
+                            
+                            {/* ACUMULANDO (Solo los al día) */}
+                            <button onClick={() => setStatusFilter('accumulating')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold whitespace-nowrap border ${statusFilter === 'accumulating' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-emerald-600 border-emerald-100'}`}>🟢 ACUMULANDO (AL DÍA)</button>
+                            
+                            {/* DEBEN (Cualquiera con deuda) */}
+                            <button onClick={() => setStatusFilter('debt')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold whitespace-nowrap border ${statusFilter === 'debt' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-red-500 border-red-100'}`}>🔴 DEBEN</button>
+                            
+                            <button onClick={() => setStatusFilter('clean')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold whitespace-nowrap border ${statusFilter === 'clean' ? 'bg-slate-400 text-white border-slate-400' : 'bg-white text-slate-400 border-slate-200'}`}>⚪ LIMPIOS</button>
                         </div>
                     )}
 
-                    {/* Formulario Nuevo Cliente (Ocultable) */}
                     {view === 'new' && (
                         <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 animate-in slide-in-from-top duration-300 overflow-y-auto max-h-[70vh]">
                             <h3 className="font-bold mb-3">Nuevo Registro</h3>
@@ -1097,15 +1478,12 @@
                     )}
                 </div>
 
-                {/* LISTA CLIENTES (Con lógica h-auto para cascada en vertical) */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-2 landscape:grid landscape:grid-cols-2 landscape:gap-4 landscape:content-start">
-                    {filteredList.length === 0 ? (
-                        <div className="text-center py-10 text-slate-400 italic text-sm col-span-2">No hay clientes con este filtro.</div>
-                    ) : (
+                <div className="flex-1 overflow-y-auto p-4 space-y-2 landscape:grid landscape:grid-cols-2 landscape:gap-4 landscape:content-start landscape:space-y-0">
+                    {filteredList.length === 0 ? <div className="text-center py-10 text-slate-400 italic text-sm col-span-2">No hay clientes con este filtro.</div> : 
                         filteredList.map(c => { 
                             const status = logic.getClientStatus(c, logic.getClientCycle(c.id)); 
                             return (
-                                <div key={c.id} onClick={() => { setActiveClient(c); setView('detail'); }} className="bg-white p-4 rounded-2xl border border-slate-100 flex justify-between items-center touch-card shadow-sm h-auto landscape:h-full">
+                                <div key={c.id} onClick={() => { setActiveClient(c); setView('detail'); }} className="bg-white p-4 rounded-2xl border border-slate-100 flex justify-between items-center touch-card shadow-sm h-auto landscape:h-full cursor-pointer hover:border-indigo-100 transition-colors">
                                     <div>
                                         <div className="font-black text-xl text-slate-800 tracking-tight">{c.id}</div>
                                         <div className="flex flex-col mt-0.5">
@@ -1117,11 +1495,15 @@
                                 </div>
                             ); 
                         })
-                    )}
+                    }
                 </div>
             </div>
         );
     };
+
+
+
+
 
 
     const ReportViewer = ({ logic, onClose, metrics }) => {
@@ -1269,196 +1651,225 @@
         );
     };
 
-    const AdminView = ({ logic, onClose }) => {
-        const [filter, setFilter] = useState('month'); 
-        const [expDetail, setExpDetail] = useState(""); 
-        const [expAmount, setExpAmount] = useState(""); 
-        const [expDate, setExpDate] = useState(getToday()); 
-        const [showExportMenu, setShowExportMenu] = useState(false); 
-        const [showPreview, setShowPreview] = useState(false);
-        const [detailMode, setDetailMode] = useState(null); 
+       // --- VISTA ADMINISTRADOR (CON GASTOS PERSONALES VS NEGOCIO) ---
+     // --- VISTA ADMINISTRADOR (MULTIBANCO + GASTOS PERSONALES) ---
+    // --- VISTA ADMINISTRADOR (CON EDICIÓN Y TRANSFERENCIAS) ---
+    // --- VISTA ADMINISTRADOR (DISEÑO SPLIT + CABECERA INTEGRADA) ---
+    // --- VISTA ADMINISTRADOR (DISEÑO FINAL CON INDICADORES DE VENTA Y COBRO) ---
+    const AdminView = ({ logic }) => {
+        // ESTADOS NUEVO GASTO
+        const [expDetail, setExpDetail] = useState("");
+        const [expAmount, setExpAmount] = useState("");
+        const [expDate, setExpDate] = useState(getToday());
+        const [expType, setExpType] = useState('business'); 
+        const [expAccount, setExpAccount] = useState('pichincha'); 
 
-        const metrics = useMemo(() => {
-            try {
-                const safeSales = logic.sales || [];
-                const safePayments = logic.payments || [];
-                const safeExpenses = logic.expenses || [];
-                const safeClients = logic.clients || [];
+        // ESTADOS EDICIÓN Y TRANSFERENCIA
+        const [editingExp, setEditingExp] = useState(null);
+        const [showTransfer, setShowTransfer] = useState(false);
+        const [transfFrom, setTransfFrom] = useState('pichincha');
+        const [transfTo, setTransfTo] = useState('guayaquil');
+        const [transfAmount, setTransfAmount] = useState("");
 
-                const now = new Date(); 
-                const filterDate = new Date(); 
-                if (filter === 'week') filterDate.setDate(now.getDate() - 7); 
-                else if (filter === 'month') filterDate.setMonth(now.getMonth() - 1); 
-                else if (filter === 'year') filterDate.setFullYear(now.getFullYear(), 0, 1);
-                else if (filter === 'all') filterDate.setFullYear(2000); 
+        // --- 1. MATEMÁTICAS ---
+        const balances = { pichincha: 0, guayaquil: 0, pacifico: 0, efectivo: 0 };
 
-                const filteredSales = safeSales.filter(s => new Date(safeISO(s.date)) >= filterDate); 
-                const filteredPayments = safePayments.filter(p => new Date(safeISO(p.date)) >= filterDate);
-                const filteredExpenses = safeExpenses.filter(e => new Date(safeISO(e.date)) >= filterDate);
+        logic.payments.forEach(p => {
+            const acc = p.account ? p.account.toLowerCase() : 'pichincha';
+            if (balances[acc] !== undefined) balances[acc] += p.amount;
+        });
 
-                const totalSales = filteredSales.reduce((acc, s) => acc + (s.value || 0), 0);
+        logic.expenses.forEach(e => {
+            const acc = e.account ? e.account.toLowerCase() : 'pichincha';
+            if (balances[acc] !== undefined) balances[acc] -= e.amount;
+        });
 
-                const realIncomePayments = filteredPayments.filter(p => {
-                    const det = (p.detail || "").toLowerCase();
-                    return !det.includes("envío") && !det.includes("envio") && !det.includes("transferencia");
-                });
-                const totalCollected = realIncomePayments.reduce((acc, p) => acc + (p.amount || 0), 0);
-                const totalExpenses = filteredExpenses.reduce((acc, e) => acc + (e.amount || 0), 0);
-
-                const debtorsList = [];
-                safeClients.forEach(c => {
-                    try {
-                        const cycle = logic.getClientCycle(c.id);
-                        if (cycle.clothingBalance < -0.01) {
-                            debtorsList.push({ ...c, debt: cycle.clothingBalance });
-                        }
-                    } catch (err) {}
-                });
-                const totalReceivable = debtorsList.reduce((acc, c) => acc + Math.abs(c.debt), 0);
-                const debtorsCount = debtorsList.length;
-
-                const salesByDate = {}; 
-                filteredSales.forEach(s => { 
-                    const dateKey = new Date(safeISO(s.date)).toLocaleDateString(); 
-                    if (!salesByDate[dateKey]) salesByDate[dateKey] = 0; 
-                    salesByDate[dateKey] += s.value; 
-                });
-
-                return { 
-                    totalSales, filteredSales,
-                    totalCollected, realIncomePayments,
-                    totalExpenses, filteredExpenses,
-                    totalReceivable, debtorsCount, debtorsList,
-                    profit: totalCollected - totalExpenses, 
-                    salesByDate 
-                };
-
-            } catch (error) {
-                console.error("Error crítico en métricas:", error);
-                return { totalSales: 0, filteredSales:[], totalCollected: 0, realIncomePayments:[], totalExpenses: 0, filteredExpenses:[], totalReceivable: 0, debtorsCount: 0, debtorsList:[], profit: 0, salesByDate: {} };
-            }
-        }, [logic.sales, logic.payments, logic.expenses, logic.clients, filter]);
-
-        const handleAddExpense = () => { if(!expDetail || !expAmount) return; logic.addExpense(expDetail, expAmount, expDate); setExpDetail(""); setExpAmount(""); alert("Gasto registrado"); };
+        // Totales de Caja
+        const currentBalanceGlobal = balances.pichincha + balances.guayaquil + balances.pacifico + balances.efectivo;
         
-        const handleExportCSV = () => { 
-            const rows = [["REPORTE GERENCIAL ADELITA STORE"], ["Periodo", filter.toUpperCase()], [""], ["INDICADOR", "VALOR"], ["Ventas Totales (Ropa)", metrics.totalSales], ["Recaudado Real (Banco)", metrics.totalCollected], ["Por Cobrar (Calle)", metrics.totalReceivable], ["Gastos Operativos", metrics.totalExpenses], ["Utilidad Neta", metrics.profit], [""], ["DETALLE VENTAS DIARIAS"], ["FECHA", "MONTO"]]; 
-            Object.entries(metrics.salesByDate).forEach(([d, t]) => rows.push([d, t])); 
-            exportToCSV(rows, "Reporte_Gerencia.csv"); 
+        // Gastos
+        const expensesBusiness = logic.expenses.filter(e => e.category === 'business').reduce((acc, e) => acc + e.amount, 0);
+        const expensesPersonal = logic.expenses.filter(e => e.category === 'personal').reduce((acc, e) => acc + e.amount, 0);
+
+        // --- NUEVOS CÁLCULOS (CENTRO DE LA CABECERA) ---
+        // A. Ventas Totales Históricas (Suma de todas las ventas registradas)
+        const totalSalesGlobal = logic.sales.reduce((acc, s) => acc + s.value, 0);
+
+        // B. Por Cobrar Real (Suma de saldos negativos de todos los clientes)
+        // Esto es muy preciso: revisa uno por uno cuánto debe.
+        const totalReceivable = logic.clients.reduce((acc, c) => {
+            const cycle = logic.getClientCycle(c.id);
+            // Si el balance es negativo (debe), sumamos esa deuda (valor absoluto)
+            return acc + (cycle.clothingBalance < -0.01 ? Math.abs(cycle.clothingBalance) : 0);
+        }, 0);
+
+        // MANEJADORES
+        const handleAddExpense = () => {
+            if (!expDetail || !expAmount) return;
+            logic.addExpense(expDetail, expAmount, expDate, expType, expAccount);
+            setExpDetail(""); setExpAmount("");
         };
 
-        const DetailModal = () => {
-            if (!detailMode) return null;
-            let title = ""; let items = []; let cols = []; let colorClass = "";
+        const handleSaveEdit = async () => {
+            if (!editingExp || !editingExp.fireId) return;
+            try {
+                await window.fs.updateDoc(window.fs.doc(window.db, "expenses", editingExp.fireId), {
+                    detail: editingExp.detail,
+                    amount: parseFloat(editingExp.amount),
+                    date: safeISO(editingExp.date),
+                    category: editingExp.category,
+                    account: editingExp.account
+                });
+                setEditingExp(null);
+            } catch(e) { alert("Error al editar: " + e.message); }
+        };
 
-            if (detailMode === 'sales') {
-                title = "Detalle de Ventas (Ropa)"; colorClass = "text-blue-600";
-                items = metrics.filteredSales.sort((a,b) => new Date(b.date) - new Date(a.date));
-                cols = ["Fecha", "Cliente", "Prenda", "Valor"];
-            } else if (detailMode === 'income') {
-                title = "Ingresos Reales (Banco)"; colorClass = "text-emerald-600";
-                items = metrics.realIncomePayments.sort((a,b) => new Date(b.date) - new Date(a.date));
-                cols = ["Fecha", "Cliente", "Detalle", "Monto"];
-            } else if (detailMode === 'debtors') {
-                title = "Cuentas por Cobrar (Calle)"; colorClass = "text-red-600";
-                items = metrics.debtorsList.sort((a,b) => a.debt - b.debt); 
-                cols = ["Cliente", "Teléfono", "Ciudad", "Deuda"];
-            } else if (detailMode === 'expenses') {
-                title = "Gastos Operativos"; colorClass = "text-orange-600";
-                items = metrics.filteredExpenses.sort((a,b) => new Date(b.date) - new Date(a.date));
-                cols = ["Fecha", "Detalle", "", "Monto"];
+        const handleTransfer = () => {
+            if (!transfAmount || transfFrom === transfTo) return alert("Datos inválidos");
+            const dateISO = new Date().toISOString();
+            logic.addExpense(`Transf. a ${capitalizeFirst(transfTo)}`, transfAmount, dateISO, 'transfer_out', transfFrom);
+            window.fs.addDoc(window.fs.collection(window.db, 'payments'), { 
+                id: Date.now(), clientId: 'ADMIN_TRANSF', amount: parseFloat(transfAmount), date: dateISO, detail: `Transf. desde ${capitalizeFirst(transfFrom)}`, account: transfTo 
+            });
+            setTransfAmount(""); setShowTransfer(false);
+            alert("✅ Transferencia Exitosa");
+        };
+
+        const deleteExpense = async () => {
+            if(!editingExp) return;
+            if(confirm("¿Borrar este registro?")) {
+                await window.fs.deleteDoc(window.fs.doc(window.db, "expenses", editingExp.fireId));
+                setEditingExp(null);
             }
-
-            return (
-                <div className="fixed inset-0 bg-black/70 z-[70] flex items-center justify-center p-4 animate-in fade-in" onClick={() => setDetailMode(null)}>
-                    <div className="bg-white w-full max-w-4xl h-[80vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-                        <div className="p-5 border-b flex justify-between items-center bg-slate-50">
-                            <h3 className={`font-bold text-xl ${colorClass}`}>{title}</h3>
-                            <button onClick={() => setDetailMode(null)} className="w-8 h-8 rounded-full bg-slate-200 text-slate-500 font-bold flex items-center justify-center hover:bg-slate-300">×</button>
-                        </div>
-                        <div className="flex-1 overflow-auto p-0">
-                            <table className="w-full text-sm text-left">
-                                <thead className="bg-slate-100 text-slate-500 uppercase text-xs sticky top-0 font-bold">
-                                    <tr>{cols.map((c,i) => <th key={i} className="p-3">{c}</th>)}</tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                    {items.map((it, idx) => (
-                                        <tr key={idx} className="hover:bg-slate-50">
-                                            {detailMode === 'sales' && <><td className="p-3">{new Date(safeISO(it.date)).toLocaleDateString()}</td><td className="p-3 font-bold text-slate-700">{it.clientId}</td><td className="p-3">{it.item}</td><td className="p-3 font-bold text-right">${it.value.toFixed(2)}</td></>}
-                                            {detailMode === 'income' && <><td className="p-3">{new Date(safeISO(it.date)).toLocaleDateString()}</td><td className="p-3 font-bold text-slate-700">{logic.clients.find(c=>c.id===it.clientId)?.name || it.clientId}</td><td className="p-3">{it.detail}</td><td className="p-3 font-bold text-right text-emerald-600">+${it.amount.toFixed(2)}</td></>}
-                                            {detailMode === 'debtors' && <><td className="p-3 font-bold text-slate-700">{it.name} <span className="text-[10px] text-slate-400 block">{it.id}</span></td><td className="p-3">{it.phone}</td><td className="p-3">{it.city}</td><td className="p-3 font-bold text-right text-red-600">{it.debt.toFixed(2)}</td></>}
-                                            {detailMode === 'expenses' && <><td className="p-3">{new Date(safeISO(it.date)).toLocaleDateString()}</td><td className="p-3 font-bold text-slate-700">{it.detail}</td><td className="p-3"></td><td className="p-3 font-bold text-right text-orange-600">-${it.amount.toFixed(2)}</td></>}
-                                        </tr>
-                                    ))}
-                                    {items.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-slate-400 italic">No hay registros</td></tr>}
-                                </tbody>
-                            </table>
-                        </div>
-                        <div className="p-4 border-t bg-slate-50 text-right font-bold text-slate-700">
-                             Total Registros: {items.length}
-                        </div>
-                    </div>
-                </div>
-            );
         };
+
+        const sortedExpenses = [...logic.expenses].sort((a,b) => new Date(safeISO(b.date)) - new Date(safeISO(a.date)));
 
         return (
-            <div className="flex flex-col h-full bg-slate-50 pb-20 landscape:pb-0 landscape:flex-row font-sans relative">
-                <DetailModal />
-
-                <div className="p-6 bg-slate-900 text-white shadow-lg landscape:w-1/3 landscape:flex landscape:flex-col landscape:justify-center">
-                    <h1 className="text-2xl font-bold flex items-center gap-2 mb-1"><Icon.Chart /> Gerencia</h1>
-                    <p className="text-slate-400 text-xs mb-6 uppercase tracking-widest">Panel Financiero</p>
-                    <div className="flex gap-2 mt-2 text-xs font-bold bg-slate-800 p-1 rounded-lg self-start"><button onClick={() => setFilter('week')} className={`px-3 py-1.5 rounded-md transition-colors ${filter === 'week' ? 'bg-indigo-500 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Semana</button><button onClick={() => setFilter('month')} className={`px-3 py-1.5 rounded-md transition-colors ${filter === 'month' ? 'bg-indigo-500 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Mes</button><button onClick={() => setFilter('year')} className={`px-3 py-1.5 rounded-md transition-colors ${filter === 'year' ? 'bg-indigo-500 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Año</button><button onClick={() => setFilter('all')} className={`px-3 py-1.5 rounded-md transition-colors ${filter === 'all' ? 'bg-indigo-500 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Todo</button></div>
-                    <div className="mt-8 border-t border-slate-700 pt-6">
-                        <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
-                            <p className="text-xs text-slate-400 font-bold uppercase mb-1">Caja Real (Utilidad)</p>
-                            <p className={`text-3xl font-black ${metrics.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatMoney(metrics.profit)}</p>
-                            <p className="text-[10px] text-slate-500 mt-1">*Recaudado menos Gastos (Sin envíos)</p>
+            <div className="flex flex-col h-full bg-slate-50 relative overflow-hidden">
+                
+                {/* --- MODALES --- */}
+                {showTransfer && (
+                    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6 animate-in fade-in" onClick={() => setShowTransfer(false)}>
+                        <div className="bg-white p-6 rounded-3xl w-full max-w-sm shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
+                            <h3 className="font-bold text-xl text-slate-800 flex items-center gap-2"><Icon.Zap /> Transferir Dinero</h3>
+                            <div className="flex items-center gap-2 bg-slate-100 p-3 rounded-xl">
+                                <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 uppercase">Origen</label><select value={transfFrom} onChange={e => setTransfFrom(e.target.value)} className="w-full bg-transparent font-bold text-sm outline-none"><option value="pichincha">Pichincha</option><option value="guayaquil">Guayaquil</option><option value="pacifico">Pacífico</option><option value="efectivo">Efectivo</option></select></div>
+                                <div className="text-slate-400">➔</div>
+                                <div className="flex-1 text-right"><label className="text-[10px] font-bold text-slate-400 uppercase">Destino</label><select value={transfTo} onChange={e => setTransfTo(e.target.value)} className="w-full bg-transparent font-bold text-sm outline-none text-right"><option value="pichincha">Pichincha</option><option value="guayaquil">Guayaquil</option><option value="pacifico">Pacífico</option><option value="efectivo">Efectivo</option></select></div>
+                            </div>
+                            <div><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Monto a Mover</label><input type="number" value={transfAmount} onChange={e => setTransfAmount(e.target.value)} className="w-full p-3 border-2 border-indigo-100 rounded-xl text-xl font-bold text-indigo-600 outline-none focus:border-indigo-500" placeholder="$0.00" autoFocus /></div>
+                            <button onClick={handleTransfer} className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg">CONFIRMAR MOVIMIENTO</button>
                         </div>
                     </div>
-                    <div className="mt-auto pt-6 flex gap-3"><button onClick={onClose} className="text-slate-400 text-xs font-bold border border-slate-700 px-4 py-2 rounded hover:bg-slate-800">Volver</button><button onClick={() => window.fbAuth.signOut(window.auth)} className="text-red-400 text-xs font-bold border border-red-900/50 px-4 py-2 rounded hover:bg-red-900/20">Cerrar Sesión</button></div>
+                )}
+                {editingExp && (
+                    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6 animate-in fade-in" onClick={() => setEditingExp(null)}>
+                        <div className="bg-white p-6 rounded-3xl w-full max-w-sm shadow-2xl space-y-3" onClick={e => e.stopPropagation()}>
+                            <div className="flex justify-between items-center border-b pb-2"><h3 className="font-bold text-lg text-slate-800">Corregir Gasto</h3><button onClick={deleteExpense} className="text-red-400 text-xs font-bold border border-red-200 px-2 py-1 rounded hover:bg-red-50">Borrar</button></div>
+                            <div className="flex bg-slate-100 p-1 rounded-xl"><button onClick={() => setEditingExp({...editingExp, category: 'business'})} className={`flex-1 py-2 rounded-lg text-[10px] font-bold ${editingExp.category === 'business' ? 'bg-white shadow text-slate-800' : 'text-slate-400'}`}>🏢 NEGOCIO</button><button onClick={() => setEditingExp({...editingExp, category: 'personal'})} className={`flex-1 py-2 rounded-lg text-[10px] font-bold ${editingExp.category === 'personal' ? 'bg-orange-500 shadow text-white' : 'text-slate-400'}`}>😎 MÍO</button></div>
+                            <div><label className="text-[10px] font-bold text-slate-400 uppercase">Banco Real</label><select value={editingExp.account || 'pichincha'} onChange={e => setEditingExp({...editingExp, account: e.target.value})} className="w-full p-2 border rounded-xl font-bold text-sm"><option value="pichincha">Pichincha</option><option value="guayaquil">Guayaquil</option><option value="pacifico">Pacífico</option><option value="efectivo">Efectivo</option></select></div>
+                            <input value={editingExp.detail} onChange={e => setEditingExp({...editingExp, detail: e.target.value})} className="w-full p-2 border rounded-xl" />
+                            <div className="flex gap-2"><input type="number" value={editingExp.amount} onChange={e => setEditingExp({...editingExp, amount: e.target.value})} className="w-24 p-2 border rounded-xl font-bold" /><input type="date" value={editingExp.date.split('T')[0]} onChange={e => setEditingExp({...editingExp, date: e.target.value})} className="flex-1 p-2 border rounded-xl" /></div>
+                            <button onClick={handleSaveEdit} className="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl shadow-lg">GUARDAR CORRECCIÓN</button>
+                        </div>
+                    </div>
+                )}
+
+                {/* --- 1. CABECERA NEGRA OPTIMIZADA (3 COLUMNAS) --- */}
+                <div className="bg-slate-900 p-4 pb-6 rounded-b-[2rem] shadow-xl text-white z-10 shrink-0">
+                    <div className="flex justify-between items-end mb-5">
+                        {/* A. CAJA REAL (Izquierda) */}
+                        <div className="flex-1">
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Caja Total Real</div>
+                            <div className="text-4xl font-black tracking-tight">${currentBalanceGlobal.toFixed(2)}</div>
+                        </div>
+
+                        {/* B. INDICADORES DE VENTA Y DEUDA (Centro - NUEVO) */}
+                        <div className="flex-1 flex flex-col items-center justify-end px-2">
+                             <div className="flex items-center gap-2 mb-1">
+                                <span className="text-[10px] font-bold text-emerald-400 uppercase">Ventas Totales</span>
+                                <span className="text-xs font-black text-emerald-300">${totalSalesGlobal.toFixed(2)}</span>
+                             </div>
+                             <div className="w-full h-px bg-slate-700/50 my-1"></div>
+                             <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold text-rose-400 uppercase">Por Cobrar</span>
+                                <span className="text-xs font-black text-rose-300">${totalReceivable.toFixed(2)}</span>
+                             </div>
+                        </div>
+
+                        {/* C. SALIDAS (Derecha) */}
+                        <div className="flex-1 text-right space-y-1">
+                            <div className="text-[10px] text-slate-400"><span className="text-orange-400 font-bold">Retiros:</span> -${expensesPersonal.toFixed(2)}</div>
+                            <div className="text-[10px] text-slate-400"><span className="text-slate-200 font-bold">Gastos:</span> -${expensesBusiness.toFixed(2)}</div>
+                        </div>
+                    </div>
+
+                    {/* Tarjetas de Bancos Integradas */}
+                    <div className="grid grid-cols-4 gap-2">
+                        <div className="bg-white/10 p-2 rounded-xl backdrop-blur-sm text-center border border-white/5">
+                            <div className="text-[9px] text-yellow-300 font-bold uppercase mb-0.5">Pichincha</div>
+                            <div className="text-xs font-bold">${balances.pichincha.toFixed(0)}</div>
+                        </div>
+                        <div className="bg-white/10 p-2 rounded-xl backdrop-blur-sm text-center border border-white/5">
+                            <div className="text-[9px] text-pink-300 font-bold uppercase mb-0.5">Guayaquil</div>
+                            <div className="text-xs font-bold">${balances.guayaquil.toFixed(0)}</div>
+                        </div>
+                        <div className="bg-white/10 p-2 rounded-xl backdrop-blur-sm text-center border border-white/5">
+                            <div className="text-[9px] text-blue-300 font-bold uppercase mb-0.5">Pacífico</div>
+                            <div className="text-xs font-bold">${balances.pacifico.toFixed(0)}</div>
+                        </div>
+                        <div className="bg-white/10 p-2 rounded-xl backdrop-blur-sm text-center border border-white/5">
+                            <div className="text-[9px] text-emerald-300 font-bold uppercase mb-0.5">Efectivo</div>
+                            <div className="text-xs font-bold">${balances.efectivo.toFixed(0)}</div>
+                        </div>
+                    </div>
                 </div>
 
-                {showExportMenu && (<div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6 animate-in fade-in" onClick={() => setShowExportMenu(false)}><div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-4 shadow-2xl" onClick={e => e.stopPropagation()}><h3 className="font-bold text-xl text-center text-slate-800 mb-2">Generar Reporte</h3><button onClick={() => { handleExportCSV(); setShowExportMenu(false); }} className="w-full flex items-center gap-4 p-4 bg-emerald-50 text-emerald-800 rounded-2xl font-bold hover:bg-emerald-100 transition-colors border border-emerald-100"><div className="bg-white p-3 rounded-xl shadow-sm"><Icon.List /></div><div className="text-left"><div className="text-base">Excel / CSV</div><div className="text-[10px] opacity-60 font-normal">Datos crudos para editar</div></div></button><button onClick={() => { setShowPreview(true); setShowExportMenu(false); }} className="w-full flex items-center gap-4 p-4 bg-indigo-50 text-indigo-800 rounded-2xl font-bold hover:bg-indigo-100 transition-colors border border-indigo-100"><div className="bg-white p-3 rounded-xl shadow-sm"><Icon.FileText /></div><div className="text-left"><div className="text-base">Visualizar / PDF</div><div className="text-[10px] opacity-60 font-normal">Ver y guardar reporte</div></div></button><button onClick={() => setShowExportMenu(false)} className="w-full py-3 text-slate-400 font-bold text-sm hover:text-slate-600">Cancelar</button></div></div>)}
-                {showPreview && <ReportViewer logic={logic} metrics={metrics} onClose={() => setShowPreview(false)} />}
+                {/* --- 2. CONTENIDO DIVIDIDO --- */}
+                <div className="flex-1 flex flex-col landscape:flex-row overflow-hidden">
+                    
+                    {/* MITAD 1: FORMULARIO */}
+                    <div className="flex-none landscape:w-1/2 overflow-y-auto p-4 space-y-3 bg-slate-50">
+                        <button onClick={() => setShowTransfer(true)} className="w-full py-3 bg-white text-indigo-600 border border-indigo-100 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-indigo-50 shadow-sm text-xs">
+                            <Icon.Zap /> TRANSFERIR ENTRE CUENTAS
+                        </button>
 
-                <div className="flex-1 overflow-y-auto p-4 space-y-6 landscape:w-2/3">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div onClick={() => setDetailMode('sales')} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 cursor-pointer hover:scale-[1.02] transition-transform active:scale-95 group">
-                            <div className="flex justify-between items-start mb-2"><div className="p-2 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-100"><Icon.Tag /></div><Icon.Search /></div>
-                            <p className="text-xs text-slate-400 font-bold uppercase">Ventas Ropa</p>
-                            <p className="text-xl md:text-2xl font-bold text-slate-800">{formatMoney(metrics.totalSales)}</p>
-                        </div>
-
-                        <div onClick={() => setDetailMode('income')} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 cursor-pointer hover:scale-[1.02] transition-transform active:scale-95 group">
-                            <div className="flex justify-between items-start mb-2"><div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-100"><Icon.Dollar /></div><Icon.Search /></div>
-                            <p className="text-xs text-slate-400 font-bold uppercase">Recaudado (Real)</p>
-                            <p className="text-xl md:text-2xl font-bold text-emerald-600">{formatMoney(metrics.totalCollected)}</p>
-                        </div>
-
-                        <div onClick={() => setDetailMode('debtors')} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden cursor-pointer hover:scale-[1.02] transition-transform active:scale-95 group">
-                            <div className="absolute top-0 right-0 p-2 opacity-10 text-red-600 transform translate-x-2 -translate-y-2"><svg className="w-16 h-16" fill="currentColor" viewBox="0 0 24 24"><path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>
-                            <div className="flex justify-between items-start mb-2"><div className="p-2 bg-red-50 text-red-600 rounded-lg group-hover:bg-red-100"><Icon.Users /></div><span className="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded-full">{metrics.debtorsCount} Clientes</span></div>
-                            <p className="text-xs text-slate-400 font-bold uppercase">Por Cobrar (Calle)</p>
-                            <p className="text-xl md:text-2xl font-bold text-red-500">{formatMoney(metrics.totalReceivable)}</p>
-                        </div>
-
-                        <div onClick={() => setDetailMode('expenses')} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 cursor-pointer hover:scale-[1.02] transition-transform active:scale-95 group">
-                            <div className="flex justify-between items-start mb-2"><div className="p-2 bg-orange-50 text-orange-600 rounded-lg group-hover:bg-orange-100"><Icon.List /></div><Icon.Search /></div>
-                            <p className="text-xs text-slate-400 font-bold uppercase">Gastos Operativos</p>
-                            <p className="text-xl md:text-2xl font-bold text-slate-800">{formatMoney(metrics.totalExpenses)}</p>
+                        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+                            <h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2 text-sm"><Icon.Tag /> Registrar Salida</h3>
+                            <div className="flex bg-slate-100 p-1 rounded-xl mb-3">
+                                <button onClick={() => setExpType('business')} className={`flex-1 py-2 rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-2 ${expType === 'business' ? 'bg-white shadow text-slate-800' : 'text-slate-400'}`}>🏢 NEGOCIO</button>
+                                <button onClick={() => setExpType('personal')} className={`flex-1 py-2 rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-2 ${expType === 'personal' ? 'bg-orange-500 shadow text-white' : 'text-slate-400'}`}>😎 MÍO</button>
+                            </div>
+                            <div className="mb-3"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Origen</label><select value={expAccount} onChange={e => setExpAccount(e.target.value)} className="w-full p-2 bg-indigo-50 border border-indigo-100 rounded-xl text-xs font-bold text-indigo-800 outline-none"><option value="pichincha">🏦 Banco Pichincha</option><option value="guayaquil">🏦 Banco Guayaquil</option><option value="pacifico">🏦 Banco Pacífico</option><option value="efectivo">💵 Efectivo / Caja</option></select></div>
+                            <div className="flex gap-2 mb-2"><div className="flex-1"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Detalle</label><input value={expDetail} onChange={e => setExpDetail(e.target.value)} placeholder="Ej: Pago Luz" className="w-full p-2 bg-slate-50 border rounded-xl outline-none text-xs" /></div><div className="w-20"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Monto</label><input type="number" step="0.01" value={expAmount} onChange={e => setExpAmount(e.target.value)} placeholder="$" className="w-full p-2 bg-slate-50 border rounded-xl outline-none font-bold text-slate-700 text-xs" /></div></div>
+                            <div className="flex gap-2 items-center"><input type="date" value={expDate} onChange={e => setExpDate(e.target.value)} className="bg-slate-50 border p-2 rounded-xl text-[10px] font-bold text-slate-500" /><button onClick={handleAddExpense} className={`flex-1 py-2 rounded-xl font-bold text-white shadow-lg active:scale-95 transition-transform text-xs ${expType === 'business' ? 'bg-slate-800' : 'bg-orange-500'}`}>REGISTRAR</button></div>
                         </div>
                     </div>
 
-                    <button onClick={() => setShowExportMenu(true)} className="w-full bg-slate-800 text-white py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2"><Icon.Download /> DESCARGAR REPORTE PDF / EXCEL</button>
+                    {/* MITAD 2: LISTA */}
+                    <div className="flex-1 landscape:w-1/2 overflow-y-auto p-4 pt-0 landscape:pt-4 border-t landscape:border-t-0 landscape:border-l border-slate-200">
+                        <h3 className="text-[10px] font-bold text-slate-400 uppercase mb-2 sticky top-0 bg-slate-50 py-2">Últimos Movimientos</h3>
+                        <div className="space-y-2 pb-20">
+                            {sortedExpenses.map(e => (
+                                <div key={e.id} onClick={() => setEditingExp(e)} className={`p-3 rounded-xl border flex justify-between items-center cursor-pointer hover:scale-[1.02] transition-transform ${e.category === 'transfer_out' ? 'bg-indigo-50 border-indigo-100 opacity-70' : (e.category === 'personal' ? 'bg-orange-50 border-orange-100' : 'bg-white border-slate-100')}`}>
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${e.category === 'personal' ? 'bg-orange-100 text-orange-500' : 'bg-slate-100 text-slate-500'}`}>{e.category === 'personal' ? '😎' : (e.category === 'transfer_out' ? '💱' : '🏢')}</div>
+                                        <div className="overflow-hidden"><div className={`font-bold text-xs truncate ${e.category === 'personal' ? 'text-orange-800' : 'text-slate-700'}`}>{e.detail}</div><div className="text-[9px] text-slate-400 flex gap-2"><span>{new Date(safeISO(e.date)).toLocaleDateString()}</span><span className="font-bold uppercase text-indigo-400">({e.account ? e.account.substring(0,3) : 'PIC'})</span></div></div>
+                                    </div>
+                                    <div className={`font-bold text-xs ${e.category === 'personal' ? 'text-orange-600' : 'text-slate-600'}`}>-${e.amount.toFixed(2)}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
 
-                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200"><h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2">📉 Registrar Gasto</h3><div className="space-y-3"><input value={expDetail} onChange={e => setExpDetail(e.target.value)} placeholder="Concepto (ej: Paca Americana)" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl" /><div className="flex gap-2"><input type="number" inputMode="decimal" step="0.01" value={expAmount} onChange={e => setExpAmount(e.target.value)} placeholder="$ Monto" className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-red-500" /><input type="date" value={expDate} onChange={e => setExpDate(e.target.value)} className="w-32 p-3 bg-slate-50 border border-slate-200 rounded-xl" /></div><button onClick={handleAddExpense} className="w-full bg-slate-700 text-white py-3 rounded-xl font-bold shadow-md hover:bg-slate-600">Guardar Gasto</button></div></div>
-                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"><div className="p-4 border-b border-slate-100 font-bold text-slate-700 bg-slate-50/50">Ventas por Fecha (Lives)</div>{Object.entries(metrics.salesByDate).length === 0 ? <p className="p-8 text-center text-slate-400 text-sm italic">Sin datos en este periodo</p> : (Object.entries(metrics.salesByDate).sort((a,b) => b[1] - a[1]).map(([date, total]) => (<div key={date} className="flex justify-between p-4 border-b border-slate-50 last:border-0 hover:bg-slate-50"><span className="font-medium text-slate-600 text-sm flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-400"></div> {date}</span><span className="font-bold text-emerald-600">{formatMoney(total)}</span></div>)))}</div>
                 </div>
             </div>
         );
     };
+
+
+
 
     const App = () => {
         const [user, setUser] = useState(null);
