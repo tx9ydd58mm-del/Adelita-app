@@ -332,18 +332,25 @@
 
     // --- LÓGICA DE NEGOCIO REPARADA (CEREBRO) ---
     // --- LÓGICA DE NEGOCIO (V10 - PROTOCOLO FRANCOTIRADOR / ID ÚNICO) ---
+
+
+    // --- LÓGICA DE NEGOCIO (V14 - PAPELERA CON DESTRUCCIÓN DEFINITIVA) ---
     const useBusinessLogic = (user) => {
         const [clients, setClients] = useState([]);
-        const [sales, setSales] = useState([]);
+        const [allSalesRaw, setAllSalesRaw] = useState([]); 
         const [payments, setPayments] = useState([]);
         const [shipments, setShipments] = useState([]);
         const [expenses, setExpenses] = useState([]);
+
+        // Mágia Contable: 'sales' solo tiene lo activo. La basura NO SUMA DEUDA.
+        const sales = useMemo(() => allSalesRaw.filter(s => !s.deletedAt), [allSalesRaw]);
+        const trash = useMemo(() => allSalesRaw.filter(s => s.deletedAt), [allSalesRaw]);
 
         useEffect(() => {
             if (!user) return;
             const { onSnapshot, collection } = window.fs; const db = window.db;
             const uC = onSnapshot(collection(db, 'clients'), (s) => setClients(s.docs.map(d => ({...d.data(), fireId: d.id}))));
-            const uS = onSnapshot(collection(db, 'sales'), (s) => setSales(s.docs.map(d => ({...d.data(), fireId: d.id}))));
+            const uS = onSnapshot(collection(db, 'sales'), (s) => setAllSalesRaw(s.docs.map(d => ({...d.data(), fireId: d.id}))));
             const uP = onSnapshot(collection(db, 'payments'), (s) => setPayments(s.docs.map(d => ({...d.data(), fireId: d.id}))));
             const uSh = onSnapshot(collection(db, 'shipments'), (s) => setShipments(s.docs.map(d => ({...d.data(), fireId: d.id}))));
             const uE = onSnapshot(collection(db, 'expenses'), (s) => setExpenses(s.docs.map(d => ({...d.data(), fireId: d.id}))));
@@ -373,63 +380,53 @@
         const updateClientLocal = (clientId, updates) => { const c = clients.find(cl => cl.id === clientId); if (c && c.fireId) window.fs.updateDoc(window.fs.doc(window.db, "clients", c.fireId), updates); };
         const deleteClient = async (clientId) => { const c = clients.find(cl => cl.id === clientId); if(c && c.fireId) await window.fs.deleteDoc(window.fs.doc(window.db, "clients", c.fireId)); };
         
-        // --- FUNCIÓN DE BORRADO: EL FRANCOTIRADOR (ID EXACTO) ---
+        // 1. SOFT DELETE (A la Papelera)
         const deleteSale = async (itemOrId) => { 
             try {
                 const db = window.db;
-                
-                // Opción A: Tenemos el ID de Firestore directo (Ideal)
-                if (typeof itemOrId === 'string') {
-                    await window.fs.deleteDoc(window.fs.doc(db, "sales", itemOrId));
+                let targetFireId = typeof itemOrId === 'string' ? itemOrId : (itemOrId.fireId || null);
+                if (!targetFireId && typeof itemOrId === 'object' && itemOrId.id) {
+                    const q = window.fs.query(window.fs.collection(db, "sales"), window.fs.where("id", "==", itemOrId.id));
+                    const snapshot = await window.fs.getDocs(q);
+                    if (!snapshot.empty) targetFireId = snapshot.docs[0].id;
+                }
+                if (targetFireId) {
+                    await window.fs.updateDoc(window.fs.doc(db, "sales", targetFireId), { deletedAt: new Date().toISOString() });
                     return true;
                 }
+                return false;
+            } catch (error) { return false; }
+        };
 
-                // Opción B: Tenemos el OBJETO de venta (Buscamos por CÓDIGO ÚNICO INTERNO)
-                // Tu requerimiento: Usar el 'id' numérico único que generamos al crear.
-                if (typeof itemOrId === 'object') {
-                    // 1. Si tiene fireId, úsalo primero (es más rápido)
-                    if (itemOrId.fireId) {
-                        await window.fs.deleteDoc(window.fs.doc(db, "sales", itemOrId.fireId));
-                        return true;
-                    }
-                    
-                    // 2. Si no tiene fireId, usa el CÓDIGO ÚNICO (item.id)
-                    if (itemOrId.id) {
-                        console.log("Buscando venta por Código Único:", itemOrId.id);
-                        const q = window.fs.query(
-                            window.fs.collection(db, "sales"), 
-                            window.fs.where("id", "==", itemOrId.id) // <--- AQUÍ ESTÁ LA MAGIA
-                        );
-                        const snapshot = await window.fs.getDocs(q);
-                        
-                        if (!snapshot.empty) {
-                            // Borramos todos los que coincidan (debería ser solo 1 porque es único)
-                            const batch = window.fs.writeBatch(db); // Usamos batch para asegurar
-                            snapshot.docs.forEach((doc) => {
-                                batch.delete(doc.ref);
-                            });
-                            await batch.commit();
-                            return true;
-                        }
-                    }
-                }
-                console.warn("No se pudo borrar: Faltan identificadores", itemOrId);
-                return false;
-            } catch (error) {
-                console.error("Error al borrar:", error);
-                alert("Error de conexión al intentar borrar.");
-                return false;
-            }
+        // 2. RESTORE (Sacar de Papelera)
+        const restoreSale = async (itemOrId) => {
+            try {
+                const db = window.db;
+                const targetFireId = typeof itemOrId === 'string' ? itemOrId : itemOrId.fireId;
+                if(targetFireId) await window.fs.updateDoc(window.fs.doc(db, "sales", targetFireId), { deletedAt: null });
+            } catch(e) {}
+        };
+
+        // 3. HARD DELETE (Destruir para siempre) - NUEVO
+        const destroySale = async (itemOrId) => {
+            try {
+                const db = window.db;
+                const targetFireId = typeof itemOrId === 'string' ? itemOrId : itemOrId.fireId;
+                if(targetFireId) await window.fs.deleteDoc(window.fs.doc(db, "sales", targetFireId));
+            } catch(e) {}
         };
 
         // CÁLCULOS
         const getClientCycle = (clientId) => {
             const clientShipments = shipments.filter(s => s.clientId === clientId).sort((a, b) => new Date(safeISO(b.date)) - new Date(safeISO(a.date)));
             const lastShipmentDate = clientShipments.length > 0 ? new Date(safeISO(clientShipments[0].date)) : new Date(0);
+            
+            // Usamos 'sales' (NO INCLUYE BASURA) -> Por eso la deuda baja inmediatamente
             const cycleSales = sales.filter(s => s.clientId === clientId && new Date(safeISO(s.date)) > lastShipmentDate);
             const cyclePayments = payments.filter(p => p.clientId === clientId && new Date(safeISO(p.date)) > lastShipmentDate);
             const allSales = sales.filter(s => s.clientId === clientId);
             const allPayments = payments.filter(p => p.clientId === clientId);
+            
             const totalSales = cycleSales.reduce((acc, s) => acc + s.value, 0);
             const totalNormalPaid = cyclePayments.filter(p => !p.detail?.includes("Pago Envío")).reduce((acc, p) => acc + p.amount, 0);
             const totalShippingPaid = cyclePayments.filter(p => p.detail?.includes("Pago Envío")).reduce((acc, p) => acc + p.amount, 0);
@@ -451,7 +448,7 @@
             return { code: 'ACC_PAID', label: 'ACUMULANDO', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
         };
 
-        return { clients, sales, payments, shipments, expenses, setClients: updateClientLocal, getClientCycle, getClientStatus, registerClient, addSale, addBatchSales, addPayment, addExpense, registerShipment, deleteClient, deleteSale };
+        return { clients, sales, trash, payments, shipments, expenses, setClients: updateClientLocal, getClientCycle, getClientStatus, registerClient, addSale, addBatchSales, addPayment, addExpense, registerShipment, deleteClient, deleteSale, restoreSale, destroySale };
     };
 
 
@@ -509,6 +506,7 @@
     // --- DETALLE CLIENTE 11.0 (ORDENAMIENTO CRONOLÓGICO PERFECTO) ---
     // --- DETALLE CLIENTE 12.0 (CENTINELA: ALERTA INMORTAL Y EN VIVO) ---
         // --- DETALLE CLIENTE 12.0 (CENTINELA: ALERTA INMORTAL Y EN VIVO) ---
+    // --- DETALLE CLIENTE 15.0 (EL NIGROMANTE: REVIVIR VENTAS ANTIGUAS DESDE EL BANNER) ---
     const ClientDetailComponent = ({ activeClient, logic, onBack }) => {
         const [payAmount, setPayAmount] = useState("");
         const [payDate, setPayDate] = useState(getToday()); 
@@ -519,9 +517,9 @@
         const [orderViewMode, setOrderViewMode] = useState('grouped'); 
         const [tabView, setTabView] = useState('cycle'); 
         
-        // ESTADOS DE LA ALERTA
         const [cancellationHistory, setCancellationHistory] = useState([]);
-        const [alertMinimized, setAlertMinimized] = useState(false); // Empieza expandido para que lo veas
+        const [alertMinimized, setAlertMinimized] = useState(false);
+        const [showTrash, setShowTrash] = useState(false);
         
         const [waTab, setWaTab] = useState('direct'); 
         const [waSubTab, setWaSubTab] = useState('full'); 
@@ -544,6 +542,8 @@
         const cycle = logic.getClientCycle(activeClient.id); 
         const status = logic.getClientStatus(activeClient, cycle);
         
+        const clientTrash = (logic.trash || []).filter(t => t.clientId === activeClient.id).sort((a,b) => new Date(b.deletedAt) - new Date(a.deletedAt));
+        
         const shippingCost = Number(activeClient.shippingCost) || 0; 
         const shippingPaid = Number(cycle.totalShippingPaid) || 0; 
         const shippingPending = Math.max(0, shippingCost - shippingPaid); 
@@ -563,26 +563,15 @@
             });
         };
 
-        // --- CARGA DE HISTORIAL "EN VIVO" (EL SECRETO DE LA INMORTALIDAD) ---
         useEffect(() => {
             if (!activeClient || !activeClient.id) return;
-            
-            // Usamos onSnapshot en lugar de getDocs. Esto mantiene la conexión abierta.
-            // Si sales y entras, se reconecta inmediatamente.
-            const q = window.fs.query(
-                window.fs.collection(window.db, 'cancellations'), 
-                window.fs.where("clientId", "==", activeClient.id)
-            );
-
+            const q = window.fs.query(window.fs.collection(window.db, 'cancellations'), window.fs.where("clientId", "==", activeClient.id));
             const unsubscribe = window.fs.onSnapshot(q, (snapshot) => {
                 const hist = snapshot.docs.map(d => d.data());
                 hist.sort((a,b) => new Date(b.date) - new Date(a.date));
                 setCancellationHistory(hist);
-            }, (error) => {
-                console.log("Error vigilando historial:", error);
-            });
-
-            return () => unsubscribe(); // Limpieza al salir
+            }, (error) => console.log("Error vigilando historial:", error));
+            return () => unsubscribe();
         }, [activeClient.id]);
 
         const logCancellation = async (items, reason, totalAmount) => {
@@ -590,14 +579,13 @@
                 await window.fs.addDoc(window.fs.collection(window.db, 'cancellations'), {
                     clientId: activeClient.id, date: new Date().toISOString(), reason: reason, itemsCount: items.length, totalAmount: parseFloat(totalAmount) || 0, detail: items.map(i => i.item).join(", ")
                 });
-                // No necesitamos actualizar el estado manual, el onSnapshot lo hará solo
             } catch(e) {}
         };
 
-        const handleDeleteSingleSale = async (item) => { if(window.confirm(`¿Eliminar "${item.item}"?`)) { await logic.deleteSale(item); } };
+        const handleDeleteSingleSale = async (item) => { if(window.confirm(`¿Mover a papelera "${item.item}"?`)) { await logic.deleteSale(item); } };
         const handleDeleteGroup = async (items) => {
             if(!items || items.length === 0) return;
-            if(window.confirm(`⚠️ ¿ELIMINAR TODO EL LIVE (${items.length} prendas)?`)) {
+            if(window.confirm(`⚠️ ¿MOVER TODO EL LIVE (${items.length} prendas) A PAPELERA?`)) {
                 const total = items.reduce((sum, i) => sum + (i.value||0), 0);
                 await logCancellation(items, "Eliminó Live Completo", total);
                 for (const item of items) { await logic.deleteSale(item); }
@@ -607,12 +595,53 @@
             const count = cycle.cycleSales.length;
             const totalDebt = cycle.totalSales;
             if (count === 0) return alert("Nada que borrar.");
-            if (window.confirm(`🛑 ¿ANULAR PEDIDO COMPLETO?\n\n- Se borrarán ${count} prendas.\n- Se registrará: NO PAGÓ / RENUNCIÓ.\n\n¿Confirmar?`)) {
+            if (window.confirm(`🛑 ¿ANULAR PEDIDO COMPLETO?\n\n- ${count} prendas irán a Papelera.\n- Se registrará "No Pagó".\n- La deuda desaparecerá.`)) {
                 await logCancellation(cycle.cycleSales, "ANULADO: No Pagó / Renunció", totalDebt);
                 for (const item of cycle.cycleSales) { await logic.deleteSale(item); }
-                alert("✅ Pedido anulado. Stock liberado.");
+                alert("✅ Pedido anulado. Deuda borrada.");
             }
         };
+
+        const handleRestore = async (item) => { if(confirm(`¿Restaurar "${item.item}" al pedido?`)) { await logic.restoreSale(item); if(clientTrash.length <= 1) setShowTrash(false); } };
+        const handleDestroy = async (item) => { if(confirm(`🛑 ¿ELIMINAR DEFINITIVAMENTE?\n\n"${item.item}" desaparecerá para siempre.`)) { await logic.destroySale(item); if(clientTrash.length <= 1) setShowTrash(false); } };
+
+        // --- MAGIA NIGROMANTE: REVIVIR DESDE EL HISTORIAL ---
+        // --- MAGIA NIGROMANTE REFORZADA (V15.1 - Modo Diagnóstico) ---
+
+        // --- MAGIA NIGROMANTE FINAL (V16 - Versión Producción Limpia) ---
+        const handleResurrectFromHistory = async (h) => {
+            try {
+                // 1. Buscamos el dinero (Compatible con ventas viejas y nuevas)
+                const amount = parseFloat(h.totalAmount) || parseFloat(h.value) || parseFloat(h.amount) || 0;
+                
+                // 2. Validación silenciosa
+                if (amount <= 0) {
+                    alert("⚠️ No se puede recuperar: Este registro no tiene un valor monetario válido.");
+                    return;
+                }
+                
+                // 3. Confirmación clara para el usuario
+                const confirmMsg = `¿Deseas recuperar esta deuda?\n\nDetalle: ${h.reason || 'Sin detalle'}\nValor: $${amount.toFixed(2)}`;
+                if (!window.confirm(confirmMsg)) return;
+
+                // 4. Creamos la venta (Resurrección)
+                // Usamos un texto limpio para el detalle
+                const detailText = h.detail || h.reason || "Recuperado de Papelera";
+                const cleanDetail = detailText.length > 40 ? `(Recuperado) ${detailText.substring(0, 37)}...` : `(Recuperado) ${detailText}`;
+                
+                // Guardamos
+                await logic.addSale(activeClient.id, cleanDetail, amount, new Date().toISOString());
+                
+                // Mensaje de éxito corto
+                alert("✅ Deuda recuperada correctamente.");
+
+            } catch (error) {
+                console.error(error);
+                alert("Ocurrió un error de conexión. Intenta de nuevo.");
+            }
+        };
+
+
 
         const handleUpdateClient = (upd) => logic.setClients(activeClient.id, upd);
         const saveEdit = () => { handleUpdateClient({name:editName,phone:editPhone,cedula:editCedula,province:editProvince,city:editCity,address:editAddress}); setIsEditing(false); };
@@ -662,7 +691,7 @@
             );
         };
         
-        // --- TARJETA DE REPUTACIÓN (AHORA INMORTAL) ---
+        // --- TARJETA DE REPUTACIÓN (AHORA CON BOTÓN DE RESUCITAR) ---
         const ReputationCard = () => {
             if (cancellationHistory.length === 0) return null;
             const totalCancelled = cancellationHistory.reduce((acc, curr) => acc + (Number(curr.totalAmount)||0), 0);
@@ -674,7 +703,21 @@
                         <>
                             <div className="flex justify-between items-start"><div className="flex items-center gap-2 text-red-700 font-black text-sm uppercase"><Icon.Alert /> <span>Ojo: Cliente con Antecedentes</span></div><div className="flex gap-2"><span className="bg-red-200 text-red-800 text-[10px] px-2 py-1 rounded-full font-bold">{cancellationHistory.length} Cancelaciones</span><button onClick={() => setAlertMinimized(true)} className="text-red-400 hover:text-red-600 font-bold text-xl leading-none">_</button></div></div>
                             <div className="mt-2 text-xs text-slate-600">Ha cancelado un total de <span className="font-bold text-red-600">${totalCancelled.toFixed(2)}</span> en mercancía previamente.</div>
-                            <div className="mt-3 max-h-32 overflow-y-auto bg-white/50 rounded-lg p-1 space-y-1 border border-red-100">{cancellationHistory.map((h, i) => (<div key={i} className="bg-white p-2 rounded border border-red-50 text-[10px] text-slate-500 flex justify-between items-center shadow-sm"><div><span className="font-bold block text-red-700">{h.reason}</span><span className="text-[9px]">{new Date(h.date).toLocaleDateString()}</span></div><span className="font-black text-red-500">${(h.totalAmount||0).toFixed(2)}</span></div>))}</div>
+                            <div className="mt-3 max-h-40 overflow-y-auto bg-white/50 rounded-lg p-1 space-y-1 border border-red-100">
+                                {cancellationHistory.map((h, i) => (
+                                    <div key={i} className="bg-white p-2 rounded border border-red-50 text-[10px] text-slate-500 flex justify-between items-center shadow-sm">
+                                        <div className="flex-1 pr-2">
+                                            <span className="font-bold block text-red-700">{h.reason}</span>
+                                            <span className="text-[9px]">{new Date(h.date).toLocaleDateString()}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-black text-red-500">${(h.totalAmount||0).toFixed(2)}</span>
+                                            {/* BOTÓN MÁGICO PARA RECUPERAR LO BORRADO */}
+                                            <button onClick={() => handleResurrectFromHistory(h)} className="bg-emerald-500 text-white px-2 py-1 rounded text-[9px] font-bold hover:bg-emerald-600 shadow active:scale-95 transition-transform flex items-center gap-1"><Icon.Zap /> RECUPERAR</button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </>
                     )}
                 </div>
@@ -684,6 +727,7 @@
         // --- RENDER FINAL ---
         return (
             <div className="flex flex-col h-full bg-white relative">
+                {showTrash && (<div className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-4 animate-in fade-in" onClick={()=>setShowTrash(false)}><div className="bg-white w-full max-w-md rounded-3xl p-6 relative" onClick={e=>e.stopPropagation()}><h3 className="font-black text-2xl text-slate-800 mb-4 flex items-center gap-2"><Icon.Trash /> Papelera de Reciclaje</h3><div className="bg-orange-50 text-orange-800 text-xs p-3 rounded-xl mb-4 border border-orange-100">Estos ítems <b>NO suman deuda</b>. Restáuralos para cobrar o elimínalos para siempre.</div><div className="max-h-[60vh] overflow-y-auto space-y-2">{clientTrash.length===0 ? <div className="text-center text-slate-400 italic py-10">Papelera vacía 🧹</div> : clientTrash.map(item => (<div key={item.fireId} className="flex flex-col gap-2 p-3 border rounded-xl hover:bg-slate-50 bg-white shadow-sm"><div className="flex justify-between items-center"><div><div className="font-bold text-slate-700">{item.item}</div><div className="text-xs text-slate-400">Borrado: {new Date(item.deletedAt).toLocaleDateString()}</div></div><span className="font-black text-slate-400">${item.value.toFixed(2)}</span></div><div className="flex gap-2 mt-1"><button onClick={()=>handleRestore(item)} className="flex-1 bg-emerald-100 text-emerald-700 py-2 rounded-lg font-bold text-xs hover:bg-emerald-200 flex justify-center items-center gap-1"><Icon.Check /> Restaurar</button><button onClick={()=>handleDestroy(item)} className="flex-1 bg-red-100 text-red-700 py-2 rounded-lg font-bold text-xs hover:bg-red-200 flex justify-center items-center gap-1"><Icon.Trash /> Eliminar Def.</button></div></div>))}</div><button onClick={()=>setShowTrash(false)} className="mt-4 w-full py-3 bg-slate-100 text-slate-500 font-bold rounded-xl">Cerrar</button></div></div>)}
                 {showWaModal && (<div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={()=>setShowWaModal(false)}><div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]" onClick={e=>e.stopPropagation()}><div className="bg-slate-50 p-4 border-b"><div className="flex justify-between mb-4"><h3 className="font-bold text-slate-700">Generador WhatsApp</h3><button onClick={()=>setShowWaModal(false)}>×</button></div><div className="flex p-1 bg-slate-200 rounded-xl gap-1"><button onClick={()=>setWaTab('direct')} className={`flex-1 py-2 rounded-lg text-xs font-bold ${waTab==='direct'?'bg-white shadow':''}`}>A. DIRECTO</button><button onClick={()=>setWaTab('summary')} className={`flex-1 py-2 rounded-lg text-xs font-bold ${waTab==='summary'?'bg-white shadow':''}`}>B. RESUMIDO</button><button onClick={()=>setWaTab('audit')} className={`flex-1 py-2 rounded-lg text-xs font-bold ${waTab==='audit'?'bg-white shadow':''}`}>C. AUDITORÍA</button></div></div><div className="flex-1 overflow-y-auto p-4 bg-white">{waTab==='audit' && (<div className="mb-4"><div className="flex gap-2 mb-3"><button onClick={()=>setWaSubTab('full')} className={`flex-1 py-1 border rounded-lg text-xs font-bold ${waSubTab==='full'?'bg-pink-50 border-pink-500 text-pink-600':''}`}>Todo el Ciclo</button><button onClick={()=>setWaSubTab('manual')} className={`flex-1 py-1 border rounded-lg text-xs font-bold ${waSubTab==='manual'?'bg-pink-50 border-pink-500 text-pink-600':''}`}>Selección Manual</button></div>{waSubTab==='manual' && (<div className="bg-slate-50 p-3 rounded-xl border max-h-40 overflow-y-auto">{Object.entries(cycle.cycleSales.reduce((acc,s)=>{const d=new Date(safeISO(s.date)).toLocaleDateString('es-ES'); acc[d]=(acc[d]||0)+s.value; return acc;},{})).map(([d,t])=>(<label key={d} className="flex gap-2 p-2 border-b"><input type="checkbox" checked={waSelectedDates.includes(d)} onChange={e=>{if(e.target.checked)setWaSelectedDates([...waSelectedDates,d]);else setWaSelectedDates(waSelectedDates.filter(x=>x!==d))}} /><span className="text-xs font-bold flex-1">Live {d}</span><span className="text-xs">${t.toFixed(2)}</span></label>))}</div>)}</div>)}<textarea id="wa-textarea" readOnly className="w-full h-64 p-3 bg-slate-50 border rounded-xl text-xs font-mono" value={generateWaMessage()}></textarea></div><div className="p-4 border-t"><button onClick={()=>{const t=document.getElementById('wa-textarea');t.select();document.execCommand('copy');alert("Copiado!");}} className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold flex justify-center gap-2"><Icon.Copy /> COPIAR</button></div></div></div>)}
                 {editingPayment && (<div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-6" onClick={()=>setEditingPayment(null)}><div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-4" onClick={e=>e.stopPropagation()}><h3 className="font-bold text-center">Editar Pago</h3><select value={editingPayment.account||'pichincha'} onChange={e=>setEditingPayment({...editingPayment,account:e.target.value})} className="w-full p-3 bg-indigo-50 border rounded-xl font-bold"><option value="pichincha">Pichincha</option><option value="guayaquil">Guayaquil</option><option value="pacifico">Pacífico</option><option value="efectivo">Efectivo</option></select><div className="grid grid-cols-2 gap-3"><input type="number" value={editingPayment.amount} onChange={e=>setEditingPayment({...editingPayment,amount:e.target.value})} className="p-3 border rounded-xl" /><input type="date" value={editingPayment.date.split('T')[0]} onChange={e=>setEditingPayment({...editingPayment,date:e.target.value})} className="p-3 border rounded-xl" /></div><div className="flex gap-2"><button onClick={handleSavePaymentEdit} className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl">Guardar</button></div><button onClick={handleDeletePayment} className="w-full py-3 bg-red-100 text-red-600 font-bold rounded-xl border border-red-200 flex justify-center gap-2"><Icon.Trash /> ELIMINAR</button></div></div>)}
                 {editingSale && (<div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-6" onClick={()=>setEditingSale(null)}><div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-4" onClick={e=>e.stopPropagation()}><h3 className="font-bold text-center">Editar Venta</h3><input type="date" value={editingSale.date.split('T')[0]} onChange={e=>setEditingSale({...editingSale,date:e.target.value})} className="w-full p-3 border rounded-xl" /><input value={editingSale.item} onChange={e=>setEditingSale({...editingSale,item:e.target.value})} className="w-full p-3 border rounded-xl" /><input type="number" value={editingSale.value} onChange={e=>setEditingSale({...editingSale,value:e.target.value})} className="w-full p-3 border rounded-xl font-bold text-emerald-600" /><button onClick={handleSaveSaleEdit} className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl">Guardar</button></div></div>)}
@@ -695,7 +739,7 @@
 
                 <div className="flex-1 overflow-y-auto p-4 landscape:grid landscape:grid-cols-2 landscape:gap-6">
                     <div className="space-y-6 pb-6">
-                        <div className="flex justify-between items-start"><div className="flex-1">{isEditing ? (<div className="bg-slate-50 p-3 rounded-xl border"><input value={editName} onChange={e=>setEditName(e.target.value)} className="w-full border p-2 mb-2" /><button onClick={saveEdit} className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold text-xs">Guardar</button><button onClick={()=>setIsEditing(false)} className="ml-2 bg-slate-300 px-3 py-2 rounded-lg font-bold text-xs">Cancelar</button></div>) : (<><h1 className="text-4xl font-black text-slate-800">{activeClient.id}</h1><div className="text-sm text-slate-500"><span className="font-bold uppercase">{activeClient.name}</span> <button onClick={()=>setIsEditing(true)}><Icon.Edit /></button></div><div className="text-xs">📞 {activeClient.phone}</div></>)}</div><div className="flex gap-2"><button onClick={()=>setShowInvoice(true)} className="bg-indigo-100 text-indigo-700 p-2 rounded-xl"><Icon.FileText /></button><button onClick={()=>setShowWaModal(true)} className="bg-emerald-100 text-emerald-700 p-2 rounded-xl"><Icon.Message /></button></div></div>
+                        <div className="flex justify-between items-start"><div className="flex-1">{isEditing ? (<div className="bg-slate-50 p-3 rounded-xl border"><input value={editName} onChange={e=>setEditName(e.target.value)} className="w-full border p-2 mb-2" /><button onClick={saveEdit} className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold text-xs">Guardar</button><button onClick={()=>setIsEditing(false)} className="ml-2 bg-slate-300 px-3 py-2 rounded-lg font-bold text-xs">Cancelar</button></div>) : (<><h1 className="text-4xl font-black text-slate-800">{activeClient.id}</h1><div className="text-sm text-slate-500"><span className="font-bold uppercase">{activeClient.name}</span> <button onClick={()=>setIsEditing(true)}><Icon.Edit /></button></div><div className="text-xs">📞 {activeClient.phone}</div></>)}</div><div className="flex gap-2"><button onClick={()=>setShowTrash(true)} className="bg-orange-100 text-orange-700 p-2 rounded-xl flex items-center gap-1 font-bold text-[10px]"><Icon.Trash /> {clientTrash.length > 0 ? `Papelera (${clientTrash.length})` : 'Papelera'}</button><button onClick={()=>setShowInvoice(true)} className="bg-indigo-100 text-indigo-700 p-2 rounded-xl"><Icon.FileText /></button><button onClick={()=>setShowWaModal(true)} className="bg-emerald-100 text-emerald-700 p-2 rounded-xl"><Icon.Message /></button></div></div>
                         
                         <div className="flex border-b mb-2"><button onClick={()=>setTabView('cycle')} className={`flex-1 py-2 text-sm font-bold ${tabView==='cycle'?'text-indigo-600 border-b-2 border-indigo-600':'text-slate-400'}`}>Ciclo Actual</button><button onClick={()=>setTabView('history')} className={`flex-1 py-2 text-sm font-bold ${tabView==='history'?'text-indigo-600 border-b-2 border-indigo-600':'text-slate-400'}`}>Historial</button></div>
                         
@@ -732,8 +776,6 @@
             </div>
         );
     };
-
-
 
 
     // --- BODEGA INTELIGENTE V2 (Con Arrastre de Deudas y Saldos) ---
