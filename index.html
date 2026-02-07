@@ -19,7 +19,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, enableIndexedDbPersistence, updateDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        // AQUI ESTABA EL ERROR: Faltaba importar 'query' y 'where'
+        import { getFirestore, collection, addDoc, onSnapshot, enableIndexedDbPersistence, updateDoc, deleteDoc, doc, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
         const firebaseConfig = {
@@ -45,12 +46,14 @@
 
         window.db = db;
         window.auth = auth;
-        window.fs = { collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc };
+        // AQUI LAS AGREGAMOS A LA CAJA DE HERRAMIENTAS GLOBAL:
+        window.fs = { collection, addDoc, onSnapshot, updateDoc, deleteDoc, doc, query, where };
         window.fbAuth = { signInWithEmailAndPassword, onAuthStateChanged, signOut };
         
         window.firebaseLoaded = true;
         if(window.initReactApp) window.initReactApp();
     </script>
+
 
     <style>
     body { 
@@ -504,6 +507,8 @@
     // --- DETALLE CLIENTE (V10 - INTEGRACIÓN FRANCOTIRADOR) ---
     // --- DETALLE CLIENTE 10.0 (ALERTA CENTINELA: PERMANENTE Y MINIMIZABLE) ---
     // --- DETALLE CLIENTE 11.0 (ORDENAMIENTO CRONOLÓGICO PERFECTO) ---
+    // --- DETALLE CLIENTE 12.0 (CENTINELA: ALERTA INMORTAL Y EN VIVO) ---
+        // --- DETALLE CLIENTE 12.0 (CENTINELA: ALERTA INMORTAL Y EN VIVO) ---
     const ClientDetailComponent = ({ activeClient, logic, onBack }) => {
         const [payAmount, setPayAmount] = useState("");
         const [payDate, setPayDate] = useState(getToday()); 
@@ -513,8 +518,10 @@
         
         const [orderViewMode, setOrderViewMode] = useState('grouped'); 
         const [tabView, setTabView] = useState('cycle'); 
+        
+        // ESTADOS DE LA ALERTA
         const [cancellationHistory, setCancellationHistory] = useState([]);
-        const [alertMinimized, setAlertMinimized] = useState(false);
+        const [alertMinimized, setAlertMinimized] = useState(false); // Empieza expandido para que lo veas
         
         const [waTab, setWaTab] = useState('direct'); 
         const [waSubTab, setWaSubTab] = useState('full'); 
@@ -547,34 +554,35 @@
         const clientShipments = safeShipments.filter(s => s.clientId === activeClient.id);
         const displayedSales = tabView === 'history' ? cycle.allSales : cycle.cycleSales;
 
-        // --- FUNCIÓN MAESTRA DE ORDENAMIENTO (LA SOLUCIÓN) ---
-        // Ordena por Fecha DESC, y si empatan, por ID de creación (Milisegundos) DESC
         const sortSales = (salesList) => {
             return [...salesList].sort((a, b) => {
                 const dateA = new Date(safeISO(a.date));
                 const dateB = new Date(safeISO(b.date));
-                // 1. Comparar Fechas
                 if (dateB - dateA !== 0) return dateB - dateA;
-                // 2. Si es el mismo día, desempatar por ID (orden de creación)
-                // Esto asegura que lo último ingresado salga arriba
                 return (b.id || 0) - (a.id || 0);
             });
         };
 
+        // --- CARGA DE HISTORIAL "EN VIVO" (EL SECRETO DE LA INMORTALIDAD) ---
         useEffect(() => {
-            const loadHistory = async () => {
-                if (!activeClient || !activeClient.id) return;
-                try {
-                    const q = window.fs.query(window.fs.collection(window.db, 'cancellations'), window.fs.where("clientId", "==", activeClient.id));
-                    const snap = await window.fs.getDocs(q);
-                    if (!snap.empty) {
-                        const hist = snap.docs.map(d => d.data());
-                        hist.sort((a,b) => new Date(b.date) - new Date(a.date));
-                        setCancellationHistory(hist);
-                    }
-                } catch(e) {}
-            };
-            loadHistory();
+            if (!activeClient || !activeClient.id) return;
+            
+            // Usamos onSnapshot en lugar de getDocs. Esto mantiene la conexión abierta.
+            // Si sales y entras, se reconecta inmediatamente.
+            const q = window.fs.query(
+                window.fs.collection(window.db, 'cancellations'), 
+                window.fs.where("clientId", "==", activeClient.id)
+            );
+
+            const unsubscribe = window.fs.onSnapshot(q, (snapshot) => {
+                const hist = snapshot.docs.map(d => d.data());
+                hist.sort((a,b) => new Date(b.date) - new Date(a.date));
+                setCancellationHistory(hist);
+            }, (error) => {
+                console.log("Error vigilando historial:", error);
+            });
+
+            return () => unsubscribe(); // Limpieza al salir
         }, [activeClient.id]);
 
         const logCancellation = async (items, reason, totalAmount) => {
@@ -582,6 +590,7 @@
                 await window.fs.addDoc(window.fs.collection(window.db, 'cancellations'), {
                     clientId: activeClient.id, date: new Date().toISOString(), reason: reason, itemsCount: items.length, totalAmount: parseFloat(totalAmount) || 0, detail: items.map(i => i.item).join(", ")
                 });
+                // No necesitamos actualizar el estado manual, el onSnapshot lo hará solo
             } catch(e) {}
         };
 
@@ -592,7 +601,6 @@
                 const total = items.reduce((sum, i) => sum + (i.value||0), 0);
                 await logCancellation(items, "Eliminó Live Completo", total);
                 for (const item of items) { await logic.deleteSale(item); }
-                setCancellationHistory(prev => [{date: new Date().toISOString(), totalAmount: total, reason: "Eliminó Live Completo"}, ...prev]);
             }
         };
         const handleWipeCycle = async () => {
@@ -603,7 +611,6 @@
                 await logCancellation(cycle.cycleSales, "ANULADO: No Pagó / Renunció", totalDebt);
                 for (const item of cycle.cycleSales) { await logic.deleteSale(item); }
                 alert("✅ Pedido anulado. Stock liberado.");
-                setCancellationHistory(prev => [{date: new Date().toISOString(), totalAmount: totalDebt, reason: "ANULADO: No Pagó / Renunció"}, ...prev]);
             }
         };
 
@@ -619,10 +626,8 @@
         const cycleStartDateStr = cycle.lastShipmentDate.toLocaleDateString() === '12/31/1969' ? 'Inicio' : new Date(safeISO(cycle.lastShipmentDate)).toLocaleDateString();
         
         const generateWaMessage = () => { try { 
-            // Usamos el sortSales aquí también para que el WA salga ordenado
             let salesToShow = (waTab==='audit' && waSubTab==='manual') ? cycle.cycleSales.filter(s => waSelectedDates.includes(new Date(safeISO(s.date)).toLocaleDateString('es-ES'))) : cycle.cycleSales; 
-            salesToShow = sortSales(salesToShow).reverse(); // En WA, cronológico ASC (lo viejo primero) suele leerse mejor
-            
+            salesToShow = sortSales(salesToShow).reverse();
             const groups = {}; salesToShow.forEach(s => { const k = new Date(safeISO(s.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'numeric' }); if(!groups[k]) groups[k]={count:0,total:0}; groups[k].count++; groups[k].total+=s.value; }); const totalSalesShown = salesToShow.reduce((acc, s) => acc + s.value, 0); const finalBalance = totalSalesShown - (cycle.totalNormalPaid || 0); const shipPending = activeClient.deliveryMethod ? Math.max(0, shippingCost - shippingPaid) : 0; const grandTotal = Math.max(0, finalBalance + shipPending); let msg = `Hola ${activeClient.name} (${activeClient.id}) 👋\n\n`; if (waTab === 'direct') { msg += `*ESTADO DE CUENTA RAPIDO*\n💰 *TOTAL A TRANSFERIR: $${grandTotal.toFixed(2)}*\n`; } else { msg += `*RESUMEN DE CUENTA*\n*DETALLE DE LIVES:*\n`; Object.entries(groups).forEach(([d, v]) => msg += `🗓️ ${capitalizeFirst(d)}\n   ▪️ ${v.count} prendas ...... $${v.total.toFixed(2)}\n`); msg += `----------------------------------\nSubtotal Ropa: $${totalSalesShown.toFixed(2)}\n`; if(cycle.allPayments.length>0) { msg += `*ABONOS:*\n`; cycle.allPayments.filter(p=>!p.detail.includes("Envío")).forEach(p=>msg+=`   ✅ $${p.amount.toFixed(2)} (${new Date(safeISO(p.date)).toLocaleDateString()})\n`); msg+=`Total Abonos: -$${(cycle.totalNormalPaid||0).toFixed(2)}\n`; } msg += `\n📊 *BALANCE FINAL:*\n   Saldo Ropa: $${finalBalance.toFixed(2)}\n`; if(activeClient.deliveryMethod) msg += shipPending>0 ? `   Envío (${activeClient.deliveryMethod}): $${shipPending.toFixed(2)}\n` : `   Envío: PAGADO ✅\n`; msg += `\n💰 *TOTAL A TRANSFERIR: $${grandTotal.toFixed(2)}*\n`; } if(grandTotal>0.01) msg += `\n----------------------------------\n🏦 *DATOS BANCARIOS:*\nBanco Pichincha\nCuenta Ahorros\n2204226498\nBryan David Suárez\nCI: 1003300751\n\n📸 Foto del comprobante por favor.\n`; else msg += `\n🎉 *¡TU CUENTA ESTÁ AL DÍA!*\n`; return msg; } catch(e) { return "Error generando mensaje."; } };
 
         // --- SUB-COMPONENTES VISUALES ---
@@ -643,17 +648,13 @@
 
         const SalesListRenderer = ({ sales, shipments=[], isHistory=false, viewMode, onDeleteSale, onEditSale, onDeleteGroup }) => {
             const safeSales = useMemo(() => Array.isArray(sales) ? sales : [], [sales]);
-            
-            // AQUI USAMOS LA MAGIA DEL ORDENAMIENTO (FECHA + ID)
             const sortedSales = useMemo(() => sortSales(safeSales), [safeSales]);
 
             if (!isHistory && viewMode === 'grouped') {
-                // Agrupamos manteniendo el orden interno
                 const grouped = sortedSales.reduce((acc, s) => { 
                     const k = capitalizeFirst(new Date(safeISO(s.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' })); 
                     if(!acc[k]) acc[k] = []; acc[k].push(s); return acc; 
                 }, {});
-                
                 return (<div className="overflow-y-auto p-2 pb-20">{Object.entries(grouped).map(([key, items], idx) => (<SalesAccordionGroup key={idx} dateKey={key} items={items} onDelete={onDeleteSale} onEdit={onEditSale} onDeleteGroup={onDeleteGroup} />))}{safeSales.length === 0 && <div className="text-center p-8 text-slate-300">Sin ventas activas.</div>}</div>);
             }
             return (
@@ -661,7 +662,7 @@
             );
         };
         
-        // --- TARJETA DE REPUTACIÓN ---
+        // --- TARJETA DE REPUTACIÓN (AHORA INMORTAL) ---
         const ReputationCard = () => {
             if (cancellationHistory.length === 0) return null;
             const totalCancelled = cancellationHistory.reduce((acc, curr) => acc + (Number(curr.totalAmount)||0), 0);
@@ -731,8 +732,6 @@
             </div>
         );
     };
-
-
 
 
 
