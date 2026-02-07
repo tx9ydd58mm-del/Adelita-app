@@ -502,6 +502,8 @@
     // --- DETALLE CLIENTE (Mejorado con WhatsApp + Envíos + Historial ACORDEÓN) ---
         // --- DETALLE CLIENTE 7.0 (FIX: ERROR HISTORIAL Y BOTONES DE BORRADO) ---
     // --- DETALLE CLIENTE (V10 - INTEGRACIÓN FRANCOTIRADOR) ---
+    // --- DETALLE CLIENTE 10.0 (ALERTA CENTINELA: PERMANENTE Y MINIMIZABLE) ---
+    // --- DETALLE CLIENTE 11.0 (ORDENAMIENTO CRONOLÓGICO PERFECTO) ---
     const ClientDetailComponent = ({ activeClient, logic, onBack }) => {
         const [payAmount, setPayAmount] = useState("");
         const [payDate, setPayDate] = useState(getToday()); 
@@ -512,6 +514,7 @@
         const [orderViewMode, setOrderViewMode] = useState('grouped'); 
         const [tabView, setTabView] = useState('cycle'); 
         const [cancellationHistory, setCancellationHistory] = useState([]);
+        const [alertMinimized, setAlertMinimized] = useState(false);
         
         const [waTab, setWaTab] = useState('direct'); 
         const [waSubTab, setWaSubTab] = useState('full'); 
@@ -544,7 +547,20 @@
         const clientShipments = safeShipments.filter(s => s.clientId === activeClient.id);
         const displayedSales = tabView === 'history' ? cycle.allSales : cycle.cycleSales;
 
-        // CARGA SEGURA DE HISTORIAL
+        // --- FUNCIÓN MAESTRA DE ORDENAMIENTO (LA SOLUCIÓN) ---
+        // Ordena por Fecha DESC, y si empatan, por ID de creación (Milisegundos) DESC
+        const sortSales = (salesList) => {
+            return [...salesList].sort((a, b) => {
+                const dateA = new Date(safeISO(a.date));
+                const dateB = new Date(safeISO(b.date));
+                // 1. Comparar Fechas
+                if (dateB - dateA !== 0) return dateB - dateA;
+                // 2. Si es el mismo día, desempatar por ID (orden de creación)
+                // Esto asegura que lo último ingresado salga arriba
+                return (b.id || 0) - (a.id || 0);
+            });
+        };
+
         useEffect(() => {
             const loadHistory = async () => {
                 if (!activeClient || !activeClient.id) return;
@@ -569,44 +585,28 @@
             } catch(e) {}
         };
 
-        // --- BORRADO (Enviando ITEM completo para buscar por ID interno) ---
-        const handleDeleteSingleSale = async (item) => {
-            if(window.confirm(`¿Eliminar "${item.item}"?`)) {
-                await logic.deleteSale(item); // <--- Enviamos todo el objeto
-            }
-        };
-
+        const handleDeleteSingleSale = async (item) => { if(window.confirm(`¿Eliminar "${item.item}"?`)) { await logic.deleteSale(item); } };
         const handleDeleteGroup = async (items) => {
             if(!items || items.length === 0) return;
             if(window.confirm(`⚠️ ¿ELIMINAR TODO EL LIVE (${items.length} prendas)?`)) {
                 const total = items.reduce((sum, i) => sum + (i.value||0), 0);
                 await logCancellation(items, "Eliminó Live Completo", total);
-                
-                // Iteramos y mandamos el objeto completo
-                for (const item of items) { 
-                    await logic.deleteSale(item); 
-                }
+                for (const item of items) { await logic.deleteSale(item); }
                 setCancellationHistory(prev => [{date: new Date().toISOString(), totalAmount: total, reason: "Eliminó Live Completo"}, ...prev]);
             }
         };
-
         const handleWipeCycle = async () => {
             const count = cycle.cycleSales.length;
             const totalDebt = cycle.totalSales;
             if (count === 0) return alert("Nada que borrar.");
-            
             if (window.confirm(`🛑 ¿ANULAR PEDIDO COMPLETO?\n\n- Se borrarán ${count} prendas.\n- Se registrará: NO PAGÓ / RENUNCIÓ.\n\n¿Confirmar?`)) {
                 await logCancellation(cycle.cycleSales, "ANULADO: No Pagó / Renunció", totalDebt);
-                
-                for (const item of cycle.cycleSales) { 
-                    await logic.deleteSale(item); 
-                }
+                for (const item of cycle.cycleSales) { await logic.deleteSale(item); }
                 alert("✅ Pedido anulado. Stock liberado.");
                 setCancellationHistory(prev => [{date: new Date().toISOString(), totalAmount: totalDebt, reason: "ANULADO: No Pagó / Renunció"}, ...prev]);
             }
         };
 
-        // MANEJADORES
         const handleUpdateClient = (upd) => logic.setClients(activeClient.id, upd);
         const saveEdit = () => { handleUpdateClient({name:editName,phone:editPhone,cedula:editCedula,province:editProvince,city:editCity,address:editAddress}); setIsEditing(false); };
         const handleSaveSaleEdit = async () => { if(!editingSale) return; try{ await window.fs.updateDoc(window.fs.doc(window.db,"sales",editingSale.fireId), { item: editingSale.item, value: parseFloat(editingSale.value), date: safeISO(editingSale.date) }); setEditingSale(null); } catch(e){ alert(e.message); } };
@@ -618,7 +618,12 @@
         const handleRouteSelect = (r) => { let c = 0; if(r==='Servientrega') c=5; if(r==='Domicilio') c=3; if(r==='Ibarra') c=(cycle.totalSales>=25?0:3); handleUpdateClient({ deliveryMethod: r, shippingCost: c }); };
         const cycleStartDateStr = cycle.lastShipmentDate.toLocaleDateString() === '12/31/1969' ? 'Inicio' : new Date(safeISO(cycle.lastShipmentDate)).toLocaleDateString();
         
-        const generateWaMessage = () => { try { let salesToShow = (waTab==='audit' && waSubTab==='manual') ? cycle.cycleSales.filter(s => waSelectedDates.includes(new Date(safeISO(s.date)).toLocaleDateString('es-ES'))) : cycle.cycleSales; salesToShow.sort((a,b) => new Date(safeISO(a.date)) - new Date(safeISO(b.date))); const groups = {}; salesToShow.forEach(s => { const k = new Date(safeISO(s.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'numeric' }); if(!groups[k]) groups[k]={count:0,total:0}; groups[k].count++; groups[k].total+=s.value; }); const totalSalesShown = salesToShow.reduce((acc, s) => acc + s.value, 0); const finalBalance = totalSalesShown - (cycle.totalNormalPaid || 0); const shipPending = activeClient.deliveryMethod ? Math.max(0, shippingCost - shippingPaid) : 0; const grandTotal = Math.max(0, finalBalance + shipPending); let msg = `Hola ${activeClient.name} (${activeClient.id}) 👋\n\n`; if (waTab === 'direct') { msg += `*ESTADO DE CUENTA RAPIDO*\n💰 *TOTAL A TRANSFERIR: $${grandTotal.toFixed(2)}*\n`; } else { msg += `*RESUMEN DE CUENTA*\n*DETALLE DE LIVES:*\n`; Object.entries(groups).forEach(([d, v]) => msg += `🗓️ ${capitalizeFirst(d)}\n   ▪️ ${v.count} prendas ...... $${v.total.toFixed(2)}\n`); msg += `----------------------------------\nSubtotal Ropa: $${totalSalesShown.toFixed(2)}\n`; if(cycle.allPayments.length>0) { msg += `*ABONOS:*\n`; cycle.allPayments.filter(p=>!p.detail.includes("Envío")).forEach(p=>msg+=`   ✅ $${p.amount.toFixed(2)} (${new Date(safeISO(p.date)).toLocaleDateString()})\n`); msg+=`Total Abonos: -$${(cycle.totalNormalPaid||0).toFixed(2)}\n`; } msg += `\n📊 *BALANCE FINAL:*\n   Saldo Ropa: $${finalBalance.toFixed(2)}\n`; if(activeClient.deliveryMethod) msg += shipPending>0 ? `   Envío (${activeClient.deliveryMethod}): $${shipPending.toFixed(2)}\n` : `   Envío: PAGADO ✅\n`; msg += `\n💰 *TOTAL A TRANSFERIR: $${grandTotal.toFixed(2)}*\n`; } if(grandTotal>0.01) msg += `\n----------------------------------\n🏦 *DATOS BANCARIOS:*\nBanco Pichincha\nCuenta Ahorros\n2204226498\nBryan David Suárez\nCI: 1003300751\n\n📸 Foto del comprobante por favor.\n`; else msg += `\n🎉 *¡TU CUENTA ESTÁ AL DÍA!*\n`; return msg; } catch(e) { return "Error generando mensaje."; } };
+        const generateWaMessage = () => { try { 
+            // Usamos el sortSales aquí también para que el WA salga ordenado
+            let salesToShow = (waTab==='audit' && waSubTab==='manual') ? cycle.cycleSales.filter(s => waSelectedDates.includes(new Date(safeISO(s.date)).toLocaleDateString('es-ES'))) : cycle.cycleSales; 
+            salesToShow = sortSales(salesToShow).reverse(); // En WA, cronológico ASC (lo viejo primero) suele leerse mejor
+            
+            const groups = {}; salesToShow.forEach(s => { const k = new Date(safeISO(s.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'numeric' }); if(!groups[k]) groups[k]={count:0,total:0}; groups[k].count++; groups[k].total+=s.value; }); const totalSalesShown = salesToShow.reduce((acc, s) => acc + s.value, 0); const finalBalance = totalSalesShown - (cycle.totalNormalPaid || 0); const shipPending = activeClient.deliveryMethod ? Math.max(0, shippingCost - shippingPaid) : 0; const grandTotal = Math.max(0, finalBalance + shipPending); let msg = `Hola ${activeClient.name} (${activeClient.id}) 👋\n\n`; if (waTab === 'direct') { msg += `*ESTADO DE CUENTA RAPIDO*\n💰 *TOTAL A TRANSFERIR: $${grandTotal.toFixed(2)}*\n`; } else { msg += `*RESUMEN DE CUENTA*\n*DETALLE DE LIVES:*\n`; Object.entries(groups).forEach(([d, v]) => msg += `🗓️ ${capitalizeFirst(d)}\n   ▪️ ${v.count} prendas ...... $${v.total.toFixed(2)}\n`); msg += `----------------------------------\nSubtotal Ropa: $${totalSalesShown.toFixed(2)}\n`; if(cycle.allPayments.length>0) { msg += `*ABONOS:*\n`; cycle.allPayments.filter(p=>!p.detail.includes("Envío")).forEach(p=>msg+=`   ✅ $${p.amount.toFixed(2)} (${new Date(safeISO(p.date)).toLocaleDateString()})\n`); msg+=`Total Abonos: -$${(cycle.totalNormalPaid||0).toFixed(2)}\n`; } msg += `\n📊 *BALANCE FINAL:*\n   Saldo Ropa: $${finalBalance.toFixed(2)}\n`; if(activeClient.deliveryMethod) msg += shipPending>0 ? `   Envío (${activeClient.deliveryMethod}): $${shipPending.toFixed(2)}\n` : `   Envío: PAGADO ✅\n`; msg += `\n💰 *TOTAL A TRANSFERIR: $${grandTotal.toFixed(2)}*\n`; } if(grandTotal>0.01) msg += `\n----------------------------------\n🏦 *DATOS BANCARIOS:*\nBanco Pichincha\nCuenta Ahorros\n2204226498\nBryan David Suárez\nCI: 1003300751\n\n📸 Foto del comprobante por favor.\n`; else msg += `\n🎉 *¡TU CUENTA ESTÁ AL DÍA!*\n`; return msg; } catch(e) { return "Error generando mensaje."; } };
 
         // --- SUB-COMPONENTES VISUALES ---
         const SalesAccordionGroup = ({ dateKey, items, onDelete, onEdit, onDeleteGroup }) => {
@@ -638,12 +643,21 @@
 
         const SalesListRenderer = ({ sales, shipments=[], isHistory=false, viewMode, onDeleteSale, onEditSale, onDeleteGroup }) => {
             const safeSales = useMemo(() => Array.isArray(sales) ? sales : [], [sales]);
+            
+            // AQUI USAMOS LA MAGIA DEL ORDENAMIENTO (FECHA + ID)
+            const sortedSales = useMemo(() => sortSales(safeSales), [safeSales]);
+
             if (!isHistory && viewMode === 'grouped') {
-                const grouped = [...safeSales].sort((a, b) => new Date(safeISO(b.date)) - new Date(safeISO(a.date))).reduce((acc, s) => { const k = capitalizeFirst(new Date(safeISO(s.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' })); if(!acc[k]) acc[k] = []; acc[k].push(s); return acc; }, {});
+                // Agrupamos manteniendo el orden interno
+                const grouped = sortedSales.reduce((acc, s) => { 
+                    const k = capitalizeFirst(new Date(safeISO(s.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' })); 
+                    if(!acc[k]) acc[k] = []; acc[k].push(s); return acc; 
+                }, {});
+                
                 return (<div className="overflow-y-auto p-2 pb-20">{Object.entries(grouped).map(([key, items], idx) => (<SalesAccordionGroup key={idx} dateKey={key} items={items} onDelete={onDeleteSale} onEdit={onEditSale} onDeleteGroup={onDeleteGroup} />))}{safeSales.length === 0 && <div className="text-center p-8 text-slate-300">Sin ventas activas.</div>}</div>);
             }
             return (
-                <div className="overflow-y-auto p-2 pb-20">{safeSales.sort((a,b) => new Date(safeISO(b.date)) - new Date(safeISO(a.date))).map((s, idx) => (<div key={idx} className="flex justify-between items-center p-3 border-b border-slate-50 text-sm"><div className="flex-1"><span className="block font-bold text-slate-700">{s.item}</span><span className="text-[10px] text-slate-400">📅 {new Date(safeISO(s.date)).toLocaleDateString()}</span></div><span className="font-bold text-slate-800 mr-3">${(Number(s.value)||0).toFixed(2)}</span><div className="flex gap-2"><button onClick={()=>onEditSale(s)} className="w-9 h-9 flex items-center justify-center text-indigo-500 bg-indigo-50 border border-indigo-100 rounded-xl active:scale-95 shadow-sm"><Icon.Edit /></button><button onClick={()=>onDeleteSale(s)} className="w-9 h-9 flex items-center justify-center text-red-500 bg-red-50 border border-red-100 rounded-xl active:scale-95 shadow-sm"><Icon.Trash /></button></div></div>))}{safeSales.length === 0 && <div className="text-center p-8 text-slate-300">Historial vacío.</div>}</div>
+                <div className="overflow-y-auto p-2 pb-20">{sortedSales.map((s, idx) => (<div key={idx} className="flex justify-between items-center p-3 border-b border-slate-50 text-sm"><div className="flex-1"><span className="block font-bold text-slate-700">{s.item}</span><span className="text-[10px] text-slate-400">📅 {new Date(safeISO(s.date)).toLocaleDateString()}</span></div><span className="font-bold text-slate-800 mr-3">${(Number(s.value)||0).toFixed(2)}</span><div className="flex gap-2"><button onClick={()=>onEditSale(s)} className="w-9 h-9 flex items-center justify-center text-indigo-500 bg-indigo-50 border border-indigo-100 rounded-xl active:scale-95 shadow-sm"><Icon.Edit /></button><button onClick={()=>onDeleteSale(s)} className="w-9 h-9 flex items-center justify-center text-red-500 bg-red-50 border border-red-100 rounded-xl active:scale-95 shadow-sm"><Icon.Trash /></button></div></div>))}{safeSales.length === 0 && <div className="text-center p-8 text-slate-300">Historial vacío.</div>}</div>
             );
         };
         
@@ -652,10 +666,16 @@
             if (cancellationHistory.length === 0) return null;
             const totalCancelled = cancellationHistory.reduce((acc, curr) => acc + (Number(curr.totalAmount)||0), 0);
             return (
-                <div className="mx-4 mt-2 bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl animate-in slide-in-from-top shadow-sm">
-                    <div className="flex justify-between items-start"><div className="flex items-center gap-2 text-red-700 font-black text-sm uppercase"><Icon.Alert /> <span>Ojo: Cliente con Antecedentes</span></div><span className="bg-red-200 text-red-800 text-[10px] px-2 py-1 rounded-full font-bold">{cancellationHistory.length} Cancelaciones</span></div>
-                    <div className="mt-2 text-xs text-slate-600">Ha cancelado un total de <span className="font-bold text-red-600">${totalCancelled.toFixed(2)}</span> en mercancía previamente.</div>
-                    <details className="mt-2"><summary className="text-[10px] font-bold text-slate-400 cursor-pointer hover:text-slate-600">VER DETALLE HISTORIAL</summary><div className="mt-2 space-y-2 max-h-32 overflow-y-auto">{cancellationHistory.map((h, i) => (<div key={i} className="bg-white p-2 rounded border text-[10px] text-slate-500"><div className="flex justify-between font-bold"><span>{new Date(h.date).toLocaleDateString()}</span><span>${(h.totalAmount||0).toFixed(2)}</span></div><div className="italic text-red-400">{h.reason}</div></div>))}</div></details>
+                <div className={`mx-4 mt-2 transition-all duration-300 shadow-sm ${alertMinimized ? 'bg-red-500 rounded-lg p-2' : 'bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl'}`}>
+                    {alertMinimized ? (
+                        <div className="flex justify-between items-center text-white" onClick={() => setAlertMinimized(false)}><div className="flex items-center gap-2 font-bold text-xs uppercase cursor-pointer"><Icon.Alert /> <span>¡Cuidado! Historial negativo ({cancellationHistory.length})</span></div><button className="text-white text-xs font-bold bg-white/20 px-2 py-1 rounded">VER</button></div>
+                    ) : (
+                        <>
+                            <div className="flex justify-between items-start"><div className="flex items-center gap-2 text-red-700 font-black text-sm uppercase"><Icon.Alert /> <span>Ojo: Cliente con Antecedentes</span></div><div className="flex gap-2"><span className="bg-red-200 text-red-800 text-[10px] px-2 py-1 rounded-full font-bold">{cancellationHistory.length} Cancelaciones</span><button onClick={() => setAlertMinimized(true)} className="text-red-400 hover:text-red-600 font-bold text-xl leading-none">_</button></div></div>
+                            <div className="mt-2 text-xs text-slate-600">Ha cancelado un total de <span className="font-bold text-red-600">${totalCancelled.toFixed(2)}</span> en mercancía previamente.</div>
+                            <div className="mt-3 max-h-32 overflow-y-auto bg-white/50 rounded-lg p-1 space-y-1 border border-red-100">{cancellationHistory.map((h, i) => (<div key={i} className="bg-white p-2 rounded border border-red-50 text-[10px] text-slate-500 flex justify-between items-center shadow-sm"><div><span className="font-bold block text-red-700">{h.reason}</span><span className="text-[9px]">{new Date(h.date).toLocaleDateString()}</span></div><span className="font-black text-red-500">${(h.totalAmount||0).toFixed(2)}</span></div>))}</div>
+                        </>
+                    )}
                 </div>
             );
         };
@@ -711,6 +731,8 @@
             </div>
         );
     };
+
+
 
 
 
@@ -1042,40 +1064,190 @@
 
 
 
+    // --- LIVE VIEW 2.0: MULTI-CARGA (CARRITO RAPIDO) ---
     const LiveView = ({ logic }) => {
-        const [search, setSearch] = useState(""); const [found, setFound] = useState(null); const [item, setItem] = useState(""); const [price, setPrice] = useState(""); const [qty, setQty] = useState(1); const [msg, setMsg] = useState(null); const [suggestions, setSuggestions] = useState([]); const [saleDate, setSaleDate] = useState(getToday());
-        const ITEMS_COMMON = [ "Prenda", "Combo", "Blusa", "Pantalón", "Vestido", "Camiseta", "Falda", "Short", "Chaqueta"]; const QTY_OPTIONS = [1, 2, 3, 4, 5, 10]; const PRICE_OPTIONS = ["0.25", "0.50", "0.75", "1.00", "1.25", "1.50", "1.75", "2.00"];
+        const [search, setSearch] = useState(""); 
+        const [found, setFound] = useState(null); 
+        
+        // Datos de la prenda actual
+        const [item, setItem] = useState(""); 
+        const [price, setPrice] = useState(""); 
+        const [qty, setQty] = useState(1); 
+        
+        // Carrito temporal (Multi-items)
+        const [cart, setCart] = useState([]); 
+        
+        const [msg, setMsg] = useState(null); 
+        const [suggestions, setSuggestions] = useState([]); 
+        const [saleDate, setSaleDate] = useState(getToday());
+
+        const ITEMS_COMMON = [ "Prenda", "Combo", "Blusa", "Pantalón", "Vestido", "Camiseta", "Falda", "Short", "Chaqueta"]; 
+        const QTY_OPTIONS = [1, 2, 3, 4, 5, 10]; 
+        const PRICE_OPTIONS = ["0.25", "0.50", "0.75", "1.00", "1.25", "1.50", "1.75", "2.00", "3.00", "5.00"];
 
         useEffect(() => {
             if (search.length > 0) { const matches = logic.clients.filter(c => c.id.toLowerCase().startsWith(search.toLowerCase()) || c.name.toLowerCase().includes(search.toLowerCase())).slice(0, 3); setSuggestions(matches); } else { setSuggestions([]); }
             const exactMatch = logic.clients.find(c => c.id.toLowerCase() === search.toLowerCase()); setFound(exactMatch || null);
         }, [search, logic.clients]);
 
-        const selectSuggestion = (client) => { setSearch(client.id); setFound(client); setSuggestions([]); };
-        const handleSubmit = (e) => {
-            e.preventDefault(); if (!found || !item || !price) return; const quantity = parseInt(qty) || 1; const finalDate = smartDate(saleDate, logic.getClientCycle(found.id).lastShipmentDate); 
-            logic.addBatchSales(found.id, item, price, finalDate, quantity); setMsg(`Venta: ${quantity} x ${item} ($${price} c/u)`); setTimeout(() => setMsg(null), 2000); setItem(""); setPrice(""); setSearch(""); setFound(null); setSuggestions([]); setQty(1);
+        const selectSuggestion = (client) => { setSearch(client.id); setFound(client); setSuggestions([]); setCart([]); };
+
+        // 1. AGREGAR A LA LISTA TEMPORAL (Sin guardar en DB todavía)
+        const addToCart = () => {
+            if (!item || !price) return;
+            const newItem = { 
+                item, 
+                price: parseFloat(price), 
+                qty: parseInt(qty) || 1,
+                id: Date.now() // ID temporal para borrar si me equivoco
+            };
+            setCart([...cart, newItem]);
+            // Limpiamos solo los campos para meter el siguiente
+            setItem(""); setPrice(""); setQty(1);
+        };
+
+        // 2. BORRAR ITEM DEL CARRITO (Por si me equivoqué)
+        const removeFromCart = (tempId) => {
+            setCart(cart.filter(x => x.id !== tempId));
+        };
+
+        // 3. GUARDAR TODO EN FIREBASE (FINALIZAR)
+        const handleFinalize = (e) => {
+            e.preventDefault(); 
+            if (!found) return;
+
+            // Combinamos lo que está en el carrito + lo que está en los inputs (si hay algo a medio escribir)
+            const itemsToSave = [...cart];
+            if (item && price) {
+                itemsToSave.push({ item, price: parseFloat(price), qty: parseInt(qty) || 1 });
+            }
+
+            if (itemsToSave.length === 0) return alert("Nada que guardar.");
+
+            const finalDate = smartDate(saleDate, logic.getClientCycle(found.id).lastShipmentDate); 
+
+            // Guardamos todo en lote
+            itemsToSave.forEach(line => {
+                logic.addBatchSales(found.id, line.item, line.price, finalDate, line.qty);
+            });
+
+            // Feedback visual
+            const totalItems = itemsToSave.reduce((sum, i) => sum + i.qty, 0);
+            const totalMoney = itemsToSave.reduce((sum, i) => sum + (i.price * i.qty), 0);
+            
+            setMsg(`✅ ¡ÉXITO! Guardadas ${totalItems} prendas ($${totalMoney.toFixed(2)}) para ${found.id}`);
+            setTimeout(() => setMsg(null), 3000);
+
+            // Reset Total
+            setItem(""); setPrice(""); setSearch(""); setFound(null); setSuggestions([]); setQty(1); setCart([]);
         };
 
         return (
             <div className="h-full flex flex-col bg-[#f0f2f5]">
                 <div className="bg-white p-4 shadow-sm z-30 border-b border-slate-100 rounded-b-[30px] mb-2">
-                    <div className="flex justify-between items-center mb-4"><div className="flex flex-col"><h2 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-indigo-600 tracking-tighter">ADELITA STORE</h2><span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase ml-0.5">Live Sale System</span></div><div className="flex flex-col items-end"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Fecha Venta</label><input type="date" value={saleDate} onChange={e => setSaleDate(e.target.value)} className="bg-slate-50 text-slate-700 font-bold text-xs p-2 rounded-xl border border-slate-200 outline-none w-28 text-center shadow-sm" /></div></div>
-                    <div className="relative"><input value={search} onChange={e => setSearch(e.target.value)} className="w-full text-center text-xl font-mono uppercase bg-slate-50 border-2 border-slate-200 rounded-2xl p-4 focus:border-pink-500 outline-none transition-all font-bold text-slate-700 placeholder:text-slate-300 shadow-inner" placeholder="BUSCAR CLIENTE (ID / NOMBRE)" autoFocus />{suggestions.length > 0 && !found && (<div className="absolute top-full left-0 w-full mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl z-40 overflow-hidden">{suggestions.map(s => (<div key={s.id} onClick={() => selectSuggestion(s)} className="p-4 border-b border-slate-50 hover:bg-slate-50 flex justify-between items-center cursor-pointer"><span className="font-bold text-slate-800 text-lg">{s.id}</span><span className="text-sm text-slate-500 font-medium">{s.name}</span></div>))}</div>)}</div>
-                    {found && (<div className="mt-3 bg-gradient-to-r from-emerald-500 to-teal-500 p-3 rounded-2xl text-center shadow-lg animate-in fade-in slide-in-from-top-4 mb-1 transform transition-all"><div className="font-black text-white text-xl tracking-tight">{found.name}</div><div className="text-white/80 text-xs font-bold tracking-widest">{found.id}</div></div>)}
+                    <div className="flex justify-between items-center mb-4">
+                        <div className="flex flex-col"><h2 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-indigo-600 tracking-tighter">ADELITA STORE</h2><span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase ml-0.5">Live Sale System</span></div>
+                        <div className="flex flex-col items-end"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Fecha Venta</label><input type="date" value={saleDate} onChange={e => setSaleDate(e.target.value)} className="bg-slate-50 text-slate-700 font-bold text-xs p-2 rounded-xl border border-slate-200 outline-none w-28 text-center shadow-sm" /></div>
+                    </div>
+                    
+                    <div className="relative">
+                        <input value={search} onChange={e => setSearch(e.target.value)} className="w-full text-center text-xl font-mono uppercase bg-slate-50 border-2 border-slate-200 rounded-2xl p-4 focus:border-pink-500 outline-none transition-all font-bold text-slate-700 placeholder:text-slate-300 shadow-inner" placeholder="BUSCAR CLIENTE (ID / NOMBRE)" autoFocus />
+                        {suggestions.length > 0 && !found && (<div className="absolute top-full left-0 w-full mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl z-40 overflow-hidden">{suggestions.map(s => (<div key={s.id} onClick={() => selectSuggestion(s)} className="p-4 border-b border-slate-50 hover:bg-slate-50 flex justify-between items-center cursor-pointer"><span className="font-bold text-slate-800 text-lg">{s.id}</span><span className="text-sm text-slate-500 font-medium">{s.name}</span></div>))}</div>)}
+                    </div>
+                    
+                    {found && (
+                        <div className="mt-3 space-y-2">
+                            {/* CABECERA CLIENTE */}
+                            <div className="bg-gradient-to-r from-emerald-500 to-teal-500 p-3 rounded-2xl text-center shadow-lg animate-in fade-in slide-in-from-top-4 transform transition-all relative">
+                                <div className="font-black text-white text-xl tracking-tight">{found.name}</div>
+                                <div className="text-white/80 text-xs font-bold tracking-widest">{found.id}</div>
+                                <button onClick={() => { setFound(null); setSearch(""); setCart([]); }} className="absolute right-3 top-3 text-white/50 hover:text-white font-bold text-xs">CAMBIAR</button>
+                            </div>
+
+                            {/* --- LISTA TEMPORAL (CARRITO) --- */}
+                            {cart.length > 0 && (
+                                <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-3 animate-in slide-in-from-top-2">
+                                    <div className="text-[10px] font-bold text-indigo-400 uppercase mb-2 flex justify-between">
+                                        <span>Items por guardar:</span>
+                                        <span>Total: ${cart.reduce((acc, i) => acc + (i.price * i.qty), 0).toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex gap-2 overflow-x-auto pb-1">
+                                        {cart.map((c, i) => (
+                                            <div key={i} className="flex-shrink-0 bg-white border border-indigo-100 px-3 py-2 rounded-xl shadow-sm flex items-center gap-2">
+                                                <div>
+                                                    <div className="font-bold text-xs text-slate-700">{c.qty}x {c.item}</div>
+                                                    <div className="text-[10px] text-emerald-600 font-bold">${c.price.toFixed(2)} c/u</div>
+                                                </div>
+                                                <button onClick={() => removeFromCart(c.id)} className="text-red-400 hover:text-red-600 font-bold px-1">×</button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
+
                 <div className="flex-1 overflow-y-auto p-4 pt-2">
                     {msg && <div className="bg-emerald-600 text-white p-4 rounded-2xl mb-6 text-center font-bold animate-bounce shadow-xl mx-2 border-2 border-emerald-400">{msg}</div>}
+                    
                     <div className="grid grid-cols-1 landscape:grid-cols-3 gap-4 h-full">
-                        <div className="pos-card-3d delay-1"><label className="pos-label-giant"><Icon.Tag /> Prenda</label><input value={item} onChange={e => setItem(e.target.value)} className="pos-input-modern mb-4" placeholder="NOMBRE..." /><div className="pos-scroll-area">{ITEMS_COMMON.map(it => (<div key={it} className="btn-3d-wrapper"><button onClick={() => setItem(it)} className={`btn-3d w-full h-full ${item === it ? 'active-pink' : ''}`}>{it}</button></div>))}</div></div>
-                        <div className="pos-card-3d delay-2"><label className="pos-label-giant"><Icon.Hash /> Cantidad</label><input type="number" inputMode="numeric" pattern="[0-9]*" value={qty} onChange={e => setQty(parseInt(e.target.value) || '')} className="pos-input-modern mb-4" placeholder="#" /><div className="pos-scroll-area">{QTY_OPTIONS.map(q => (<div key={q} className="btn-3d-wrapper"><button onClick={() => setQty(q)} className={`btn-3d w-full h-full ${qty === q ? 'active-indigo' : ''}`}>{q}</button></div>))}</div></div>
-                        <div className="pos-card-3d delay-3"><label className="pos-label-giant"><Icon.Dollar /> Precio Unitario</label><input type="number" inputMode="decimal" step="0.01" value={price} onChange={e => setPrice(e.target.value)} className="pos-input-modern mb-4 text-emerald-600" placeholder="$0.00" /><div className="pos-scroll-area">{PRICE_OPTIONS.map(p => (<div key={p} className="btn-3d-wrapper"><button onClick={() => setPrice(p)} className={`btn-3d w-full h-full ${price === p ? 'active-emerald' : ''}`}>${p}</button></div>))}</div></div>
+                        {/* COLUMNA 1: ITEM */}
+                        <div className="pos-card-3d delay-1">
+                            <label className="pos-label-giant"><Icon.Tag /> Prenda</label>
+                            <input value={item} onChange={e => setItem(e.target.value)} className="pos-input-modern mb-4" placeholder="NOMBRE..." />
+                            <div className="pos-scroll-area">
+                                {ITEMS_COMMON.map(it => (<div key={it} className="btn-3d-wrapper"><button onClick={() => setItem(it)} className={`btn-3d w-full h-full ${item === it ? 'active-pink' : ''}`}>{it}</button></div>))}
+                            </div>
+                        </div>
+                        {/* COLUMNA 2: CANTIDAD */}
+                        <div className="pos-card-3d delay-2">
+                            <label className="pos-label-giant"><Icon.Hash /> Cantidad</label>
+                            <input type="number" inputMode="numeric" pattern="[0-9]*" value={qty} onChange={e => setQty(parseInt(e.target.value) || '')} className="pos-input-modern mb-4" placeholder="#" />
+                            <div className="pos-scroll-area">
+                                {QTY_OPTIONS.map(q => (<div key={q} className="btn-3d-wrapper"><button onClick={() => setQty(q)} className={`btn-3d w-full h-full ${qty === q ? 'active-indigo' : ''}`}>{q}</button></div>))}
+                            </div>
+                        </div>
+                        {/* COLUMNA 3: PRECIO */}
+                        <div className="pos-card-3d delay-3">
+                            <label className="pos-label-giant"><Icon.Dollar /> Precio Unitario</label>
+                            <input type="number" inputMode="decimal" step="0.01" value={price} onChange={e => setPrice(e.target.value)} className="pos-input-modern mb-4 text-emerald-600" placeholder="$0.00" />
+                            <div className="pos-scroll-area">
+                                {PRICE_OPTIONS.map(p => (<div key={p} className="btn-3d-wrapper"><button onClick={() => setPrice(p)} className={`btn-3d w-full h-full ${price === p ? 'active-emerald' : ''}`}>${p}</button></div>))}
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div className="p-4 bg-white border-t border-slate-200 z-20 pb-6 md:pb-4 rounded-t-[30px] shadow-[0_-10px_20px_rgba(0,0,0,0.05)]"><button onClick={handleSubmit} disabled={!found || !item || !price} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xl shadow-2xl disabled:opacity-50 touch-card active:scale-95 transition-all flex items-center justify-center gap-3 tracking-wide"><span>CONFIRMAR VENTA</span><div className="bg-white/20 p-1.5 rounded-full"><Icon.Check /></div></button></div>
+
+                {/* --- FOOTER DE ACCIONES 2.0 --- */}
+                <div className="p-4 bg-white border-t border-slate-200 z-20 pb-6 md:pb-4 rounded-t-[30px] shadow-[0_-10px_20px_rgba(0,0,0,0.05)]">
+                    <div className="flex gap-3">
+                        {/* BOTÓN 1: SUMAR AL CARRITO (AMARILLO/NARANJA) - Solo aparece si hay datos */}
+                        <button 
+                            onClick={addToCart} 
+                            disabled={!found || !item || !price} 
+                            className="flex-1 py-5 bg-amber-400 text-amber-900 rounded-2xl font-black text-sm md:text-lg shadow-xl disabled:opacity-50 touch-card active:scale-95 transition-all flex items-center justify-center gap-2"
+                        >
+                            <Icon.List /> <span>SUMAR Y SEGUIR</span>
+                        </button>
+
+                        {/* BOTÓN 2: CONFIRMAR TODO (NEGRO/VERDE) */}
+                        <button 
+                            onClick={handleFinalize} 
+                            disabled={!found || (!item && cart.length === 0)} 
+                            className="flex-[2] py-5 bg-slate-900 text-white rounded-2xl font-black text-sm md:text-xl shadow-2xl disabled:opacity-50 touch-card active:scale-95 transition-all flex items-center justify-center gap-3 tracking-wide"
+                        >
+                            <span>
+                                {cart.length > 0 ? `GUARDAR TODO (${cart.length + (item ? 1 : 0)})` : 'CONFIRMAR VENTA'}
+                            </span>
+                            <div className="bg-white/20 p-1.5 rounded-full"><Icon.Check /></div>
+                        </button>
+                    </div>
+                </div>
             </div>
         );
     };
+
 
             const ClientsView = ({ logic }) => {
         const [view, setView] = useState('list'); 
