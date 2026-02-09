@@ -640,51 +640,70 @@
             return marked.reverse(); 
         }, [sales, totalPaid, isHistory]);
 
-        // 2. CÁLCULO DE TOTALES Y CANTIDADES (ACTUALIZADO)
+        // 2. CÁLCULO DE TOTALES Y CANTIDADES
         const summary = useMemo(() => {
             return processedSales.reduce((acc, item) => {
                 if (item.owner && item.owner !== 'me') {
                     acc.partners += item.value;
-                    acc.partnersCount += 1; // Contar prenda socia
+                    acc.partnersCount += 1;
                 } else if (item.__covered) {
                     acc.paid += item.value;
-                    acc.paidCount += 1;     // Contar prenda pagada
+                    acc.paidCount += 1;
                 } else {
                     acc.pending += item.value;
-                    acc.pendingCount += 1;  // Contar prenda pendiente
+                    acc.pendingCount += 1;
                 }
                 return acc;
             }, { paid: 0, paidCount: 0, pending: 0, pendingCount: 0, partners: 0, partnersCount: 0 });
         }, [processedSales]);
 
+        // CÁLCULO DEL GRAN TOTAL (La suma de todo)
+        const grandTotalValue = summary.paid + summary.pending + summary.partners;
+        const grandTotalItems = summary.paidCount + summary.pendingCount + summary.partnersCount;
+
         // --- RENDERIZADO ---
         return (
             <div className="flex flex-col h-full">
-                {/* --- BARRA DE RESUMEN (AHORA CON CANTIDADES) --- */}
+                
+                {/* --- BARRA DE RESUMEN MAESTRA --- */}
                 {processedSales.length > 0 && (
-                    <div className="flex gap-2 mb-3 text-[10px] font-black uppercase tracking-wide">
-                        {/* CAJA VERDE (PAGADO) */}
-                        <div className="flex-1 bg-emerald-50 border border-emerald-100 text-emerald-700 p-2 rounded-lg text-center shadow-sm flex flex-col justify-center">
-                            <div className="opacity-60 text-[9px]">CUBIERTO</div>
-                            <div className="text-sm font-black">${summary.paid.toFixed(2)}</div>
-                            <div className="text-[9px] bg-white/50 rounded px-1 mt-0.5 inline-block self-center border border-emerald-100">{summary.paidCount} prendas</div>
-                        </div>
-
-                        {/* CAJA NARANJA/GRIS (FALTA) */}
-                        <div className={`flex-1 border p-2 rounded-lg text-center shadow-sm flex flex-col justify-center ${summary.pending > 0.01 ? 'bg-orange-50 border-orange-100 text-orange-600' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>
-                            <div className="opacity-60 text-[9px]">FALTA</div>
-                            <div className="text-sm font-black">${summary.pending.toFixed(2)}</div>
-                            <div className={`text-[9px] bg-white/50 rounded px-1 mt-0.5 inline-block self-center border ${summary.pending > 0.01 ? 'border-orange-100' : 'border-slate-200'}`}>{summary.pendingCount} prendas</div>
-                        </div>
-
-                        {/* CAJA MORADA (SOCIAS) */}
-                        {summary.partners > 0 && (
-                            <div className="flex-1 bg-purple-50 border border-purple-100 text-purple-700 p-2 rounded-lg text-center shadow-sm flex flex-col justify-center">
-                                <div className="opacity-60 text-[9px]">SOCIAS</div>
-                                <div className="text-sm font-black">${summary.partners.toFixed(2)}</div>
-                                <div className="text-[9px] bg-white/50 rounded px-1 mt-0.5 inline-block self-center border border-purple-100">{summary.partnersCount} prendas</div>
+                    <div className="mb-3 space-y-2">
+                        {/* 1. TOTAL GLOBAL (CINTA NEGRA) */}
+                        <div className="bg-slate-800 text-white p-3 rounded-xl flex justify-between items-center shadow-lg">
+                            <div className="flex flex-col">
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Valor del Pedido</span>
+                                <span className="text-xl font-black tracking-tight">${grandTotalValue.toFixed(2)}</span>
                             </div>
-                        )}
+                            <div className="bg-white/10 border border-white/20 px-3 py-1.5 rounded-lg text-xs font-bold">
+                                🛍️ {grandTotalItems} prendas
+                            </div>
+                        </div>
+
+                        {/* 2. DESGLOSE (CUADRITOS DE COLORES) */}
+                        <div className="flex gap-2 text-[10px] font-black uppercase tracking-wide">
+                            {/* CAJA VERDE (PAGADO) */}
+                            <div className="flex-1 bg-emerald-50 border border-emerald-100 text-emerald-700 p-2 rounded-lg text-center shadow-sm flex flex-col justify-center">
+                                <div className="opacity-60 text-[9px]">CUBIERTO</div>
+                                <div className="text-sm font-black">${summary.paid.toFixed(2)}</div>
+                                <div className="text-[9px] bg-white/50 rounded px-1 mt-0.5 inline-block self-center border border-emerald-100">{summary.paidCount} un.</div>
+                            </div>
+
+                            {/* CAJA NARANJA (FALTA) */}
+                            <div className={`flex-1 border p-2 rounded-lg text-center shadow-sm flex flex-col justify-center ${summary.pending > 0.01 ? 'bg-orange-50 border-orange-100 text-orange-600' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>
+                                <div className="opacity-60 text-[9px]">FALTA</div>
+                                <div className="text-sm font-black">${summary.pending.toFixed(2)}</div>
+                                <div className={`text-[9px] bg-white/50 rounded px-1 mt-0.5 inline-block self-center border ${summary.pending > 0.01 ? 'border-orange-100' : 'border-slate-200'}`}>{summary.pendingCount} un.</div>
+                            </div>
+
+                            {/* CAJA MORADA (SOCIAS) - Solo si hay */}
+                            {summary.partners > 0 && (
+                                <div className="flex-1 bg-purple-50 border border-purple-100 text-purple-700 p-2 rounded-lg text-center shadow-sm flex flex-col justify-center">
+                                    <div className="opacity-60 text-[9px]">SOCIAS</div>
+                                    <div className="text-sm font-black">${summary.partners.toFixed(2)}</div>
+                                    <div className="text-[9px] bg-white/50 rounded px-1 mt-0.5 inline-block self-center border border-purple-100">{summary.partnersCount} un.</div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
 
