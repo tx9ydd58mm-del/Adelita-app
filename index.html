@@ -755,6 +755,7 @@
     };
 
     // --- DETALLE CLIENTE 8.0 (CON PESTAÑAS DE PAGO Y SEMÁFORO) ---
+    // --- DETALLE CLIENTE 8.3 (WHATSAPP AUDITORÍA HISTÓRICA REPARADO) ---
     const ClientDetailComponent = ({ activeClient, logic, onBack }) => {
         const [payAmount, setPayAmount] = useState("");
         const [payDate, setPayDate] = useState(getToday()); 
@@ -764,22 +765,26 @@
         
         const [orderViewMode, setOrderViewMode] = useState('grouped'); 
         const [tabView, setTabView] = useState('cycle'); 
-        
-        // NUEVO: Estado para pestaña de pagos
-        const [paymentTab, setPaymentTab] = useState('cycle'); // 'cycle' | 'history'
+        const [paymentTab, setPaymentTab] = useState('cycle'); 
 
         const [cancellationHistory, setCancellationHistory] = useState([]);
         const [alertMinimized, setAlertMinimized] = useState(false);
         const [showTrash, setShowTrash] = useState(false);
-        const [waTab, setWaTab] = useState('direct'); 
+        
+        // ESTADOS DEL WHATSAPP
+        const [waTab, setWaTab] = useState('summary'); 
         const [waSubTab, setWaSubTab] = useState('full'); 
         const [waSelectedDates, setWaSelectedDates] = useState([]); 
         const [showWaModal, setShowWaModal] = useState(false);
+        const [auditCycleId, setAuditCycleId] = useState('current'); 
+        const [waExpandItems, setWaExpandItems] = useState(false); 
+
         const [showInvoice, setShowInvoice] = useState(false);
         const [isEditing, setIsEditing] = useState(false); 
         const [editingSale, setEditingSale] = useState(null); 
         const [editingPayment, setEditingPayment] = useState(null);
         const [isProcessing, setIsProcessing] = useState(false);
+        
         const [editName, setEditName] = useState(activeClient.name); 
         const [editPhone, setEditPhone] = useState(activeClient.phone); 
         const [editCedula, setEditCedula] = useState(activeClient.cedula||""); 
@@ -815,11 +820,21 @@
         const shippingPending = Math.max(0, shippingCost - shippingPaid); 
         const clothingBalance = Number(cycle.clothingBalance) || 0;
         const clothingDebt = Math.abs(Math.min(0, clothingBalance));
+        
         const safeShipments = (logic.shipments && Array.isArray(logic.shipments)) ? logic.shipments : [];
         const clientShipments = safeShipments.filter(s => s.clientId === activeClient.id);
         const displayedSales = tabView === 'history' ? cycle.allSales : cycle.cycleSales;
 
         const sortSales = (salesList) => { return [...salesList].sort((a, b) => { const dateA = new Date(safeISO(a.date)); const dateB = new Date(safeISO(b.date)); if (dateB - dateA !== 0) return dateB - dateA; return (b.id || 0) - (a.id || 0); }); };
+
+        const pastCycles = useMemo(() => {
+            const ships = [...clientShipments].sort((a,b) => new Date(safeISO(b.date)) - new Date(safeISO(a.date)));
+            return ships.map((s, i) => {
+                const endDate = new Date(safeISO(s.date));
+                const startDate = i + 1 < ships.length ? new Date(safeISO(ships[i+1].date)) : new Date('2000-01-01');
+                return { id: s.id, label: `Ciclo cerrado el ${endDate.toLocaleDateString()}`, start: startDate, end: endDate };
+            });
+        }, [clientShipments]);
 
         useEffect(() => {
             if (!activeClient || !activeClient.id) return;
@@ -845,14 +860,200 @@
         const handlePayWithBalance = () => { if (shippingCost <= 0) return alert("Define costo envío."); if (clothingBalance < shippingPending) return alert("Saldo insuficiente"); const dateISO = smartDate(getToday(), cycle.lastShipmentDate); logic.addPayment(activeClient.id, -shippingPending, 'Transferencia a Envío', dateISO, 'efectivo'); logic.addPayment(activeClient.id, shippingPending, 'Pago Envío (Saldo)', dateISO, 'efectivo'); logic.addExpense(`Salida Courier (Saldo) - ${activeClient.name}`, shippingPending, dateISO, 'business', 'efectivo'); alert("✅ Pagado con saldo."); };
         const handleRouteSelect = (r) => { let c = 0; if(r==='Servientrega') c=5; if(r==='Domicilio') c=3; if(r==='Ibarra') c=(cycle.totalSales>=25?0:3); handleUpdateClient({ deliveryMethod: r, shippingCost: c }); };
         const cycleStartDateStr = cycle.lastShipmentDate.toLocaleDateString() === '12/31/1969' ? 'Inicio' : new Date(safeISO(cycle.lastShipmentDate)).toLocaleDateString();
-        const generateWaMessage = () => { try { let salesToShow = (waTab==='audit' && waSubTab==='manual') ? cycle.cycleSales.filter(s => waSelectedDates.includes(new Date(safeISO(s.date)).toLocaleDateString('es-ES'))) : cycle.cycleSales; salesToShow = sortSales(salesToShow).reverse(); const groups = {}; salesToShow.forEach(s => { const k = new Date(safeISO(s.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'numeric' }); if(!groups[k]) groups[k]={count:0,total:0}; groups[k].count++; groups[k].total+=s.value; }); const totalSalesShown = salesToShow.reduce((acc, s) => acc + s.value, 0); const finalBalance = totalSalesShown - (cycle.totalNormalPaid || 0); const shipPending = activeClient.deliveryMethod ? Math.max(0, shippingCost - shippingPaid) : 0; const grandTotal = Math.max(0, finalBalance + shipPending); let msg = `Hola ${activeClient.name} (${activeClient.id}) 👋\n\n`; if (waTab === 'direct') { msg += `*ESTADO DE CUENTA RAPIDO*\n💰 *TOTAL A TRANSFERIR: $${grandTotal.toFixed(2)}*\n`; } else { msg += `*RESUMEN DE CUENTA*\n*DETALLE DE LIVES:*\n`; Object.entries(groups).forEach(([d, v]) => msg += `🗓️ ${capitalizeFirst(d)}\n   ▪️ ${v.count} prendas ...... $${v.total.toFixed(2)}\n`); msg += `----------------------------------\nSubtotal Ropa: $${totalSalesShown.toFixed(2)}\n`; if(cycle.allPayments.length>0) { msg += `*ABONOS:*\n`; cycle.allPayments.filter(p=>!p.detail.includes("Envío")).forEach(p=>msg+=`   ✅ $${p.amount.toFixed(2)} (${new Date(safeISO(p.date)).toLocaleDateString()})\n`); msg+=`Total Abonos: -$${(cycle.totalNormalPaid||0).toFixed(2)}\n`; } msg += `\n📊 *BALANCE FINAL:*\n   Saldo Ropa: $${finalBalance.toFixed(2)}\n`; if(activeClient.deliveryMethod) msg += shipPending>0 ? `   Envío (${activeClient.deliveryMethod}): $${shipPending.toFixed(2)}\n` : `   Envío: PAGADO ✅\n`; msg += `\n💰 *TOTAL A TRANSFERIR: $${grandTotal.toFixed(2)}*\n`; } if(grandTotal>0.01) msg += `\n----------------------------------\n🏦 *DATOS BANCARIOS:*\nBanco Pichincha\nCuenta Ahorros\n2204226498\nBryan David Suárez\nCI: 1003300751\n\n📸 Foto del comprobante por favor.\n`; else msg += `\n🎉 *¡TU CUENTA ESTÁ AL DÍA!*\n`; return msg; } catch(e) { return "Error generando mensaje."; } };
+        
+        // --- GENERADOR DE WHATSAPP (CORREGIDO ERROR TEXTO VS NUMERO) ---
+        const generateWaMessage = () => {
+            try {
+                let salesToShow = [];
+                let paymentsToShow = [];
+                let isCurrent = true;
+                let cycleTitle = "ACTUAL";
+
+                if (waTab === 'direct' || waTab === 'summary') {
+                    salesToShow = cycle.cycleSales;
+                    paymentsToShow = cycle.cyclePayments;
+                } else if (waTab === 'audit') {
+                    if (auditCycleId === 'current') {
+                        salesToShow = cycle.cycleSales;
+                        paymentsToShow = cycle.cyclePayments;
+                    } else {
+                        isCurrent = false;
+                        // AQUÍ ESTÁ EL ARREGLO MAGICO: String() compara ambos como texto igual
+                        const past = pastCycles.find(c => String(c.id) === String(auditCycleId));
+                        if (past) {
+                            cycleTitle = `CERRADO EL ${past.end.toLocaleDateString('es-ES')}`;
+                            salesToShow = cycle.allSales.filter(s => { const d = new Date(safeISO(s.date)); return d > past.start && d <= past.end; });
+                            paymentsToShow = cycle.allPayments.filter(p => { const d = new Date(safeISO(p.date)); return d > past.start && d <= past.end; });
+                        }
+                    }
+
+                    if (waSubTab === 'manual') {
+                        salesToShow = salesToShow.filter(s => waSelectedDates.includes(new Date(safeISO(s.date)).toLocaleDateString('es-ES')));
+                    }
+                }
+
+                salesToShow = sortSales(salesToShow).reverse();
+
+                const groups = {};
+                let totalSalesShown = 0;
+                salesToShow.forEach(s => { 
+                    const k = new Date(safeISO(s.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'numeric' }); 
+                    if(!groups[k]) groups[k] = { count: 0, total: 0, items: [] }; 
+                    groups[k].count++; groups[k].total += s.value; groups[k].items.push(s);
+                    totalSalesShown += s.value; 
+                }); 
+                
+                const totalPaymentsShown = paymentsToShow.reduce((acc, p) => acc + (parseFloat(p.amount)||0), 0);
+                const finalBalance = totalSalesShown - totalPaymentsShown; 
+                const shipPending = (isCurrent && activeClient.deliveryMethod) ? Math.max(0, shippingCost - shippingPaid) : 0; 
+                const grandTotal = Math.max(0, finalBalance + shipPending); 
+                
+                let msg = `Hola ${activeClient.name} 👋\n\n`; 
+                
+                if (waTab === 'direct') { 
+                    msg += `*ESTADO DE CUENTA RÁPIDO*\n💰 *TOTAL A TRANSFERIR: $${grandTotal.toFixed(2)}*\n`; 
+                } else { 
+                    msg += `*RESUMEN DE CUENTA ${cycleTitle}*\n\n*DETALLE DE LIVES:*\n`; 
+                    Object.entries(groups).forEach(([d, v]) => {
+                        msg += `🗓️ ${capitalizeFirst(d)}\n`;
+                        
+                        // LÓGICA DE EXPANSIÓN
+                        if (waExpandItems) {
+                            v.items.forEach(item => { msg += `   ▪️ ${item.item} ...... $${item.value.toFixed(2)}\n`; });
+                        } else {
+                            msg += `   ▪️ ${v.count} prendas ...... $${v.total.toFixed(2)}\n`;
+                        }
+                    }); 
+                    msg += `----------------------------------\nSubtotal Ropa: $${totalSalesShown.toFixed(2)}\n`; 
+                    
+                    if(paymentsToShow.length > 0) { 
+                        msg += `\n*ABONOS REGISTRADOS:*\n`; 
+                        paymentsToShow.filter(p=>!p.detail.includes("Envío")).forEach(p => {
+                            msg += `   ✅ $${p.amount.toFixed(2)} (${new Date(safeISO(p.date)).toLocaleDateString()})\n`;
+                        }); 
+                        msg += `Total Abonos: -$${totalPaymentsShown.toFixed(2)}\n`; 
+                    } else {
+                        msg += `\n*ABONOS:*\n   Ninguno registrado en este periodo.\n`;
+                    }
+
+                    msg += `\n📊 *BALANCE DEL PERIODO:*\n   Saldo Ropa: $${finalBalance.toFixed(2)}\n`; 
+                    
+                    if (isCurrent && activeClient.deliveryMethod) {
+                        msg += shipPending > 0 ? `   Envío (${activeClient.deliveryMethod}): $${shipPending.toFixed(2)}\n` : `   Envío: PAGADO ✅\n`; 
+                    }
+                    
+                    if (isCurrent) {
+                        msg += `\n💰 *TOTAL A TRANSFERIR: $${grandTotal.toFixed(2)}*\n`; 
+                    }
+                } 
+                
+                if (grandTotal > 0.01 && isCurrent) {
+                    msg += `\n----------------------------------\n🏦 *DATOS BANCARIOS:*\nBanco Pichincha\nCuenta Ahorros\n2204226498\nBryan David Suárez\nCI: 1003300751\n\n📸 Foto del comprobante por favor.\n`; 
+                } else if (grandTotal <= 0 && isCurrent) {
+                    msg += `\n🎉 *¡TU CUENTA ESTÁ AL DÍA!*\n`; 
+                }
+                return msg; 
+            } catch(e) { 
+                return "Error generando mensaje."; 
+            } 
+        };
 
         const ReputationCard = () => { if (cancellationHistory.length === 0) return null; const totalCancelled = cancellationHistory.reduce((acc, curr) => acc + (Number(curr.totalAmount)||0), 0); return ( <div className={`mx-4 mt-2 transition-all duration-300 shadow-sm ${alertMinimized ? 'bg-red-500 rounded-lg p-2' : 'bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl'}`}> {alertMinimized ? ( <div className="flex justify-between items-center text-white" onClick={() => setAlertMinimized(false)}><div className="flex items-center gap-2 font-bold text-xs uppercase cursor-pointer"><Icon.Alert /> <span>¡Cuidado! Historial negativo ({cancellationHistory.length})</span></div><button className="text-white text-xs font-bold bg-white/20 px-2 py-1 rounded">VER</button></div> ) : ( <> <div className="flex justify-between items-start"><div className="flex items-center gap-2 text-red-700 font-black text-sm uppercase"><Icon.Alert /> <span>Ojo: Cliente con Antecedentes</span></div><div className="flex gap-2"><span className="bg-red-200 text-red-800 text-[10px] px-2 py-1 rounded-full font-bold">{cancellationHistory.length} Cancelaciones</span><button onClick={() => setAlertMinimized(true)} className="text-red-400 hover:text-red-600 font-bold text-xl leading-none">_</button></div></div> <div className="mt-2 text-xs text-slate-600">Ha cancelado un total de <span className="font-bold text-red-600">${totalCancelled.toFixed(2)}</span> en mercancía previamente.</div> <div className="mt-3 max-h-40 overflow-y-auto bg-white/50 rounded-lg p-1 space-y-1 border border-red-100"> {cancellationHistory.map((h, i) => ( <div key={i} className="bg-white p-2 rounded border border-red-50 text-[10px] text-slate-500 flex justify-between items-center shadow-sm"> <div className="flex-1 pr-2"> <span className="font-bold block text-red-700">{h.reason}</span> <span className="text-[9px]">{new Date(h.date).toLocaleDateString()}</span> </div> <div className="flex items-center gap-2"> <span className="font-black text-red-500">${(h.totalAmount||0).toFixed(2)}</span> <button onClick={() => handleResurrectFromHistory(h)} className="bg-emerald-500 text-white px-2 py-1 rounded text-[9px] font-bold hover:bg-emerald-600 shadow active:scale-95 transition-transform flex items-center gap-1"><Icon.Zap /> RECUPERAR</button> </div> </div> ))} </div> </> )} </div> ); };
+
+        // --- ARREGLO MAGICO PARTE 2: Listado de checkboxes ---
+        const currentWaSalesList = useMemo(() => {
+            let list = cycle.cycleSales;
+            if (waTab === 'audit' && auditCycleId !== 'current') {
+                const pc = pastCycles.find(c => String(c.id) === String(auditCycleId));
+                if (pc) {
+                    list = cycle.allSales.filter(s => { const d = new Date(safeISO(s.date)); return d > pc.start && d <= pc.end; });
+                }
+            }
+            return list.reduce((acc,s)=>{
+                const d=new Date(safeISO(s.date)).toLocaleDateString('es-ES'); 
+                acc[d]=(acc[d]||0)+s.value; return acc;
+            }, {});
+        }, [waTab, auditCycleId, cycle, pastCycles]);
 
         return (
             <div className="flex flex-col h-full bg-white relative">
                 {showTrash && (<div className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-4 animate-in fade-in" onClick={()=>setShowTrash(false)}><div className="bg-white w-full max-w-md rounded-3xl p-6 relative" onClick={e=>e.stopPropagation()}><h3 className="font-black text-2xl text-slate-800 mb-4 flex items-center gap-2"><Icon.Trash /> Papelera de Reciclaje</h3><div className="bg-orange-50 text-orange-800 text-xs p-3 rounded-xl mb-4 border border-orange-100">Estos ítems <b>NO suman deuda</b>. Restáuralos para cobrar o elimínalos para siempre.</div><div className="max-h-[60vh] overflow-y-auto space-y-2">{clientTrash.length===0 ? <div className="text-center text-slate-400 italic py-10">Papelera vacía 🧹</div> : clientTrash.map(item => (<div key={item.fireId} className="flex flex-col gap-2 p-3 border rounded-xl hover:bg-slate-50 bg-white shadow-sm"><div className="flex justify-between items-center"><div><div className="font-bold text-slate-700">{item.item}</div><div className="text-xs text-slate-400">Borrado: {new Date(item.deletedAt).toLocaleDateString()}</div></div><span className="font-black text-slate-400">${item.value.toFixed(2)}</span></div><div className="flex gap-2 mt-1"><button onClick={()=>handleRestore(item)} className="flex-1 bg-emerald-100 text-emerald-700 py-2 rounded-lg font-bold text-xs hover:bg-emerald-200 flex justify-center items-center gap-1"><Icon.Check /> Restaurar</button><button onClick={()=>handleDestroy(item)} className="flex-1 bg-red-100 text-red-700 py-2 rounded-lg font-bold text-xs hover:bg-red-200 flex justify-center items-center gap-1"><Icon.Trash /> Eliminar Def.</button></div></div>))}</div><button onClick={()=>setShowTrash(false)} className="mt-4 w-full py-3 bg-slate-100 text-slate-500 font-bold rounded-xl">Cerrar</button></div></div>)}
-                {showWaModal && (<div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={()=>setShowWaModal(false)}><div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]" onClick={e=>e.stopPropagation()}><div className="bg-slate-50 p-4 border-b"><div className="flex justify-between mb-4"><h3 className="font-bold text-slate-700">Generador WhatsApp</h3><button onClick={()=>setShowWaModal(false)}>×</button></div><div className="flex p-1 bg-slate-200 rounded-xl gap-1"><button onClick={()=>setWaTab('direct')} className={`flex-1 py-2 rounded-lg text-xs font-bold ${waTab==='direct'?'bg-white shadow':''}`}>A. DIRECTO</button><button onClick={()=>setWaTab('summary')} className={`flex-1 py-2 rounded-lg text-xs font-bold ${waTab==='summary'?'bg-white shadow':''}`}>B. RESUMIDO</button><button onClick={()=>setWaTab('audit')} className={`flex-1 py-2 rounded-lg text-xs font-bold ${waTab==='audit'?'bg-white shadow':''}`}>C. AUDITORÍA</button></div></div><div className="flex-1 overflow-y-auto p-4 bg-white">{waTab==='audit' && (<div className="mb-4"><div className="flex gap-2 mb-3"><button onClick={()=>setWaSubTab('full')} className={`flex-1 py-1 border rounded-lg text-xs font-bold ${waSubTab==='full'?'bg-pink-50 border-pink-500 text-pink-600':''}`}>Todo el Ciclo</button><button onClick={()=>setWaSubTab('manual')} className={`flex-1 py-1 border rounded-lg text-xs font-bold ${waSubTab==='manual'?'bg-pink-50 border-pink-500 text-pink-600':''}`}>Selección Manual</button></div>{waSubTab==='manual' && (<div className="bg-slate-50 p-3 rounded-xl border max-h-40 overflow-y-auto">{Object.entries(cycle.cycleSales.reduce((acc,s)=>{const d=new Date(safeISO(s.date)).toLocaleDateString('es-ES'); acc[d]=(acc[d]||0)+s.value; return acc;},{})).map(([d,t])=>(<label key={d} className="flex gap-2 p-2 border-b"><input type="checkbox" checked={waSelectedDates.includes(d)} onChange={e=>{if(e.target.checked)setWaSelectedDates([...waSelectedDates,d]);else setWaSelectedDates(waSelectedDates.filter(x=>x!==d))}} /><span className="text-xs font-bold flex-1">Live {d}</span><span className="text-xs">${t.toFixed(2)}</span></label>))}</div>)}</div>)}<textarea id="wa-textarea" readOnly className="w-full h-64 p-3 bg-slate-50 border rounded-xl text-xs font-mono" value={generateWaMessage()}></textarea></div><div className="p-4 border-t"><button onClick={()=>{const t=document.getElementById('wa-textarea');t.select();document.execCommand('copy');alert("Copiado!");}} className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold flex justify-center gap-2"><Icon.Copy /> COPIAR</button></div></div></div>)}
+                
+                {/* --- MODAL DE WHATSAPP --- */}
+                {showWaModal && (
+                    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={()=>setShowWaModal(false)}>
+                        <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]" onClick={e=>e.stopPropagation()}>
+                            <div className="bg-slate-50 p-4 border-b rounded-t-3xl shrink-0">
+                                <div className="flex justify-between mb-4">
+                                    <h3 className="font-black text-slate-700">Generador WhatsApp</h3>
+                                    <button onClick={()=>setShowWaModal(false)} className="text-slate-400 hover:text-slate-800 font-bold">✕</button>
+                                </div>
+                                <div className="flex p-1 bg-slate-200 rounded-xl gap-1">
+                                    <button onClick={()=>setWaTab('direct')} className={`flex-1 py-2 rounded-lg text-[10px] font-black tracking-widest ${waTab==='direct'?'bg-white shadow text-slate-800':'text-slate-500'}`}>DIRECTO</button>
+                                    <button onClick={()=>setWaTab('summary')} className={`flex-1 py-2 rounded-lg text-[10px] font-black tracking-widest ${waTab==='summary'?'bg-white shadow text-slate-800':'text-slate-500'}`}>COMPLETO</button>
+                                    <button onClick={()=>setWaTab('audit')} className={`flex-1 py-2 rounded-lg text-[10px] font-black tracking-widest ${waTab==='audit'?'bg-white shadow text-indigo-600':'text-slate-500'}`}>AUDITORÍA</button>
+                                </div>
+                            </div>
+                            
+                            <div className="flex-1 overflow-y-auto p-4 bg-white">
+                                {waTab === 'audit' && (
+                                    <div className="mb-4 bg-slate-50 p-3 rounded-2xl border border-slate-100 animate-in fade-in">
+                                        <label className="text-[10px] font-black text-indigo-400 uppercase mb-2 block tracking-widest">1. Seleccionar Ciclo</label>
+                                        <select value={auditCycleId} onChange={e => { setAuditCycleId(e.target.value); setWaSelectedDates([]); }} className="w-full p-2.5 text-xs border border-slate-200 rounded-xl mb-4 font-bold bg-white text-slate-700 outline-none focus:border-indigo-400 transition-colors">
+                                            <option value="current">🟢 Ciclo Actual (Vigente)</option>
+                                            {pastCycles.map(c => ( <option key={c.id} value={c.id}>📁 {c.label}</option> ))}
+                                        </select>
+
+                                        <label className="text-[10px] font-black text-indigo-400 uppercase mb-2 block tracking-widest">2. Selección de Prendas</label>
+                                        <div className="flex gap-2 mb-3">
+                                            <button onClick={()=>setWaSubTab('full')} className={`flex-1 py-2 border rounded-xl text-xs font-bold transition-all ${waSubTab==='full'?'bg-indigo-100 border-indigo-200 text-indigo-700 shadow-inner':'bg-white text-slate-500'}`}>Todo el Ciclo</button>
+                                            <button onClick={()=>setWaSubTab('manual')} className={`flex-1 py-2 border rounded-xl text-xs font-bold transition-all ${waSubTab==='manual'?'bg-indigo-100 border-indigo-200 text-indigo-700 shadow-inner':'bg-white text-slate-500'}`}>Elegir Lives</button>
+                                        </div>
+
+                                        {waSubTab === 'manual' && (
+                                            <div className="bg-white p-2 rounded-xl border border-slate-200 max-h-32 overflow-y-auto shadow-sm">
+                                                {Object.entries(currentWaSalesList).map(([d,t])=>(
+                                                    <label key={d} className="flex gap-2 p-2 border-b border-slate-50 last:border-0 hover:bg-slate-50 cursor-pointer items-center transition-colors">
+                                                        <input type="checkbox" className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500" checked={waSelectedDates.includes(d)} onChange={e=>{ if(e.target.checked) setWaSelectedDates([...waSelectedDates,d]); else setWaSelectedDates(waSelectedDates.filter(x=>x!==d)) }} />
+                                                        <span className="text-xs font-bold text-slate-700 flex-1">Live del {d}</span>
+                                                        <span className="text-xs text-indigo-600 font-black bg-indigo-50 px-2 py-0.5 rounded-full">${t.toFixed(2)}</span>
+                                                    </label>
+                                                ))}
+                                                {Object.keys(currentWaSalesList).length === 0 && <div className="text-xs text-center text-slate-400 p-4 font-bold">No hay prendas en este ciclo.</div>}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                                
+                                {(waTab === 'summary' || waTab === 'audit') && (
+                                    <div className="mb-3 flex gap-2 bg-slate-100 p-1 rounded-xl">
+                                        <button 
+                                            onClick={() => setWaExpandItems(false)} 
+                                            className={`flex-1 py-2 rounded-lg text-[10px] uppercase font-black tracking-widest transition-all ${!waExpandItems ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+                                        >
+                                            Contraído (Resumen)
+                                        </button>
+                                        <button 
+                                            onClick={() => setWaExpandItems(true)} 
+                                            className={`flex-1 py-2 rounded-lg text-[10px] uppercase font-black tracking-widest transition-all ${waExpandItems ? 'bg-white shadow text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}
+                                        >
+                                            Expandido (Detalle)
+                                        </button>
+                                    </div>
+                                )}
+
+                                <textarea id="wa-textarea" readOnly className="w-full h-48 md:h-64 p-4 bg-slate-50 border border-slate-200 rounded-2xl text-[11px] font-mono whitespace-pre-wrap outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-50 transition-all resize-none shadow-inner text-slate-700" value={generateWaMessage()}></textarea>
+                            </div>
+                            
+                            <div className="p-4 border-t border-slate-100 bg-white rounded-b-3xl shrink-0">
+                                <button onClick={()=>{ const t=document.getElementById('wa-textarea'); t.select(); document.execCommand('copy'); alert("¡Mensaje Copiado! ✅"); }} className="w-full bg-slate-900 hover:bg-black active:scale-[0.98] transition-all text-white py-4 rounded-2xl font-black text-sm flex justify-center items-center gap-2 shadow-xl shadow-slate-900/20">
+                                    <Icon.Copy /> COPIAR MENSAJE
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                
                 {editingPayment && (<div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-6" onClick={()=>setEditingPayment(null)}><div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-4" onClick={e=>e.stopPropagation()}><h3 className="font-bold text-center">Editar Pago</h3><select value={editingPayment.account||'pichincha'} onChange={e=>setEditingPayment({...editingPayment,account:e.target.value})} className="w-full p-3 bg-indigo-50 border rounded-xl font-bold"><option value="pichincha">Pichincha</option><option value="guayaquil">Guayaquil</option><option value="pacifico">Pacífico</option><option value="efectivo">Efectivo</option></select><div className="grid grid-cols-2 gap-3"><input type="number" value={editingPayment.amount} onChange={e=>setEditingPayment({...editingPayment,amount:e.target.value})} className="p-3 border rounded-xl" /><input type="date" value={editingPayment.date.split('T')[0]} onChange={e=>setEditingPayment({...editingPayment,date:e.target.value})} className="p-3 border rounded-xl" /></div><div className="flex gap-2"><button onClick={handleSavePaymentEdit} className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl">Guardar</button></div><button onClick={handleDeletePayment} className="w-full py-3 bg-red-100 text-red-600 font-bold rounded-xl border border-red-200 flex justify-center gap-2"><Icon.Trash /> ELIMINAR</button></div></div>)}
                 {editingSale && (<div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-6" onClick={()=>setEditingSale(null)}><div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-4" onClick={e=>e.stopPropagation()}><h3 className="font-bold text-center">Editar Venta</h3><input type="date" value={editingSale.date.split('T')[0]} onChange={e=>setEditingSale({...editingSale,date:e.target.value})} className="w-full p-3 border rounded-xl" /><input value={editingSale.item} onChange={e=>setEditingSale({...editingSale,item:e.target.value})} className="w-full p-3 border rounded-xl" /><input type="number" value={editingSale.value} onChange={e=>setEditingSale({...editingSale,value:e.target.value})} className="w-full p-3 border rounded-xl font-bold text-emerald-600" /><button onClick={handleSaveSaleEdit} className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl">Guardar</button></div></div>)}
 
@@ -881,15 +1082,11 @@
                     <div>
                         <div className="pb-4">
                             <div className="flex justify-between items-end mb-3"><h3 className="text-xs font-bold text-slate-400 uppercase">Detalle Pedido {tabView==='history'?'(HISTORIAL)':'(ACTUAL)'}</h3><div className="flex bg-slate-100 p-1 rounded-lg"><button onClick={()=>setOrderViewMode('grouped')} className={`px-2 py-1 rounded-md text-[10px] ${orderViewMode==='grouped'?'bg-white shadow':''}`}>Lives</button><button onClick={()=>setOrderViewMode('list')} className={`px-2 py-1 rounded-md text-[10px] ${orderViewMode==='list'?'bg-white shadow':''}`}>Lista</button></div></div>
-                            
-                            {/* AQUÍ PASAMOS EL SALDO PAGADO AL LISTADO PARA EL SEMÁFORO */}
                             <SalesListRenderer sales={displayedSales} shipments={clientShipments} isHistory={tabView==='history'} viewMode={orderViewMode} totalPaid={cycle.totalNormalPaid} onDeleteSale={handleDeleteSingleSale} onEditSale={setEditingSale} onDeleteGroup={handleDeleteGroup} />
-                            
                             {cycle.cycleSales.length > 0 && tabView === 'cycle' && ( <div className="mt-6 border-t pt-4"> <button onClick={handleWipeCycle} className="w-full py-4 bg-red-600 text-white shadow-lg rounded-xl font-black text-sm flex justify-center items-center gap-3 hover:bg-red-700 active:scale-95 transition-all"> <Icon.Trash /> 🛑 ANULAR PEDIDO (No Pagó / Renunció) </button> <p className="text-center text-[10px] text-slate-400 mt-2">Esta acción borrará todas las prendas y guardará un reporte.</p> </div> )}
                         </div>
                         
                         <div className="hidden landscape:block pt-4 border-t mt-4">
-                            {/* PESTAÑAS DE PAGOS (SOLUCIÓN PEDIDA) */}
                             <div className="flex justify-between items-center mb-2">
                                 <h3 className="text-xs font-bold text-slate-400 uppercase">Pagos</h3>
                                 <div className="flex bg-slate-100 p-1 rounded-lg">
