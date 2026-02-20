@@ -550,52 +550,57 @@
     // --- SUB-COMPONENTES VISUALES (CON SEMÁFORO DE COBERTURA) ---
     // --- SUB-COMPONENTES VISUALES (LIVES CONTRAÍDOS + SEMÁFORO) ---
     
+    // --- SUB-COMPONENTES VISUALES (CON INDICADOR DE PLAZOS Y ESTADOS) ---
+    
+    // --- SUB-COMPONENTES VISUALES (CON SEMÁFORO EN SOCIAS v8.6) ---
+    // --- SUB-COMPONENTES VISUALES (FORZADO A CONTRAÍDO v8.7) ---
     const SalesAccordionGroup = ({ dateKey, items, onDelete, onEdit, onDeleteGroup }) => {
-        // AQUÍ ESTÁ EL CAMBIO: 'false' significa que empieza CERRADO
+        // AQUÍ ESTÁ EL CANDADO: 'false' obliga a que empiece cerrado siempre
         const [isOpen, setIsOpen] = useState(false); 
         
         const safeItems = Array.isArray(items) ? items : [];
         const total = safeItems.reduce((sum, item) => sum + (Number(item.value) || 0), 0);
         
+        const hasExpired = safeItems.some(i => i.__status === 'expired');
+        const hasOnTime = safeItems.some(i => i.__status === 'ontime');
+        const allPaid = safeItems.every(i => i.__status === 'paid');
+
+        let groupBadge = null;
+        if (hasExpired) groupBadge = <span className="text-[9px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-black uppercase flex items-center gap-1"><Icon.Alert /> Riesgo</span>;
+        else if (hasOnTime) groupBadge = <span className="text-[9px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-black uppercase flex items-center gap-1">⏳ En Tiempo</span>;
+        else if (allPaid) groupBadge = <span className="text-[9px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase flex items-center gap-1"><Icon.Check /> Pagado</span>;
+
         return (
             <div className="mb-2 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm transition-all">
-                {/* CABECERA DEL ACORDEÓN (Siempre visible) */}
-                <div 
-                    onClick={() => setIsOpen(!isOpen)} 
-                    className={`w-full flex justify-between items-center p-3 cursor-pointer transition-colors ${isOpen ? 'bg-slate-100 border-b border-slate-200' : 'bg-white hover:bg-slate-50'}`}
-                >
+                <div onClick={() => setIsOpen(!isOpen)} className={`w-full flex justify-between items-center p-3 cursor-pointer transition-colors ${isOpen ? 'bg-slate-100 border-b border-slate-200' : 'bg-white hover:bg-slate-50'}`}>
                     <div className="flex items-center gap-2 flex-1">
-                        {/* Flecha que gira */}
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center bg-white border border-slate-200 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-indigo-500 border-indigo-200' : ''}`}>
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
-                        </div>
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center bg-white border border-slate-200 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-indigo-500 border-indigo-200' : ''}`}><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg></div>
                         <span className="font-bold text-slate-700 text-xs uppercase">{dateKey}</span>
-                        <span className="bg-indigo-50 text-indigo-600 border border-indigo-100 text-[9px] font-black px-2 py-0.5 rounded-full">{safeItems.length}</span>
+                        {groupBadge}
                     </div>
                     <div className="flex items-center gap-3">
                         <span className="font-black text-slate-800 text-sm">${total.toFixed(2)}</span>
-                        {/* Botón borrar grupo (solo visible si está abierto para evitar accidentes, o siempre visible según prefieras) */}
                         {isOpen && <button onClick={(e) => { e.stopPropagation(); onDeleteGroup(items); }} className="w-8 h-8 flex items-center justify-center bg-white border border-red-200 text-red-500 rounded-lg shadow-sm active:bg-red-50 active:scale-95 transition-all"><Icon.Trash /></button>}
                     </div>
                 </div>
 
-                {/* CUERPO DEL ACORDEÓN (Solo se ve si isOpen es true) */}
                 {isOpen && (<div className="divide-y divide-slate-100 animate-in slide-in-from-top-1 duration-200">{safeItems.map((item, idx) => {
                     const isPartner = item.owner && item.owner !== 'me';
-                    const isCovered = item.__covered; 
+                    let rowBg = ""; let statusIcon = null; let priceColor = "";
 
-                    let rowBg = "hover:bg-slate-50";
-                    let statusIcon = null;
-
-                    if (isPartner) {
-                        rowBg = "bg-purple-50 border-l-4 border-l-purple-400";
-                    } else if (isCovered) {
-                        rowBg = "bg-emerald-50/50 border-l-4 border-l-emerald-400";
-                        statusIcon = <span className="text-[9px] font-black text-emerald-600 bg-emerald-100 px-1 rounded uppercase">PAGADO</span>;
+                    if (item.__status === 'paid') {
+                        rowBg = "bg-emerald-50/50"; priceColor = "text-emerald-700";
+                        statusIcon = <span className="text-[9px] font-black text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded uppercase">PAGADO</span>;
+                    } else if (item.__status === 'ontime') {
+                        rowBg = "bg-blue-50/30"; priceColor = "text-blue-700";
+                        statusIcon = <span className="text-[9px] font-black text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded uppercase">EN PLAZO</span>;
                     } else {
-                        rowBg = "bg-red-50/30 border-l-4 border-l-slate-200 opacity-70";
-                        statusIcon = <span className="text-[9px] font-black text-slate-400 bg-slate-100 px-1 rounded uppercase">PENDIENTE</span>;
+                        rowBg = "bg-red-50/30 opacity-90"; priceColor = "text-red-700";
+                        statusIcon = <span className="text-[9px] font-black text-red-600 bg-red-100 px-1.5 py-0.5 rounded uppercase">VENCIDO</span>;
                     }
+
+                    const borderClass = isPartner ? "border-l-4 border-l-purple-500" : (item.__status === 'paid' ? "border-l-4 border-l-emerald-400" : (item.__status === 'ontime' ? "border-l-4 border-l-blue-400" : "border-l-4 border-l-red-400"));
+                    rowBg = `${rowBg} ${borderClass} hover:brightness-95`;
 
                     return (
                         <div key={idx} className={`flex justify-between items-center p-3 pl-4 ${rowBg}`}>
@@ -603,12 +608,12 @@
                                 <div className="font-bold text-slate-700 text-sm flex items-center gap-2">
                                     {item.item}
                                     {isPartner && <span className="text-[9px] bg-purple-200 text-purple-800 px-1.5 py-0.5 rounded font-black uppercase">{item.owner}</span>}
-                                    {!isPartner && statusIcon}
+                                    {statusIcon}
                                 </div>
                                 {item.notes && <div className="text-[10px] text-slate-400 italic">{item.notes}</div>}
                             </div>
                             <div className="flex items-center gap-3">
-                                <span className={`font-bold mr-1 ${isPartner ? 'text-purple-700' : (isCovered ? 'text-emerald-700' : 'text-slate-400')}`}>${(Number(item.value)||0).toFixed(2)}</span>
+                                <span className={`font-bold mr-1 ${priceColor}`}>${(Number(item.value)||0).toFixed(2)}</span>
                                 <div className="flex gap-2"><button onClick={() => onEdit && onEdit(item)} className="w-8 h-8 flex items-center justify-center text-indigo-500 bg-indigo-50 border border-indigo-100 rounded-lg active:scale-95 shadow-sm"><Icon.Edit /></button><button onClick={() => onDelete(item)} className="w-8 h-8 flex items-center justify-center text-red-500 bg-red-50 border border-red-100 rounded-lg active:scale-95 shadow-sm"><Icon.Trash /></button></div>
                             </div>
                         </div>
@@ -619,131 +624,103 @@
     };
 
     const SalesListRenderer = ({ sales, shipments=[], isHistory=false, viewMode, totalPaid=0, onDeleteSale, onEditSale, onDeleteGroup }) => {
-        // 1. CÁLCULOS INTELIGENTES (COBERTURA + ORDEN)
+        const GRACE_DAYS = 7; 
+
         const processedSales = useMemo(() => {
             let temp = Array.isArray(sales) ? [...sales] : [];
-            // Ordenar Viejo -> Nuevo para cálculo de cobertura
             temp.sort((a, b) => { const dateA = new Date(safeISO(a.date)); const dateB = new Date(safeISO(b.date)); if (dateA - dateB !== 0) return dateA - dateB; return (a.id || 0) - (b.id || 0); });
 
-            // Calcular Cobertura
             let runningUsed = 0;
             const limit = isHistory ? 99999999 : (totalPaid || 0);
+            const today = new Date();
             
             const marked = temp.map(item => {
-                if (item.owner && item.owner !== 'me') { return { ...item, __covered: false }; }
                 const isCovered = (limit - runningUsed) >= (item.value - 0.01);
-                if (isCovered) runningUsed += item.value;
-                return { ...item, __covered: isCovered };
+                if (isCovered) {
+                    runningUsed += item.value;
+                    return { ...item, __status: 'paid' };
+                } 
+                
+                const saleDate = new Date(safeISO(item.date));
+                const diffDays = Math.floor((today - saleDate) / (1000 * 60 * 60 * 24));
+                
+                if (diffDays <= GRACE_DAYS) {
+                    return { ...item, __status: 'ontime' }; 
+                } else {
+                    return { ...item, __status: 'expired' }; 
+                }
             });
 
-            // Invertir Nuevo -> Viejo para visualización
             return marked.reverse(); 
         }, [sales, totalPaid, isHistory]);
 
-        // 2. CÁLCULO DE TOTALES Y CANTIDADES
         const summary = useMemo(() => {
             return processedSales.reduce((acc, item) => {
-                if (item.owner && item.owner !== 'me') {
-                    acc.partners += item.value;
-                    acc.partnersCount += 1;
-                } else if (item.__covered) {
-                    acc.paid += item.value;
-                    acc.paidCount += 1;
-                } else {
-                    acc.pending += item.value;
-                    acc.pendingCount += 1;
-                }
+                if (item.owner && item.owner !== 'me') { acc.partners += item.value; acc.partnersCount += 1; } 
+                if (item.__status === 'paid') { acc.paid += item.value; acc.paidCount += 1; } 
+                else if (item.__status === 'ontime') { acc.ontime += item.value; acc.ontimeCount += 1; } 
+                else if (item.__status === 'expired') { acc.expired += item.value; acc.expiredCount += 1; }
                 return acc;
-            }, { paid: 0, paidCount: 0, pending: 0, pendingCount: 0, partners: 0, partnersCount: 0 });
+            }, { paid: 0, paidCount: 0, ontime: 0, ontimeCount: 0, expired: 0, expiredCount: 0, partners: 0, partnersCount: 0 });
         }, [processedSales]);
 
-        // CÁLCULO DEL GRAN TOTAL (La suma de todo)
-        const grandTotalValue = summary.paid + summary.pending + summary.partners;
-        const grandTotalItems = summary.paidCount + summary.pendingCount + summary.partnersCount;
+        const grandTotalValue = summary.paid + summary.ontime + summary.expired;
+        const grandTotalItems = summary.paidCount + summary.ontimeCount + summary.expiredCount;
 
-        // --- RENDERIZADO ---
         return (
             <div className="flex flex-col h-full">
-                
-                {/* --- BARRA DE RESUMEN MAESTRA --- */}
                 {processedSales.length > 0 && (
                     <div className="mb-3 space-y-2">
-                        {/* 1. TOTAL GLOBAL (CINTA NEGRA) */}
                         <div className="bg-slate-800 text-white p-3 rounded-xl flex justify-between items-center shadow-lg">
-                            <div className="flex flex-col">
-                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Valor del Pedido</span>
-                                <span className="text-xl font-black tracking-tight">${grandTotalValue.toFixed(2)}</span>
-                            </div>
-                            <div className="bg-white/10 border border-white/20 px-3 py-1.5 rounded-lg text-xs font-bold">
-                                🛍️ {grandTotalItems} prendas
-                            </div>
+                            <div className="flex flex-col"><span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Valor del Pedido</span><span className="text-xl font-black tracking-tight">${grandTotalValue.toFixed(2)}</span></div>
+                            <div className="bg-white/10 border border-white/20 px-3 py-1.5 rounded-lg text-xs font-bold">🛍️ {grandTotalItems} prendas</div>
                         </div>
 
-                        {/* 2. DESGLOSE (CUADRITOS DE COLORES) */}
-                        <div className="flex gap-2 text-[10px] font-black uppercase tracking-wide">
-                            {/* CAJA VERDE (PAGADO) */}
-                            <div className="flex-1 bg-emerald-50 border border-emerald-100 text-emerald-700 p-2 rounded-lg text-center shadow-sm flex flex-col justify-center">
-                                <div className="opacity-60 text-[9px]">CUBIERTO</div>
-                                <div className="text-sm font-black">${summary.paid.toFixed(2)}</div>
-                                <div className="text-[9px] bg-white/50 rounded px-1 mt-0.5 inline-block self-center border border-emerald-100">{summary.paidCount} un.</div>
+                        <div className="flex gap-1 text-[9px] font-black uppercase tracking-wide">
+                            <div className="flex-1 bg-emerald-50 border border-emerald-100 text-emerald-700 p-1.5 rounded-lg text-center flex flex-col justify-center">
+                                <div className="opacity-60">CUBIERTO</div><div className="text-sm">${summary.paid.toFixed(2)}</div>
                             </div>
-
-                            {/* CAJA NARANJA (FALTA) */}
-                            <div className={`flex-1 border p-2 rounded-lg text-center shadow-sm flex flex-col justify-center ${summary.pending > 0.01 ? 'bg-orange-50 border-orange-100 text-orange-600' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>
-                                <div className="opacity-60 text-[9px]">FALTA</div>
-                                <div className="text-sm font-black">${summary.pending.toFixed(2)}</div>
-                                <div className={`text-[9px] bg-white/50 rounded px-1 mt-0.5 inline-block self-center border ${summary.pending > 0.01 ? 'border-orange-100' : 'border-slate-200'}`}>{summary.pendingCount} un.</div>
+                            <div className={`flex-1 border p-1.5 rounded-lg text-center flex flex-col justify-center ${summary.ontime > 0.01 ? 'bg-blue-50 border-blue-100 text-blue-600' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>
+                                <div className="opacity-60">EN PLAZO</div><div className="text-sm">${summary.ontime.toFixed(2)}</div>
                             </div>
-
-                            {/* CAJA MORADA (SOCIAS) - Solo si hay */}
+                            <div className={`flex-1 border p-1.5 rounded-lg text-center flex flex-col justify-center ${summary.expired > 0.01 ? 'bg-red-50 border-red-200 text-red-600 shadow-sm' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>
+                                <div className="opacity-60">VENCIDO</div><div className="text-sm">${summary.expired.toFixed(2)}</div>
+                            </div>
                             {summary.partners > 0 && (
-                                <div className="flex-1 bg-purple-50 border border-purple-100 text-purple-700 p-2 rounded-lg text-center shadow-sm flex flex-col justify-center">
-                                    <div className="opacity-60 text-[9px]">SOCIAS</div>
-                                    <div className="text-sm font-black">${summary.partners.toFixed(2)}</div>
-                                    <div className="text-[9px] bg-white/50 rounded px-1 mt-0.5 inline-block self-center border border-purple-100">{summary.partnersCount} un.</div>
+                                <div className="flex-1 bg-purple-50 border border-purple-100 text-purple-700 p-1.5 rounded-lg text-center flex flex-col justify-center">
+                                    <div className="opacity-60">SOCIAS (Incl.)</div><div className="text-sm">${summary.partners.toFixed(2)}</div>
                                 </div>
                             )}
                         </div>
                     </div>
                 )}
 
-                {/* --- LISTA O ACORDEÓN --- */}
                 <div className="overflow-y-auto p-2 pb-20">
                     {(!isHistory && viewMode === 'grouped') ? (
-                        // MODO ACORDEÓN (LIVES)
                         (() => {
-                            const grouped = processedSales.reduce((acc, s) => { 
-                                const k = capitalizeFirst(new Date(safeISO(s.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' })); 
-                                if(!acc[k]) acc[k] = []; acc[k].push(s); return acc; 
-                            }, {});
-                            return Object.entries(grouped).map(([key, items], idx) => (
-                                <SalesAccordionGroup key={idx} dateKey={key} items={items} onDelete={onDeleteSale} onEdit={onEditSale} onDeleteGroup={onDeleteGroup} />
-                            ));
+                            const grouped = processedSales.reduce((acc, s) => { const k = capitalizeFirst(new Date(safeISO(s.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' })); if(!acc[k]) acc[k] = []; acc[k].push(s); return acc; }, {});
+                            return Object.entries(grouped).map(([key, items], idx) => ( <SalesAccordionGroup key={idx} dateKey={key} items={items} onDelete={onDeleteSale} onEdit={onEditSale} onDeleteGroup={onDeleteGroup} /> ));
                         })()
                     ) : (
-                        // MODO LISTA SIMPLE
                         processedSales.map((item, idx) => {
                             const isPartner = item.owner && item.owner !== 'me';
-                            const isCovered = item.__covered;
-                            let rowBg = "border-b border-slate-50";
-                            let statusIcon = null;
+                            let rowBg = ""; let statusIcon = null; let priceColor = "";
 
-                            if (isPartner) { rowBg = "bg-purple-50 border-l-4 border-l-purple-400"; } 
-                            else if (isCovered) { rowBg = "bg-emerald-50/50 border-l-4 border-l-emerald-400"; statusIcon = <span className="ml-2 text-[9px] font-black text-emerald-600 bg-emerald-100 px-1 rounded uppercase">PAGADO</span>; } 
-                            else { rowBg = "opacity-60 border-l-4 border-l-slate-200"; statusIcon = <span className="ml-2 text-[9px] font-black text-slate-400 bg-slate-100 px-1 rounded uppercase">PENDIENTE</span>; }
+                            if (item.__status === 'paid') { rowBg = "bg-emerald-50/50"; priceColor = "text-emerald-700"; statusIcon = <span className="ml-2 text-[9px] font-black text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded uppercase">PAGADO</span>; } 
+                            else if (item.__status === 'ontime') { rowBg = "bg-blue-50/30"; priceColor = "text-blue-700"; statusIcon = <span className="ml-2 text-[9px] font-black text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded uppercase">EN PLAZO</span>; } 
+                            else { rowBg = "bg-red-50/30 opacity-90"; priceColor = "text-red-700"; statusIcon = <span className="ml-2 text-[9px] font-black text-red-600 bg-red-100 px-1.5 py-0.5 rounded uppercase">VENCIDO</span>; }
+
+                            const borderClass = isPartner ? "border-l-4 border-l-purple-500" : (item.__status === 'paid' ? "border-l-4 border-l-emerald-400" : (item.__status === 'ontime' ? "border-l-4 border-l-blue-400" : "border-l-4 border-l-red-400"));
+                            rowBg = `${rowBg} ${borderClass}`;
 
                             return (
                                 <div key={idx} className={`flex justify-between items-center p-3 mb-1 text-sm ${rowBg}`}>
                                     <div className="flex-1">
-                                        <span className="block font-bold text-slate-700">
-                                            {item.item} 
-                                            {isPartner && <span className="ml-2 text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-black uppercase">{item.owner}</span>}
-                                            {!isPartner && statusIcon}
-                                        </span>
+                                        <span className="block font-bold text-slate-700">{item.item} {isPartner && <span className="ml-2 text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-black uppercase">{item.owner}</span>} {statusIcon}</span>
                                         <span className="text-[10px] text-slate-400">📅 {new Date(safeISO(item.date)).toLocaleDateString()}</span>
                                     </div>
-                                    <span className={`font-bold mr-3 ${isPartner ? 'text-purple-700' : (isCovered ? 'text-emerald-700' : 'text-slate-400')}`}>${(Number(item.value)||0).toFixed(2)}</span>
-                                    <div className="flex gap-2"><button onClick={()=>onEditSale(item)} className="w-9 h-9 flex items-center justify-center text-indigo-500 bg-indigo-50 border border-indigo-100 rounded-xl active:scale-95 shadow-sm"><Icon.Edit /></button><button onClick={()=>onDeleteSale(item)} className="w-9 h-9 flex items-center justify-center text-red-500 bg-red-50 border border-red-100 rounded-xl active:scale-95 shadow-sm"><Icon.Trash /></button></div>
+                                    <span className={`font-bold mr-3 ${priceColor}`}>${(Number(item.value)||0).toFixed(2)}</span>
+                                    <div className="flex gap-2"><button onClick={()=>onEditSale(item)} className="w-8 h-8 flex items-center justify-center text-indigo-500 bg-indigo-50 border border-indigo-100 rounded-lg active:scale-95 shadow-sm"><Icon.Edit /></button><button onClick={()=>onDeleteSale(item)} className="w-8 h-8 flex items-center justify-center text-red-500 bg-red-50 border border-red-100 rounded-lg active:scale-95 shadow-sm"><Icon.Trash /></button></div>
                                 </div>
                             );
                         })
@@ -754,8 +731,14 @@
         );
     };
 
+
     // --- DETALLE CLIENTE 8.0 (CON PESTAÑAS DE PAGO Y SEMÁFORO) ---
     // --- DETALLE CLIENTE 8.3 (WHATSAPP AUDITORÍA HISTÓRICA REPARADO) ---
+        // --- DETALLE CLIENTE 8.4 (NUEVAS POLÍTICAS Y LIQUIDACIÓN PARCIAL) ---
+        // --- DETALLE CLIENTE 8.5 (BOTÓN MÁGICO PROTEGIDO) ---
+        // --- DETALLE CLIENTE 8.6 (BOTÓN MÁGICO + WHATSAPP INTELIGENTE) ---
+    // --- DETALLE CLIENTE (CON MÁQUINA DEL TIEMPO / CORTE RETROACTIVO) ---
+    // --- DETALLE CLIENTE 8.7 (MÁQUINA DEL TIEMPO CON BOTÓN DESHACER) ---
     const ClientDetailComponent = ({ activeClient, logic, onBack }) => {
         const [payAmount, setPayAmount] = useState("");
         const [payDate, setPayDate] = useState(getToday()); 
@@ -771,7 +754,9 @@
         const [alertMinimized, setAlertMinimized] = useState(false);
         const [showTrash, setShowTrash] = useState(false);
         
-        // ESTADOS DEL WHATSAPP
+        const [showRetroCut, setShowRetroCut] = useState(false);
+        const [retroCutDate, setRetroCutDate] = useState(getToday());
+
         const [waTab, setWaTab] = useState('summary'); 
         const [waSubTab, setWaSubTab] = useState('full'); 
         const [waSelectedDates, setWaSelectedDates] = useState([]); 
@@ -822,16 +807,19 @@
         const clothingDebt = Math.abs(Math.min(0, clothingBalance));
         
         const safeShipments = (logic.shipments && Array.isArray(logic.shipments)) ? logic.shipments : [];
-        const clientShipments = safeShipments.filter(s => s.clientId === activeClient.id);
+        const clientShipments = safeShipments.filter(s => s.clientId === activeClient.id).sort((a,b) => new Date(safeISO(b.date)) - new Date(safeISO(a.date)));
+        
+        // --- DETECTAR SI HAY UN CORTE RETROACTIVO QUE SE PUEDA DESHACER ---
+        const lastOmittedCut = clientShipments.find(s => s.guide === "CORTE_OMITIDO");
+        
         const displayedSales = tabView === 'history' ? cycle.allSales : cycle.cycleSales;
 
         const sortSales = (salesList) => { return [...salesList].sort((a, b) => { const dateA = new Date(safeISO(a.date)); const dateB = new Date(safeISO(b.date)); if (dateB - dateA !== 0) return dateB - dateA; return (b.id || 0) - (a.id || 0); }); };
 
         const pastCycles = useMemo(() => {
-            const ships = [...clientShipments].sort((a,b) => new Date(safeISO(b.date)) - new Date(safeISO(a.date)));
-            return ships.map((s, i) => {
+            return clientShipments.map((s, i) => {
                 const endDate = new Date(safeISO(s.date));
-                const startDate = i + 1 < ships.length ? new Date(safeISO(ships[i+1].date)) : new Date('2000-01-01');
+                const startDate = i + 1 < clientShipments.length ? new Date(safeISO(clientShipments[i+1].date)) : new Date('2000-01-01');
                 return { id: s.id, label: `Ciclo cerrado el ${endDate.toLocaleDateString()}`, start: startDate, end: endDate };
             });
         }, [clientShipments]);
@@ -842,6 +830,56 @@
             const unsubscribe = window.fs.onSnapshot(q, (snapshot) => { const hist = snapshot.docs.map(d => d.data()); hist.sort((a,b) => new Date(b.date) - new Date(a.date)); setCancellationHistory(hist); }, (error) => console.log("Error vigilando historial:", error));
             return () => unsubscribe();
         }, [activeClient.id]);
+
+        // --- EJECUTAR CORTE ---
+        const handleExecuteRetroCut = () => {
+            const cutDateISO = safeISO(retroCutDate);
+            const cutDateObj = new Date(cutDateISO);
+            
+            const pastSales = cycle.allSales.filter(s => new Date(safeISO(s.date)) <= cutDateObj && new Date(safeISO(s.date)) > cycle.lastShipmentDate);
+            const pastPayments = cycle.allPayments.filter(p => new Date(safeISO(p.date)) <= cutDateObj && new Date(safeISO(p.date)) > cycle.lastShipmentDate);
+            
+            const pastSalesTotal = pastSales.reduce((sum, s) => sum + s.value, 0);
+            const pastPaymentsTotal = pastPayments.filter(p => !p.detail?.includes("Envío")).reduce((sum, p) => sum + p.amount, 0);
+            const pastBalance = pastPaymentsTotal - pastSalesTotal;
+
+            logic.registerShipment(activeClient.id, "CORTE_OMITIDO", "Manual", cutDateISO);
+            const nextCycleDateISO = new Date(cutDateObj.getTime() + 60000).toISOString();
+
+            if (pastBalance > 0.01) {
+                logic.addPayment(activeClient.id, pastBalance, "Saldo a Favor (Arrastre)", nextCycleDateISO, "efectivo");
+            } else if (pastBalance < -0.01) {
+                logic.addSale(activeClient.id, "Deuda Ciclo Anterior", Math.abs(pastBalance), nextCycleDateISO, 'me');
+            }
+
+            setShowRetroCut(false);
+            alert("✅ ¡Corte realizado! Se cerró el ciclo en esa fecha y las nuevas compras quedaron separadas.");
+        };
+
+        // --- DESHACER CORTE (LA SOLUCIÓN A TU ERROR) ---
+        const handleUndoRetroCut = async () => {
+            if (!lastOmittedCut) return;
+            if (!window.confirm("¿Seguro que deseas DESHACER el último corte? \n\nEsto volverá a unir la ropa vieja con la nueva en un solo ciclo.")) return;
+
+            try {
+                // 1. Borramos el muro (el envío falso)
+                await window.fs.deleteDoc(window.fs.doc(window.db, "shipments", lastOmittedCut.fireId));
+
+                // 2. Buscamos y borramos el "Saldo arrastrado" o "Deuda" que se creó automáticamente
+                const cutTime = new Date(safeISO(lastOmittedCut.date)).getTime();
+                
+                const autoSales = cycle.allSales.filter(s => s.item === "Deuda Ciclo Anterior" && Math.abs(new Date(safeISO(s.date)).getTime() - (cutTime + 60000)) < 5000);
+                for(let s of autoSales) { await window.fs.deleteDoc(window.fs.doc(window.db, "sales", s.fireId)); }
+
+                const autoPayments = cycle.allPayments.filter(p => p.detail === "Saldo a Favor (Arrastre)" && Math.abs(new Date(safeISO(p.date)).getTime() - (cutTime + 60000)) < 5000);
+                for(let p of autoPayments) { await window.fs.deleteDoc(window.fs.doc(window.db, "payments", p.fireId)); }
+
+                alert("✅ Corte deshecho correctamente. Todo volvió a la normalidad.");
+                setShowRetroCut(false);
+            } catch(e) {
+                alert("Error al deshacer: " + e.message);
+            }
+        };
 
         const logCancellation = async (items, reason, totalAmount) => { try { await window.fs.addDoc(window.fs.collection(window.db, 'cancellations'), { clientId: activeClient.id, date: new Date().toISOString(), reason: reason, itemsCount: items.length, totalAmount: parseFloat(totalAmount) || 0, detail: items.map(i => i.item).join(", ") }); } catch(e) {} };
         const handleDeleteSingleSale = async (item) => { if(window.confirm(`¿Mover a papelera "${item.item}"?`)) { await logic.deleteSale(item); } };
@@ -861,125 +899,94 @@
         const handleRouteSelect = (r) => { let c = 0; if(r==='Servientrega') c=5; if(r==='Domicilio') c=3; if(r==='Ibarra') c=(cycle.totalSales>=25?0:3); handleUpdateClient({ deliveryMethod: r, shippingCost: c }); };
         const cycleStartDateStr = cycle.lastShipmentDate.toLocaleDateString() === '12/31/1969' ? 'Inicio' : new Date(safeISO(cycle.lastShipmentDate)).toLocaleDateString();
         
-        // --- GENERADOR DE WHATSAPP (CORREGIDO ERROR TEXTO VS NUMERO) ---
+        const handlePartialLiquidation = async () => {
+            const GRACE_DAYS = 7; const now = new Date();
+            let temp = [...cycle.cycleSales].sort((a, b) => { const dateA = new Date(safeISO(a.date)); const dateB = new Date(safeISO(b.date)); if (dateA - dateB !== 0) return dateA - dateB; return (a.id || 0) - (b.id || 0); });
+            let runningUsed = 0; const limit = cycle.totalNormalPaid || 0; const itemsToLiquidate = [];
+            temp.forEach(item => {
+                const isCovered = (limit - runningUsed) >= (item.value - 0.01);
+                if (isCovered) { runningUsed += item.value; } else { const saleDate = new Date(safeISO(item.date)); const diffDays = Math.floor((now - saleDate) / (1000 * 60 * 60 * 24)); if (diffDays > GRACE_DAYS) itemsToLiquidate.push(item); }
+            });
+            if (itemsToLiquidate.length === 0) return alert("¡Todo en orden! 🎉\n\nNo hay prendas VENCIDAS (Rojas) para liquidar.");
+            const totalValue = itemsToLiquidate.reduce((sum, i) => sum + i.value, 0);
+            if (window.confirm(`⚠️ CONFIRMAR REMATE DE PRENDAS VENCIDAS\n\nSe enviarán a la papelera ${itemsToLiquidate.length} prenda(s) que superaron el plazo de 1 semana y NO fueron cubiertas.\n\nValor a liquidar: $${totalValue.toFixed(2)}\n\n¿Proceder?`)) {
+                await logCancellation(itemsToLiquidate, "Liquidación Automática (Vencidas)", totalValue);
+                for (const item of itemsToLiquidate) await logic.deleteSale(item);
+                alert(`✅ Limpieza exitosa. ${itemsToLiquidate.length} prendas pasaron a liquidación.`);
+            }
+        };
+
         const generateWaMessage = () => {
             try {
-                let salesToShow = [];
-                let paymentsToShow = [];
-                let isCurrent = true;
-                let cycleTitle = "ACTUAL";
-
-                if (waTab === 'direct' || waTab === 'summary') {
-                    salesToShow = cycle.cycleSales;
-                    paymentsToShow = cycle.cyclePayments;
-                } else if (waTab === 'audit') {
-                    if (auditCycleId === 'current') {
-                        salesToShow = cycle.cycleSales;
-                        paymentsToShow = cycle.cyclePayments;
-                    } else {
-                        isCurrent = false;
-                        // AQUÍ ESTÁ EL ARREGLO MAGICO: String() compara ambos como texto igual
-                        const past = pastCycles.find(c => String(c.id) === String(auditCycleId));
-                        if (past) {
-                            cycleTitle = `CERRADO EL ${past.end.toLocaleDateString('es-ES')}`;
-                            salesToShow = cycle.allSales.filter(s => { const d = new Date(safeISO(s.date)); return d > past.start && d <= past.end; });
-                            paymentsToShow = cycle.allPayments.filter(p => { const d = new Date(safeISO(p.date)); return d > past.start && d <= past.end; });
-                        }
-                    }
-
-                    if (waSubTab === 'manual') {
-                        salesToShow = salesToShow.filter(s => waSelectedDates.includes(new Date(safeISO(s.date)).toLocaleDateString('es-ES')));
-                    }
+                let salesToShow = []; let paymentsToShow = []; let isCurrent = true; let cycleTitle = "ACTUAL";
+                if (waTab === 'direct' || waTab === 'summary') { salesToShow = cycle.cycleSales; paymentsToShow = cycle.cyclePayments; } 
+                else if (waTab === 'audit') {
+                    if (auditCycleId === 'current') { salesToShow = cycle.cycleSales; paymentsToShow = cycle.cyclePayments; } 
+                    else { isCurrent = false; const past = pastCycles.find(c => String(c.id) === String(auditCycleId)); if (past) { cycleTitle = `CERRADO EL ${past.end.toLocaleDateString('es-ES')}`; salesToShow = cycle.allSales.filter(s => { const d = new Date(safeISO(s.date)); return d > past.start && d <= past.end; }); paymentsToShow = cycle.allPayments.filter(p => { const d = new Date(safeISO(p.date)); return d > past.start && d <= past.end; }); } }
+                    if (waSubTab === 'manual') { salesToShow = salesToShow.filter(s => waSelectedDates.includes(new Date(safeISO(s.date)).toLocaleDateString('es-ES'))); }
                 }
-
                 salesToShow = sortSales(salesToShow).reverse();
-
-                const groups = {};
-                let totalSalesShown = 0;
-                salesToShow.forEach(s => { 
-                    const k = new Date(safeISO(s.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'numeric' }); 
-                    if(!groups[k]) groups[k] = { count: 0, total: 0, items: [] }; 
-                    groups[k].count++; groups[k].total += s.value; groups[k].items.push(s);
-                    totalSalesShown += s.value; 
-                }); 
-                
+                const groups = {}; let totalSalesShown = 0;
+                salesToShow.forEach(s => { const k = new Date(safeISO(s.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'numeric' }); if(!groups[k]) groups[k] = { count: 0, total: 0, items: [] }; groups[k].count++; groups[k].total += s.value; groups[k].items.push(s); totalSalesShown += s.value; }); 
                 const totalPaymentsShown = paymentsToShow.reduce((acc, p) => acc + (parseFloat(p.amount)||0), 0);
                 const finalBalance = totalSalesShown - totalPaymentsShown; 
                 const shipPending = (isCurrent && activeClient.deliveryMethod) ? Math.max(0, shippingCost - shippingPaid) : 0; 
                 const grandTotal = Math.max(0, finalBalance + shipPending); 
-                
                 let msg = `Hola ${activeClient.name} 👋\n\n`; 
-                
-                if (waTab === 'direct') { 
-                    msg += `*ESTADO DE CUENTA RÁPIDO*\n💰 *TOTAL A TRANSFERIR: $${grandTotal.toFixed(2)}*\n`; 
-                } else { 
+                if (waTab === 'direct') { msg += `*ESTADO DE CUENTA RÁPIDO*\n💰 *TOTAL A TRANSFERIR: $${grandTotal.toFixed(2)}*\n`; } 
+                else { 
                     msg += `*RESUMEN DE CUENTA ${cycleTitle}*\n\n*DETALLE DE LIVES:*\n`; 
-                    Object.entries(groups).forEach(([d, v]) => {
-                        msg += `🗓️ ${capitalizeFirst(d)}\n`;
-                        
-                        // LÓGICA DE EXPANSIÓN
-                        if (waExpandItems) {
-                            v.items.forEach(item => { msg += `   ▪️ ${item.item} ...... $${item.value.toFixed(2)}\n`; });
-                        } else {
-                            msg += `   ▪️ ${v.count} prendas ...... $${v.total.toFixed(2)}\n`;
-                        }
-                    }); 
+                    Object.entries(groups).forEach(([d, v]) => { msg += `🗓️ ${capitalizeFirst(d)}\n`; if (waExpandItems) { v.items.forEach(item => { msg += `   ▪️ ${item.item} ...... $${item.value.toFixed(2)}\n`; }); } else { msg += `   ▪️ ${v.count} prendas ...... $${v.total.toFixed(2)}\n`; } }); 
                     msg += `----------------------------------\nSubtotal Ropa: $${totalSalesShown.toFixed(2)}\n`; 
-                    
-                    if(paymentsToShow.length > 0) { 
-                        msg += `\n*ABONOS REGISTRADOS:*\n`; 
-                        paymentsToShow.filter(p=>!p.detail.includes("Envío")).forEach(p => {
-                            msg += `   ✅ $${p.amount.toFixed(2)} (${new Date(safeISO(p.date)).toLocaleDateString()})\n`;
-                        }); 
-                        msg += `Total Abonos: -$${totalPaymentsShown.toFixed(2)}\n`; 
-                    } else {
-                        msg += `\n*ABONOS:*\n   Ninguno registrado en este periodo.\n`;
-                    }
-
+                    if(paymentsToShow.length > 0) { msg += `\n*ABONOS REGISTRADOS:*\n`; paymentsToShow.filter(p=>!p.detail.includes("Envío")).forEach(p => { msg += `   ✅ $${p.amount.toFixed(2)} (${new Date(safeISO(p.date)).toLocaleDateString()})\n`; }); msg += `Total Abonos: -$${totalPaymentsShown.toFixed(2)}\n`; } 
+                    else { msg += `\n*ABONOS:*\n   Ninguno registrado en este periodo.\n`; }
                     msg += `\n📊 *BALANCE DEL PERIODO:*\n   Saldo Ropa: $${finalBalance.toFixed(2)}\n`; 
-                    
-                    if (isCurrent && activeClient.deliveryMethod) {
-                        msg += shipPending > 0 ? `   Envío (${activeClient.deliveryMethod}): $${shipPending.toFixed(2)}\n` : `   Envío: PAGADO ✅\n`; 
-                    }
-                    
-                    if (isCurrent) {
-                        msg += `\n💰 *TOTAL A TRANSFERIR: $${grandTotal.toFixed(2)}*\n`; 
-                    }
+                    if (isCurrent && activeClient.deliveryMethod) { msg += shipPending > 0 ? `   Envío (${activeClient.deliveryMethod}): $${shipPending.toFixed(2)}\n` : `   Envío: PAGADO ✅\n`; }
+                    if (isCurrent) { msg += `\n💰 *TOTAL A TRANSFERIR: $${grandTotal.toFixed(2)}*\n`; }
                 } 
-                
-                if (grandTotal > 0.01 && isCurrent) {
-                    msg += `\n----------------------------------\n🏦 *DATOS BANCARIOS:*\nBanco Pichincha\nCuenta Ahorros\n2204226498\nBryan David Suárez\nCI: 1003300751\n\n📸 Foto del comprobante por favor.\n`; 
-                } else if (grandTotal <= 0 && isCurrent) {
-                    msg += `\n🎉 *¡TU CUENTA ESTÁ AL DÍA!*\n`; 
-                }
+                if (grandTotal > 0.01 && isCurrent) { msg += `\n----------------------------------\n🏦 *DATOS BANCARIOS:*\nBanco Pichincha\nCuenta Ahorros\n2204226498\nBryan David Suárez\nCI: 1003300751\n\n📸 Foto del comprobante por favor.\n`; } 
+                else if (grandTotal <= 0 && isCurrent) { msg += `\n🎉 *¡TU CUENTA ESTÁ AL DÍA!*\n`; }
                 return msg; 
-            } catch(e) { 
-                return "Error generando mensaje."; 
-            } 
+            } catch(e) { return "Error generando mensaje."; } 
         };
 
         const ReputationCard = () => { if (cancellationHistory.length === 0) return null; const totalCancelled = cancellationHistory.reduce((acc, curr) => acc + (Number(curr.totalAmount)||0), 0); return ( <div className={`mx-4 mt-2 transition-all duration-300 shadow-sm ${alertMinimized ? 'bg-red-500 rounded-lg p-2' : 'bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl'}`}> {alertMinimized ? ( <div className="flex justify-between items-center text-white" onClick={() => setAlertMinimized(false)}><div className="flex items-center gap-2 font-bold text-xs uppercase cursor-pointer"><Icon.Alert /> <span>¡Cuidado! Historial negativo ({cancellationHistory.length})</span></div><button className="text-white text-xs font-bold bg-white/20 px-2 py-1 rounded">VER</button></div> ) : ( <> <div className="flex justify-between items-start"><div className="flex items-center gap-2 text-red-700 font-black text-sm uppercase"><Icon.Alert /> <span>Ojo: Cliente con Antecedentes</span></div><div className="flex gap-2"><span className="bg-red-200 text-red-800 text-[10px] px-2 py-1 rounded-full font-bold">{cancellationHistory.length} Cancelaciones</span><button onClick={() => setAlertMinimized(true)} className="text-red-400 hover:text-red-600 font-bold text-xl leading-none">_</button></div></div> <div className="mt-2 text-xs text-slate-600">Ha cancelado un total de <span className="font-bold text-red-600">${totalCancelled.toFixed(2)}</span> en mercancía previamente.</div> <div className="mt-3 max-h-40 overflow-y-auto bg-white/50 rounded-lg p-1 space-y-1 border border-red-100"> {cancellationHistory.map((h, i) => ( <div key={i} className="bg-white p-2 rounded border border-red-50 text-[10px] text-slate-500 flex justify-between items-center shadow-sm"> <div className="flex-1 pr-2"> <span className="font-bold block text-red-700">{h.reason}</span> <span className="text-[9px]">{new Date(h.date).toLocaleDateString()}</span> </div> <div className="flex items-center gap-2"> <span className="font-black text-red-500">${(h.totalAmount||0).toFixed(2)}</span> <button onClick={() => handleResurrectFromHistory(h)} className="bg-emerald-500 text-white px-2 py-1 rounded text-[9px] font-bold hover:bg-emerald-600 shadow active:scale-95 transition-transform flex items-center gap-1"><Icon.Zap /> RECUPERAR</button> </div> </div> ))} </div> </> )} </div> ); };
 
-        // --- ARREGLO MAGICO PARTE 2: Listado de checkboxes ---
         const currentWaSalesList = useMemo(() => {
             let list = cycle.cycleSales;
-            if (waTab === 'audit' && auditCycleId !== 'current') {
-                const pc = pastCycles.find(c => String(c.id) === String(auditCycleId));
-                if (pc) {
-                    list = cycle.allSales.filter(s => { const d = new Date(safeISO(s.date)); return d > pc.start && d <= pc.end; });
-                }
-            }
-            return list.reduce((acc,s)=>{
-                const d=new Date(safeISO(s.date)).toLocaleDateString('es-ES'); 
-                acc[d]=(acc[d]||0)+s.value; return acc;
-            }, {});
+            if (waTab === 'audit' && auditCycleId !== 'current') { const pc = pastCycles.find(c => String(c.id) === String(auditCycleId)); if (pc) { list = cycle.allSales.filter(s => { const d = new Date(safeISO(s.date)); return d > pc.start && d <= pc.end; }); } }
+            return list.reduce((acc,s)=>{ const d=new Date(safeISO(s.date)).toLocaleDateString('es-ES'); acc[d]=(acc[d]||0)+s.value; return acc; }, {});
         }, [waTab, auditCycleId, cycle, pastCycles]);
 
         return (
             <div className="flex flex-col h-full bg-white relative">
+                
+                {/* --- MODAL MÁQUINA DEL TIEMPO (CON BOTÓN DESHACER) --- */}
+                {showRetroCut && (
+                    <div className="fixed inset-0 bg-black/80 z-[80] flex items-center justify-center p-6 animate-in fade-in" onClick={()=>setShowRetroCut(false)}>
+                        <div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-4 shadow-2xl relative" onClick={e=>e.stopPropagation()}>
+                            <button onClick={()=>setShowRetroCut(false)} className="absolute top-4 right-4 text-slate-400 font-bold w-8 h-8 flex items-center justify-center bg-slate-100 rounded-full">✕</button>
+                            <h3 className="font-black text-slate-800 text-xl flex items-center gap-2">✂️ Corte Retroactivo</h3>
+                            <p className="text-xs text-slate-500">¿Olvidaste dar a 'Confirmar Salida' en bodega y se mezclaron las compras viejas con las nuevas?<br/><br/>Elige la fecha en la que <b>realmente</b> enviaste el paquete anterior para dividir el historial:</p>
+                            <div>
+                                <label className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Fecha del envío viejo</label>
+                                <input type="date" value={retroCutDate} onChange={e=>setRetroCutDate(e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-xl mt-1 font-bold text-slate-700 outline-none" />
+                            </div>
+                            <button onClick={handleExecuteRetroCut} className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl shadow-lg active:scale-95 transition-all">Dividir Ciclos Ahora</button>
+                            
+                            {/* BOTÓN DESHACER (Solo aparece si detecta que cortaste) */}
+                            {lastOmittedCut && (
+                                <div className="mt-4 pt-4 border-t border-slate-100">
+                                    <p className="text-[10px] text-center text-slate-400 mb-2">¿Te equivocaste de fecha o cortaste mal?</p>
+                                    <button onClick={handleUndoRetroCut} className="w-full py-3 bg-red-50 text-red-600 border border-red-200 font-bold rounded-xl active:scale-95 transition-all">↩️ Deshacer el último corte</button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 {showTrash && (<div className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-4 animate-in fade-in" onClick={()=>setShowTrash(false)}><div className="bg-white w-full max-w-md rounded-3xl p-6 relative" onClick={e=>e.stopPropagation()}><h3 className="font-black text-2xl text-slate-800 mb-4 flex items-center gap-2"><Icon.Trash /> Papelera de Reciclaje</h3><div className="bg-orange-50 text-orange-800 text-xs p-3 rounded-xl mb-4 border border-orange-100">Estos ítems <b>NO suman deuda</b>. Restáuralos para cobrar o elimínalos para siempre.</div><div className="max-h-[60vh] overflow-y-auto space-y-2">{clientTrash.length===0 ? <div className="text-center text-slate-400 italic py-10">Papelera vacía 🧹</div> : clientTrash.map(item => (<div key={item.fireId} className="flex flex-col gap-2 p-3 border rounded-xl hover:bg-slate-50 bg-white shadow-sm"><div className="flex justify-between items-center"><div><div className="font-bold text-slate-700">{item.item}</div><div className="text-xs text-slate-400">Borrado: {new Date(item.deletedAt).toLocaleDateString()}</div></div><span className="font-black text-slate-400">${item.value.toFixed(2)}</span></div><div className="flex gap-2 mt-1"><button onClick={()=>handleRestore(item)} className="flex-1 bg-emerald-100 text-emerald-700 py-2 rounded-lg font-bold text-xs hover:bg-emerald-200 flex justify-center items-center gap-1"><Icon.Check /> Restaurar</button><button onClick={()=>handleDestroy(item)} className="flex-1 bg-red-100 text-red-700 py-2 rounded-lg font-bold text-xs hover:bg-red-200 flex justify-center items-center gap-1"><Icon.Trash /> Eliminar Def.</button></div></div>))}</div><button onClick={()=>setShowTrash(false)} className="mt-4 w-full py-3 bg-slate-100 text-slate-500 font-bold rounded-xl">Cerrar</button></div></div>)}
                 
-                {/* --- MODAL DE WHATSAPP --- */}
                 {showWaModal && (
                     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={()=>setShowWaModal(false)}>
                         <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]" onClick={e=>e.stopPropagation()}>
@@ -994,7 +1001,6 @@
                                     <button onClick={()=>setWaTab('audit')} className={`flex-1 py-2 rounded-lg text-[10px] font-black tracking-widest ${waTab==='audit'?'bg-white shadow text-indigo-600':'text-slate-500'}`}>AUDITORÍA</button>
                                 </div>
                             </div>
-                            
                             <div className="flex-1 overflow-y-auto p-4 bg-white">
                                 {waTab === 'audit' && (
                                     <div className="mb-4 bg-slate-50 p-3 rounded-2xl border border-slate-100 animate-in fade-in">
@@ -1003,13 +1009,11 @@
                                             <option value="current">🟢 Ciclo Actual (Vigente)</option>
                                             {pastCycles.map(c => ( <option key={c.id} value={c.id}>📁 {c.label}</option> ))}
                                         </select>
-
                                         <label className="text-[10px] font-black text-indigo-400 uppercase mb-2 block tracking-widest">2. Selección de Prendas</label>
                                         <div className="flex gap-2 mb-3">
                                             <button onClick={()=>setWaSubTab('full')} className={`flex-1 py-2 border rounded-xl text-xs font-bold transition-all ${waSubTab==='full'?'bg-indigo-100 border-indigo-200 text-indigo-700 shadow-inner':'bg-white text-slate-500'}`}>Todo el Ciclo</button>
                                             <button onClick={()=>setWaSubTab('manual')} className={`flex-1 py-2 border rounded-xl text-xs font-bold transition-all ${waSubTab==='manual'?'bg-indigo-100 border-indigo-200 text-indigo-700 shadow-inner':'bg-white text-slate-500'}`}>Elegir Lives</button>
                                         </div>
-
                                         {waSubTab === 'manual' && (
                                             <div className="bg-white p-2 rounded-xl border border-slate-200 max-h-32 overflow-y-auto shadow-sm">
                                                 {Object.entries(currentWaSalesList).map(([d,t])=>(
@@ -1024,31 +1028,16 @@
                                         )}
                                     </div>
                                 )}
-                                
                                 {(waTab === 'summary' || waTab === 'audit') && (
                                     <div className="mb-3 flex gap-2 bg-slate-100 p-1 rounded-xl">
-                                        <button 
-                                            onClick={() => setWaExpandItems(false)} 
-                                            className={`flex-1 py-2 rounded-lg text-[10px] uppercase font-black tracking-widest transition-all ${!waExpandItems ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
-                                        >
-                                            Contraído (Resumen)
-                                        </button>
-                                        <button 
-                                            onClick={() => setWaExpandItems(true)} 
-                                            className={`flex-1 py-2 rounded-lg text-[10px] uppercase font-black tracking-widest transition-all ${waExpandItems ? 'bg-white shadow text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}
-                                        >
-                                            Expandido (Detalle)
-                                        </button>
+                                        <button onClick={() => setWaExpandItems(false)} className={`flex-1 py-2 rounded-lg text-[10px] uppercase font-black tracking-widest transition-all ${!waExpandItems ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}>Contraído (Resumen)</button>
+                                        <button onClick={() => setWaExpandItems(true)} className={`flex-1 py-2 rounded-lg text-[10px] uppercase font-black tracking-widest transition-all ${waExpandItems ? 'bg-white shadow text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}>Expandido (Detalle)</button>
                                     </div>
                                 )}
-
                                 <textarea id="wa-textarea" readOnly className="w-full h-48 md:h-64 p-4 bg-slate-50 border border-slate-200 rounded-2xl text-[11px] font-mono whitespace-pre-wrap outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-50 transition-all resize-none shadow-inner text-slate-700" value={generateWaMessage()}></textarea>
                             </div>
-                            
                             <div className="p-4 border-t border-slate-100 bg-white rounded-b-3xl shrink-0">
-                                <button onClick={()=>{ const t=document.getElementById('wa-textarea'); t.select(); document.execCommand('copy'); alert("¡Mensaje Copiado! ✅"); }} className="w-full bg-slate-900 hover:bg-black active:scale-[0.98] transition-all text-white py-4 rounded-2xl font-black text-sm flex justify-center items-center gap-2 shadow-xl shadow-slate-900/20">
-                                    <Icon.Copy /> COPIAR MENSAJE
-                                </button>
+                                <button onClick={()=>{ const t=document.getElementById('wa-textarea'); t.select(); document.execCommand('copy'); alert("¡Mensaje Copiado! ✅"); }} className="w-full bg-slate-900 hover:bg-black active:scale-[0.98] transition-all text-white py-4 rounded-2xl font-black text-sm flex justify-center items-center gap-2 shadow-xl shadow-slate-900/20"><Icon.Copy /> COPIAR MENSAJE</button>
                             </div>
                         </div>
                     </div>
@@ -1062,8 +1051,23 @@
                 <ReputationCard />
 
                 <div className="flex-1 overflow-y-auto p-4 landscape:grid landscape:grid-cols-2 landscape:gap-6">
-                    <div className="space-y-6 pb-6">
+                    <div className="space-y-4 pb-6">
+                        
                         <div className="flex justify-between items-start"><div className="flex-1">{isEditing ? (<div className="bg-slate-50 p-3 rounded-xl border"><input value={editName} onChange={e=>setEditName(e.target.value)} className="w-full border p-2 mb-2" /><button onClick={saveEdit} className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold text-xs">Guardar</button><button onClick={()=>setIsEditing(false)} className="ml-2 bg-slate-300 px-3 py-2 rounded-lg font-bold text-xs">Cancelar</button></div>) : (<><h1 className="text-4xl font-black text-slate-800">{activeClient.id}</h1><div className="text-sm text-slate-500"><span className="font-bold uppercase">{activeClient.name}</span> <button onClick={()=>setIsEditing(true)}><Icon.Edit /></button></div><div className="text-xs">📞 {activeClient.phone}</div></>)}</div><div className="flex gap-2"><button onClick={()=>setShowTrash(true)} className="bg-orange-100 text-orange-700 p-2 rounded-xl flex items-center gap-1 font-bold text-[10px]"><Icon.Trash /> {clientTrash.length > 0 ? `Papelera (${clientTrash.length})` : 'Papelera'}</button><button onClick={()=>setShowInvoice(true)} className="bg-indigo-100 text-indigo-700 p-2 rounded-xl"><Icon.FileText /></button><button onClick={()=>setShowWaModal(true)} className="bg-emerald-100 text-emerald-700 p-2 rounded-xl"><Icon.Message /></button></div></div>
+                        
+                        {tabView === 'cycle' && (
+                            <div className={`p-3 rounded-2xl text-xs flex items-center gap-2 border shadow-sm ${clothingDebt > 0 ? 'bg-orange-50 text-orange-800 border-orange-100' : (cycle.cycleSales.length > 0 ? 'bg-emerald-50 text-emerald-800 border-emerald-100' : 'bg-slate-50 text-slate-500 border-slate-100')}`}>
+                                <div className="text-xl">{clothingDebt > 0 ? '⏳' : (cycle.cycleSales.length > 0 ? '📦' : '✨')}</div>
+                                <div>
+                                    {clothingDebt > 0 ? (
+                                        <><strong>Pago Pendiente.</strong> Límite: Martes 10:00 AM <br/><span className="text-[10px] opacity-80">Liquidación: Miércoles</span></>
+                                    ) : (
+                                        cycle.cycleSales.length > 0 ? <><strong>Al día.</strong> Todo pagado. <br/><span className="text-[10px] opacity-80">Envío programado: Martes 12:00 PM</span></> : "No hay prendas activas en este ciclo."
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                         <div className="flex border-b mb-2"><button onClick={()=>setTabView('cycle')} className={`flex-1 py-2 text-sm font-bold ${tabView==='cycle'?'text-indigo-600 border-b-2 border-indigo-600':'text-slate-400'}`}>Ciclo Actual</button><button onClick={()=>setTabView('history')} className={`flex-1 py-2 text-sm font-bold ${tabView==='history'?'text-indigo-600 border-b-2 border-indigo-600':'text-slate-400'}`}>Historial</button></div>
                         {(tabView==='cycle'||window.innerWidth>768) && (<>
                             <div className={`p-5 rounded-3xl border-2 ${clothingDebt>0?'border-red-100 bg-red-50':'border-slate-100 bg-white'}`}>
@@ -1081,9 +1085,27 @@
                     </div>
                     <div>
                         <div className="pb-4">
-                            <div className="flex justify-between items-end mb-3"><h3 className="text-xs font-bold text-slate-400 uppercase">Detalle Pedido {tabView==='history'?'(HISTORIAL)':'(ACTUAL)'}</h3><div className="flex bg-slate-100 p-1 rounded-lg"><button onClick={()=>setOrderViewMode('grouped')} className={`px-2 py-1 rounded-md text-[10px] ${orderViewMode==='grouped'?'bg-white shadow':''}`}>Lives</button><button onClick={()=>setOrderViewMode('list')} className={`px-2 py-1 rounded-md text-[10px] ${orderViewMode==='list'?'bg-white shadow':''}`}>Lista</button></div></div>
+                            <div className="flex justify-between items-end mb-3">
+                                <h3 className="text-xs font-bold text-slate-400 uppercase">Detalle Pedido {tabView==='history'?'(HISTORIAL)':'(ACTUAL)'}</h3>
+                                <div className="flex items-center gap-2">
+                                    {tabView === 'cycle' && (
+                                        <button onClick={()=>setShowRetroCut(true)} className="text-[10px] bg-indigo-50 text-indigo-600 border border-indigo-100 px-2 py-1 rounded-md font-bold hover:bg-indigo-100 active:scale-95 transition-all">✂️ SEPARAR CICLO</button>
+                                    )}
+                                    <div className="flex bg-slate-100 p-1 rounded-lg"><button onClick={()=>setOrderViewMode('grouped')} className={`px-2 py-1 rounded-md text-[10px] ${orderViewMode==='grouped'?'bg-white shadow':''}`}>Lives</button><button onClick={()=>setOrderViewMode('list')} className={`px-2 py-1 rounded-md text-[10px] ${orderViewMode==='list'?'bg-white shadow':''}`}>Lista</button></div>
+                                </div>
+                            </div>
                             <SalesListRenderer sales={displayedSales} shipments={clientShipments} isHistory={tabView==='history'} viewMode={orderViewMode} totalPaid={cycle.totalNormalPaid} onDeleteSale={handleDeleteSingleSale} onEditSale={setEditingSale} onDeleteGroup={handleDeleteGroup} />
-                            {cycle.cycleSales.length > 0 && tabView === 'cycle' && ( <div className="mt-6 border-t pt-4"> <button onClick={handleWipeCycle} className="w-full py-4 bg-red-600 text-white shadow-lg rounded-xl font-black text-sm flex justify-center items-center gap-3 hover:bg-red-700 active:scale-95 transition-all"> <Icon.Trash /> 🛑 ANULAR PEDIDO (No Pagó / Renunció) </button> <p className="text-center text-[10px] text-slate-400 mt-2">Esta acción borrará todas las prendas y guardará un reporte.</p> </div> )}
+                            
+                            {cycle.cycleSales.length > 0 && tabView === 'cycle' && ( 
+                                <div className="mt-6 border-t pt-4 space-y-3"> 
+                                    <button onClick={handlePartialLiquidation} className="w-full py-4 bg-orange-500 text-white shadow-lg shadow-orange-500/30 rounded-2xl font-black text-sm flex justify-center items-center gap-3 hover:bg-orange-600 active:scale-95 transition-all"> 
+                                        <Icon.Zap /> ♻️ LIQUIDAR SOLO PRENDAS VENCIDAS
+                                    </button> 
+                                    <button onClick={handleWipeCycle} className="w-full py-4 bg-red-600 text-white shadow-lg shadow-red-600/30 rounded-2xl font-black text-sm flex justify-center items-center gap-3 hover:bg-red-700 active:scale-95 transition-all"> 
+                                        <Icon.Trash /> 🛑 ANULAR PEDIDO COMPLETO (Renunció)
+                                    </button> 
+                                </div> 
+                            )}
                         </div>
                         
                         <div className="hidden landscape:block pt-4 border-t mt-4">
@@ -1104,8 +1126,6 @@
             </div>
         );
     };
-
-
 
     // --- BODEGA INTELIGENTE V2 (Con Arrastre de Deudas y Saldos) ---
     // --- BODEGA INTELIGENTE V2 (BLINDADA CONTRA PANTALLA BLANCA) ---
@@ -1561,23 +1581,70 @@
 
 
 
-            const ClientsView = ({ logic }) => {
+    // --- VISTA CLIENTES (CON VISTA PREVIA DE CÓDIGO AUTOMÁTICO) ---
+    // --- VISTA CLIENTES (DISEÑO ELEGANTE Y ANTI-DUPLICADOS BLINDADO) ---
+    const ClientsView = ({ logic }) => {
         const [view, setView] = useState('list'); 
         const [activeClient, setActiveClient] = useState(null); 
         const [filter, setFilter] = useState(""); 
-        
-        // --- FILTRO DE BOTONES ---
         const [statusFilter, setStatusFilter] = useState('all'); 
 
-        // CAMPOS NUEVOS REGISTRO
         const [newName, setNewName] = useState(""); const [newPhone, setNewPhone] = useState(""); 
         const [newCedula, setNewCedula] = useState(""); const [newProvince, setNewProvince] = useState(""); 
         const [newCity, setNewCity] = useState(""); const [newAddress, setNewAddress] = useState(""); 
         const [newAbono, setNewAbono] = useState(""); const [regDate, setRegDate] = useState(getToday()); const [manualId, setManualId] = useState("");
 
+        const suggestedId = useMemo(() => {
+            if (!newName.trim()) return "";
+            const existingNumbers = logic.clients.map(c => { const match = c.id.match(/\d+/); return match ? parseInt(match[0], 10) : -1; });
+            const usedNumbersSet = new Set(existingNumbers);
+            let nextNum = 1;
+            while (usedNumbersSet.has(nextNum)) { nextNum++; }
+            const paddedNum = String(nextNum).padStart(3, '0');
+            const cleanName = newName.trim().toUpperCase();
+            const words = cleanName.split(/\s+/);
+            let initials = "XX";
+            if (words.length >= 2) { initials = words[0][0] + words[1][0]; } 
+            else if (words.length === 1 && words[0].length >= 2) { initials = words[0][0] + words[0][1]; } 
+            else if (words.length === 1) { initials = words[0][0] + "X"; }
+            return `${initials}${paddedNum}`;
+        }, [newName, logic.clients]);
+
         const handleRegister = () => { 
-            if (!newName) return; 
-            const res = logic.registerClient(newName, newPhone, newCedula, newProvince, newCity, newAddress, newAbono, regDate, manualId); 
+            if (!newName.trim()) return alert("⚠️ El nombre es obligatorio.");
+
+            // VALIDACIONES BLINDADAS
+            const exactIds = logic.clients.map(c => c.id.toLowerCase());
+            const existingNumbers = logic.clients.map(c => {
+                const match = c.id.match(/\d+/);
+                return match ? parseInt(match[0], 10) : -1;
+            }).filter(n => n !== -1);
+
+            let finalId = "";
+
+            if (manualId && manualId.trim() !== "") {
+                const testId = manualId.trim().toLowerCase();
+                
+                // 1. ¿El código completo ya existe?
+                if (exactIds.includes(testId)) {
+                    return alert(`🛑 ERROR: El código "${manualId.toUpperCase()}" ya existe exactamente así. Escribe otro.`);
+                }
+
+                // 2. ¿El número base ya existe?
+                const customMatch = manualId.match(/\d+/);
+                if (!customMatch) return alert("⚠️ El código manual debe tener letras y un NÚMERO (Ej: AB015)");
+                
+                const customNum = parseInt(customMatch[0], 10);
+                if (existingNumbers.includes(customNum)) {
+                    return alert(`🛑 NÚMERO REPETIDO: El número ${customNum} ya está siendo usado por otro cliente en su código.\n\nPor favor, ingresa un número libre para no mezclar contabilidad.`);
+                }
+                
+                finalId = manualId.trim().toUpperCase();
+            } else {
+                finalId = suggestedId; 
+            }
+
+            const res = logic.registerClient(newName, newPhone, newCedula, newProvince, newCity, newAddress, newAbono, regDate, finalId); 
             if(res) { 
                 setNewName(""); setNewPhone(""); setNewCedula(""); setNewProvince(""); setNewCity(""); setNewAddress(""); 
                 setNewAbono(""); setManualId(""); setView('list'); 
@@ -1586,45 +1653,29 @@
 
         if (view === 'detail' && activeClient) { const clientData = logic.clients.find(c => c.id === activeClient.id) || activeClient; return <ClientDetailComponent key={clientData.id} activeClient={clientData} logic={logic} onBack={() => setView('list')} />; }
         
-        // --- LÓGICA DE FILTRADO Y ORDENAMIENTO (SOLO NÚMEROS) ---
         const filteredList = logic.clients
-            .sort((a, b) => {
-                // TRUCO MATEMÁTICO:
-                // 1. .replace(/\D/g, '') -> Borra todo lo que NO sea número (SS64 se vuelve 64)
-                // 2. parseInt -> Convierte el texto en número real para comparar
-                const numA = parseInt(a.id.replace(/\D/g, '')) || 0;
-                const numB = parseInt(b.id.replace(/\D/g, '')) || 0;
-                return numA - numB; // Ordena de menor a mayor (Ej: 5 va antes que 10)
-            })
+            .sort((a, b) => { const numA = parseInt(a.id.replace(/\D/g, '')) || 0; const numB = parseInt(b.id.replace(/\D/g, '')) || 0; return numA - numB; })
             .filter(c => {
-                // 1. Filtro de Texto
                 const matchesText = c.name.toLowerCase().includes(filter.toLowerCase()) || c.id.toLowerCase().includes(filter.toLowerCase());
                 if (!matchesText) return false;
-
-                // 2. Filtro de Botones
                 if (statusFilter === 'all') return true;
-
                 const cycle = logic.getClientCycle(c.id);
                 const status = logic.getClientStatus(c, cycle);
-
                 if (statusFilter === 'debt') return status.code === 'DEBT'; 
                 if (statusFilter === 'ready') return status.code === 'READY' || status.code === 'MISSING'; 
                 if (statusFilter === 'accumulating') return (status.code === 'ACC_PAID' || status.code === 'ACC_AUTH') && cycle.itemsCount > 0; 
                 if (statusFilter === 'clean') return cycle.itemsCount === 0 && cycle.clothingBalance >= -0.01; 
-
                 return true;
             });
         
         return (
             <div className="flex flex-col h-full pb-20 landscape:pb-0 bg-[#f0f2f5]">
                 <div className="p-4 bg-white sticky top-0 z-10 space-y-3 shadow-sm">
-                    {/* Buscador y Botón Nuevo */}
                     <div className="flex gap-2">
                         <div className="flex-1 bg-slate-100 rounded-xl flex items-center px-3"><Icon.Search /><input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Buscar por CÓDIGO o Nombre..." className="bg-transparent w-full p-3 outline-none font-bold text-slate-600" /></div>
                         <button onClick={() => setView(view === 'new' ? 'list' : 'new')} className="bg-slate-900 text-white w-12 rounded-xl font-bold text-xl shadow-lg transition-transform active:scale-95">{view === 'new' ? '×' : '+'}</button>
                     </div>
 
-                    {/* --- BARRA DE FILTROS --- */}
                     {view !== 'new' && (
                         <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
                             <button onClick={() => setStatusFilter('all')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold whitespace-nowrap transition-colors border ${statusFilter === 'all' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200'}`}>TODOS</button>
@@ -1635,24 +1686,58 @@
                         </div>
                     )}
 
-                    {/* Formulario Nuevo Cliente */}
                     {view === 'new' && (
                         <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 animate-in slide-in-from-top duration-300 overflow-y-auto max-h-[70vh]">
-                            <h3 className="font-bold mb-3">Nuevo Registro</h3>
-                            <div className="space-y-3">
-                                <div className="grid grid-cols-2 gap-2"><input value={manualId} onChange={e => setManualId(e.target.value)} placeholder="ID (Opcional)" className="p-3 bg-indigo-50 border-indigo-100 border rounded-xl font-mono text-sm" /><input value={newCedula} onChange={e => setNewCedula(e.target.value)} placeholder="Cédula / RUC" className="p-3 bg-white rounded-xl border" /></div>
-                                <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nombre Completo" className="w-full p-3 bg-white rounded-xl border" />
-                                <input value={newPhone} onChange={e => setNewPhone(e.target.value)} placeholder="Celular" type="tel" className="w-full p-3 bg-white rounded-xl border" />
-                                <div className="grid grid-cols-2 gap-2"><input value={newProvince} onChange={e => setNewProvince(e.target.value)} placeholder="Provincia" className="p-3 bg-white rounded-xl border" /><input value={newCity} onChange={e => setNewCity(e.target.value)} placeholder="Ciudad" className="p-3 bg-white rounded-xl border" /></div>
-                                <textarea value={newAddress} onChange={e => setNewAddress(e.target.value)} placeholder="Dirección Exacta" className="w-full p-3 bg-white rounded-xl border h-20 resize-none text-sm" />
-                                <div className="flex gap-2"><input value={newAbono} onChange={e => setNewAbono(e.target.value)} placeholder="Abono ($)" type="number" step="0.01" className="flex-1 p-3 bg-white rounded-xl border" /><div className="flex flex-col w-32 relative"><label className="text-[10px] uppercase font-bold text-slate-400">Fecha Reg</label><div className="relative w-full h-10"><input type="date" value={regDate} onChange={e => setRegDate(e.target.value)} className="input-overlay-trigger" /><div className="date-icon-overlay">📅</div></div></div></div>
-                                <button onClick={handleRegister} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg">Guardar Cliente</button>
+                            <h3 className="font-black text-slate-800 mb-4 flex items-center gap-2"><Icon.Users /> Nuevo Cliente</h3>
+                            <div className="space-y-4">
+                                <div className="relative">
+                                    <label className="text-[10px] font-black text-slate-400 absolute -top-2 left-3 bg-slate-50 px-1 uppercase tracking-widest">Nombre Completo *</label>
+                                    <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Ej: Diana Salazar" className="w-full p-4 bg-white border-2 border-slate-200 rounded-xl outline-none focus:border-indigo-500 font-bold text-slate-700 uppercase" autoFocus />
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="relative group">
+                                        <label className="text-[10px] font-black text-indigo-500 absolute -top-2 left-3 bg-slate-50 px-1 uppercase tracking-widest z-10">CÓDIGO</label>
+                                        <input value={manualId} onChange={e => setManualId(e.target.value)} placeholder={suggestedId ? `${suggestedId}` : "Auto"} className="w-full p-4 bg-indigo-50/50 border-2 border-indigo-200 rounded-xl outline-none focus:border-indigo-500 font-mono text-lg font-black text-indigo-700 placeholder:text-indigo-300 placeholder:italic transition-colors" />
+                                    </div>
+                                    <div className="relative">
+                                        <label className="text-[10px] font-black text-slate-400 absolute -top-2 left-3 bg-slate-50 px-1 uppercase tracking-widest">CÉDULA / RUC</label>
+                                        <input value={newCedula} onChange={e => setNewCedula(e.target.value)} placeholder="Opcional" className="w-full p-4 bg-white border-2 border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-sm font-bold text-slate-600" />
+                                    </div>
+                                </div>
+                                <div className="relative">
+                                    <label className="text-[10px] font-black text-slate-400 absolute -top-2 left-3 bg-slate-50 px-1 uppercase tracking-widest">WhatsApp</label>
+                                    <input value={newPhone} onChange={e => setNewPhone(e.target.value)} placeholder="09..." type="tel" className="w-full p-4 bg-white border-2 border-slate-200 rounded-xl outline-none focus:border-indigo-500 font-bold text-slate-700" />
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="relative">
+                                        <label className="text-[10px] font-black text-slate-400 absolute -top-2 left-3 bg-slate-50 px-1 uppercase tracking-widest">Provincia</label>
+                                        <input value={newProvince} onChange={e => setNewProvince(e.target.value)} placeholder="Ej: Imbabura" className="w-full p-3 bg-white border-2 border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-sm font-bold text-slate-600" />
+                                    </div>
+                                    <div className="relative">
+                                        <label className="text-[10px] font-black text-slate-400 absolute -top-2 left-3 bg-slate-50 px-1 uppercase tracking-widest">Ciudad</label>
+                                        <input value={newCity} onChange={e => setNewCity(e.target.value)} placeholder="Ej: Otavalo" className="w-full p-3 bg-white border-2 border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-sm font-bold text-slate-600" />
+                                    </div>
+                                </div>
+                                <div className="relative">
+                                    <label className="text-[10px] font-black text-slate-400 absolute -top-2 left-3 bg-slate-50 px-1 uppercase tracking-widest">Dirección Exacta</label>
+                                    <textarea value={newAddress} onChange={e => setNewAddress(e.target.value)} placeholder="Calles y referencias..." className="w-full p-4 bg-white border-2 border-slate-200 rounded-xl outline-none focus:border-indigo-500 h-24 resize-none text-sm font-bold text-slate-600" />
+                                </div>
+                                <div className="flex gap-3">
+                                    <div className="relative flex-1">
+                                        <label className="text-[10px] font-black text-emerald-500 absolute -top-2 left-3 bg-slate-50 px-1 uppercase tracking-widest z-10">Abono Inicial</label>
+                                        <input value={newAbono} onChange={e => setNewAbono(e.target.value)} placeholder="$ 0.00" type="number" step="0.01" className="w-full p-4 bg-emerald-50 border-2 border-emerald-200 rounded-xl outline-none focus:border-emerald-500 font-black text-emerald-700 text-lg" />
+                                    </div>
+                                    <div className="flex flex-col w-32 relative">
+                                        <label className="text-[10px] font-black text-slate-400 absolute -top-2 left-3 bg-slate-50 px-1 uppercase tracking-widest z-10">Fecha</label>
+                                        <input type="date" value={regDate} onChange={e => setRegDate(e.target.value)} className="w-full p-4 bg-white border-2 border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-600" />
+                                    </div>
+                                </div>
+                                <button onClick={handleRegister} className="w-full bg-slate-900 text-white py-4 rounded-xl font-black text-lg shadow-xl shadow-slate-900/20 active:scale-95 transition-all mt-2">Guardar Cliente</button>
                             </div>
                         </div>
                     )}
                 </div>
 
-                {/* LISTA CLIENTES (Ordenada por NÚMERO) */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-2 landscape:grid landscape:grid-cols-2 landscape:gap-4 landscape:content-start">
                     {filteredList.length === 0 ? (
                         <div className="text-center py-10 text-slate-400 italic text-sm col-span-2">No hay clientes con este filtro.</div>
@@ -1662,7 +1747,6 @@
                             return (
                                 <div key={c.id} onClick={() => { setActiveClient(c); setView('detail'); }} className="bg-white p-4 rounded-2xl border border-slate-100 flex justify-between items-center touch-card shadow-sm h-auto landscape:h-full group hover:border-indigo-300 transition-colors cursor-pointer">
                                     <div>
-                                        {/* CÓDIGO DESTACADO */}
                                         <div className="font-black text-xl text-slate-800 tracking-tight group-hover:text-indigo-600 transition-colors">{c.id}</div>
                                         <div className="flex flex-col mt-0.5">
                                             <span className="text-xs font-bold text-slate-500 uppercase">{c.name}</span>
@@ -1678,6 +1762,7 @@
             </div>
         );
     };
+
 
     // --- BODEGA INTELIGENTE (VERSIÓN BLINDADA / ANTI-CRASH) ---
        // --- BODEGA INTELIGENTE (VERSIÓN QUIRÚRGICA / ANTI-CRASH) ---
