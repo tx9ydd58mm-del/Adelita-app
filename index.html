@@ -857,6 +857,7 @@
         };
 
         // --- DESHACER CORTE (LA SOLUCIÓN A TU ERROR) ---
+            // --- DESHACER CORTE (CORREGIDO ANTI-FANTASMAS) ---
         const handleUndoRetroCut = async () => {
             if (!lastOmittedCut) return;
             if (!window.confirm("¿Seguro que deseas DESHACER el último corte? \n\nEsto volverá a unir la ropa vieja con la nueva en un solo ciclo.")) return;
@@ -865,13 +866,20 @@
                 // 1. Borramos el muro (el envío falso)
                 await window.fs.deleteDoc(window.fs.doc(window.db, "shipments", lastOmittedCut.fireId));
 
-                // 2. Buscamos y borramos el "Saldo arrastrado" o "Deuda" que se creó automáticamente
-                const cutTime = new Date(safeISO(lastOmittedCut.date)).getTime();
+                // 2. Buscamos y borramos agresivamente el "Saldo" o "Deuda" automática
+                // Extraemos solo el día (Ej: "2026-02-12") para que no se confunda con los minutos/segundos
+                const cutDateString = lastOmittedCut.date.split('T')[0];
                 
-                const autoSales = cycle.allSales.filter(s => s.item === "Deuda Ciclo Anterior" && Math.abs(new Date(safeISO(s.date)).getTime() - (cutTime + 60000)) < 5000);
+                const autoSales = cycle.allSales.filter(s => 
+                    s.item === "Deuda Ciclo Anterior" && 
+                    s.date.startsWith(cutDateString)
+                );
                 for(let s of autoSales) { await window.fs.deleteDoc(window.fs.doc(window.db, "sales", s.fireId)); }
 
-                const autoPayments = cycle.allPayments.filter(p => p.detail === "Saldo a Favor (Arrastre)" && Math.abs(new Date(safeISO(p.date)).getTime() - (cutTime + 60000)) < 5000);
+                const autoPayments = cycle.allPayments.filter(p => 
+                    p.detail === "Saldo a Favor (Arrastre)" && 
+                    p.date.startsWith(cutDateString)
+                );
                 for(let p of autoPayments) { await window.fs.deleteDoc(window.fs.doc(window.db, "payments", p.fireId)); }
 
                 alert("✅ Corte deshecho correctamente. Todo volvió a la normalidad.");
