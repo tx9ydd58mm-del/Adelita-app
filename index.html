@@ -554,12 +554,13 @@
     
     // --- SUB-COMPONENTES VISUALES (CON SEMÁFORO EN SOCIAS v8.6) ---
     // --- SUB-COMPONENTES VISUALES (FORZADO A CONTRAÍDO v8.7) ---
-    const SalesAccordionGroup = ({ dateKey, items, onDelete, onEdit, onDeleteGroup }) => {
-        // AQUÍ ESTÁ EL CANDADO: 'false' obliga a que empiece cerrado siempre
+      const SalesAccordionGroup = ({ dateKey, items, onDelete, onEdit, onDeleteGroup }) => {
         const [isOpen, setIsOpen] = useState(false); 
         
         const safeItems = Array.isArray(items) ? items : [];
         const total = safeItems.reduce((sum, item) => sum + (Number(item.value) || 0), 0);
+        // NUEVO: Calculamos la cantidad de prendas en este grupo
+        const itemsCount = safeItems.length; 
         
         const hasExpired = safeItems.some(i => i.__status === 'expired');
         const hasOnTime = safeItems.some(i => i.__status === 'ontime');
@@ -575,7 +576,11 @@
                 <div onClick={() => setIsOpen(!isOpen)} className={`w-full flex justify-between items-center p-3 cursor-pointer transition-colors ${isOpen ? 'bg-slate-100 border-b border-slate-200' : 'bg-white hover:bg-slate-50'}`}>
                     <div className="flex items-center gap-2 flex-1">
                         <div className={`w-6 h-6 rounded-full flex items-center justify-center bg-white border border-slate-200 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-indigo-500 border-indigo-200' : ''}`}><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg></div>
-                        <span className="font-bold text-slate-700 text-xs uppercase">{dateKey}</span>
+                        <span className="font-bold text-slate-700 text-xs uppercase flex items-center gap-2">
+                            {dateKey} 
+                            {/* NUEVO: Etiqueta gris que indica el número de prendas */}
+                            <span className="text-[9px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-md font-black lowercase tracking-widest">{itemsCount} prendas</span>
+                        </span>
                         {groupBadge}
                     </div>
                     <div className="flex items-center gap-3">
@@ -731,14 +736,85 @@
         );
     };
 
+    // --- NUEVA FACTURA HÍBRIDA (DISEÑO DIGITAL Y TICKET POS) ---
+     // ============================================================================
+    // 1. COMPONENTE: FACTURA HÍBRIDA (DIGITAL Y TICKET POS) REPARADA
+    // ============================================================================
+    // --- NUEVA FACTURA (DISEÑO ÚNICO: MODERN APP + IMPRESIÓN POS) ---
+    const Invoice3DModal = ({ activeClient, cycle, qrUrl }) => {
+        const sortedSales = [...cycle.cycleSales].sort((a,b) => new Date(safeISO(b.date)) - new Date(safeISO(a.date)));
+        const shippingCost = activeClient.shippingCost || 0;
+        const shippingPaid = cycle.totalShippingPaid || 0;
+        const totalSales = cycle.totalSales;
+        const totalAbonado = cycle.totalNormalPaid;
+        const clothingDebt = Math.abs(Math.min(0, cycle.clothingBalance));
+        const finalBalance = clothingDebt + Math.max(0, shippingCost - shippingPaid);
 
-    // --- DETALLE CLIENTE 8.0 (CON PESTAÑAS DE PAGO Y SEMÁFORO) ---
-    // --- DETALLE CLIENTE 8.3 (WHATSAPP AUDITORÍA HISTÓRICA REPARADO) ---
-        // --- DETALLE CLIENTE 8.4 (NUEVAS POLÍTICAS Y LIQUIDACIÓN PARCIAL) ---
-        // --- DETALLE CLIENTE 8.5 (BOTÓN MÁGICO PROTEGIDO) ---
-        // --- DETALLE CLIENTE 8.6 (BOTÓN MÁGICO + WHATSAPP INTELIGENTE) ---
-    // --- DETALLE CLIENTE (CON MÁQUINA DEL TIEMPO / CORTE RETROACTIVO) ---
-    // --- DETALLE CLIENTE 8.7 (MÁQUINA DEL TIEMPO CON BOTÓN DESHACER) ---
+        return (
+            <div className="flex-1 w-full max-w-5xl mx-auto flex flex-col items-center gap-6 overflow-hidden relative" onClick={e=>e.stopPropagation()}>
+                <style>{`
+                    @media print {
+                        body * { visibility: hidden !important; height: 0 !important; margin: 0 !important; }
+                        .print-ticket, .print-ticket * { visibility: visible !important; height: auto !important; margin: 0 !important; font-family: 'Courier New', Courier, monospace !important; color: black !important; width: 100vw !important;}
+                        .print-ticket { position: absolute; left: 0; top: 0; padding: 5mm; border: none; box-shadow: none; border-radius: 0; }
+                        .no-print-digital { display: none !important; }
+                    }
+                `}</style>
+                
+                <button onClick={()=>{ window.print(); }} className="fixed bottom-6 right-6 bg-slate-950 text-white px-6 py-4 rounded-3xl font-black shadow-2xl flex items-center gap-2 z-50 no-print-digital active:scale-95 transition-all"><Icon.Printer /> IMPRIMIR TICKET</button>
+                
+                {/* --- MODO IMPRESIÓN (TICKET POS - BLANCO Y NEGRO) --- */}
+                <div className="w-full max-w-sm shrink-0 bg-white p-6 print-ticket font-mono border-2 print:border-none border-slate-200 shadow-xl overflow-hidden print:overflow-visible">
+                    <div className="text-center mb-6">
+                        <h1 className="text-xl font-black print:text-2xl uppercase tracking-widest">ADELITA STORE</h1>
+                        <p className="text-[9px] print:text-[10px] text-slate-500 font-bold uppercase mt-1 leading-tight">Digital Invoice<br/>{new Date().toLocaleString()}</p>
+                    </div>
+                    <div className="border-t border-b border-dashed border-slate-200 py-3 mb-6 space-y-1">
+                        <p className="text-xs print:text-[10px] leading-tight">Cliente: {activeClient.name}</p>
+                        <p className="text-xs print:text-[10px]">ID: {activeClient.id}</p>
+                        <p className="text-xs print:text-[10px]">Courier: {activeClient.deliveryMethod || 'PEND.'}</p>
+                    </div>
+                    <h3 className="text-xs print:text-[10px] font-bold text-slate-400 uppercase mb-2">Prendas Adquiridas</h3>
+                    <div className="space-y-1 mb-6">
+                        {sortedSales.map(s => ( <div key={s.id} className="flex justify-between text-xs print:text-[9px]"><span className="flex-1 truncate pr-2">{new Date(safeISO(s.date)).toLocaleDateString('es-ES', {day:'numeric',month:'numeric'})} ▪️ {s.item}</span><span>${s.value.toFixed(2)}</span></div> ))}
+                    </div>
+                    <div className="border-t border-dashed border-slate-200 pt-4 mb-4 space-y-2 text-right">
+                        <div className="text-sm print:text-xs">Ropa: <span className="font-bold tracking-tight">${totalSales.toFixed(2)}</span></div>
+                        <div className="text-xs print:text-[10px]">Envío Courier: +${shippingCost.toFixed(2)}</div>
+                        <div className="text-xs print:text-[10px]">Abonos Ropa: -${totalAbonado.toFixed(2)}</div>
+                        <div className="text-xs print:text-[10px]">Abonos Envío: -${shippingPaid.toFixed(2)}</div>
+                    </div>
+                    <div className="bg-slate-900 print:bg-black text-white p-3 rounded-lg text-right mb-4">
+                        <div className="text-[10px] font-bold text-emerald-400 print:text-emerald-300 uppercase tracking-widest">Saldo Final Cobrar</div>
+                        <div className="text-3xl print:text-2xl font-black text-emerald-300 print:text-emerald-200 tracking-tighter">${finalBalance.toFixed(2)}</div>
+                    </div>
+                    <div className="flex flex-col items-center justify-center pt-2 border-t border-dashed border-slate-200 mt-4 no-print-digital">
+                        <p className="text-[9px] text-slate-400 font-bold uppercase mb-1">Escanear Ticket Contable</p>
+                        <img src={qrUrl} alt="QR Contable" className="w-24 h-24 border-2 border-slate-100 p-1" />
+                    </div>
+                </div>
+
+                {/* --- MODO PANTALLA DIGITAL (DISEÑO ADELITA STORE APP) --- */}
+                <div className="flex-1 w-full max-w-5xl mx-auto overflow-y-auto pb-24 no-print-digital flex flex-col items-center mt-6 md:mt-0">
+                    <div className="w-full max-w-lg space-y-4 animate-in slide-in-from-bottom">
+                        <div className="bg-gradient-to-r from-pink-500 via-purple-500 to-emerald-500 p-6 rounded-3xl shadow-2xl relative overflow-hidden flex flex-col items-center">
+                            <h1 className="text-3xl font-black text-white uppercase tracking-wider flex items-center gap-2"><Icon.Tag /> Factura Digital</h1>
+                            <p className="text-sm font-black text-white/70 uppercase">Adelita Store System</p>
+                        </div>
+                        <div className="bg-white p-4 rounded-xl shadow border space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Cliente:</label><div className="text-xl font-bold text-slate-800 leading-tight">{activeClient.name} ({activeClient.id})</div><div className="text-[11px] font-black text-indigo-600 flex items-center gap-1">📍 {activeClient.city} / 📞 {activeClient.phone}</div></div>
+                        <div className="bg-white p-4 rounded-xl shadow space-y-2"><h3 className="text-[10px] font-black text-slate-400 uppercase mb-3 sticky top-0 bg-white">Prendas Adquiridas</h3>{sortedSales.map(s => ( <div key={s.id} className="flex gap-3 bg-slate-50 p-2 rounded-lg border items-center shadow-inner"><Icon.Box /> <div><div className="font-bold text-slate-700 text-xs">{s.item}</div><div className="text-[9px] text-slate-400">{new Date(safeISO(s.date)).toLocaleDateString()}</div></div><div className="flex-1 text-right font-black text-indigo-700">${s.value.toFixed(2)}</div></div> ))}</div>
+                        <div className="grid grid-cols-2 gap-3"><div className="bg-white p-3 rounded-xl border text-center leading-tight">Ventas: ${totalSales.toFixed(2)}</div><div className="bg-white p-3 rounded-xl border text-center leading-tight">Envío: +${shippingCost.toFixed(2)}</div><div className="bg-white p-3 rounded-xl border text-center leading-tight">Abonos Ropa: -${totalAbonado.toFixed(2)}</div><div className="bg-white p-3 rounded-xl border text-center leading-tight">Abonos Envío: -${shippingPaid.toFixed(2)}</div></div>
+                        <div className="bg-slate-900 p-6 rounded-3xl shadow-inner text-right mt-2"><label className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Saldo Final a Cobrar</label><div className="text-4xl font-black text-emerald-300">${finalBalance.toFixed(2)}</div></div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+
+    // ============================================================================
+    // 2. COMPONENTE: PERFIL DEL CLIENTE (CON QR POS COMPLETO Y LISTA DE ÍTEMS)
+    // ============================================================================
     const ClientDetailComponent = ({ activeClient, logic, onBack }) => {
         const [payAmount, setPayAmount] = useState("");
         const [payDate, setPayDate] = useState(getToday()); 
@@ -763,6 +839,7 @@
         const [waExpandItems, setWaExpandItems] = useState(false); 
 
         const [showInvoice, setShowInvoice] = useState(false);
+        const [selectedInvoiceStyle, setSelectedInvoiceStyle] = useState('minimalist');
         
         const [showLabel, setShowLabel] = useState(false);
         const [labelMode, setLabelMode] = useState('horizontal'); 
@@ -807,6 +884,7 @@
         const shippingPending = Math.max(0, shippingCost - shippingPaid); 
         const clothingBalance = Number(cycle.clothingBalance) || 0;
         const clothingDebt = Math.abs(Math.min(0, clothingBalance));
+        const finalBalance = clothingDebt + shippingPending;
         
         const safeShipments = (logic.shipments && Array.isArray(logic.shipments)) ? logic.shipments : [];
         const clientShipments = safeShipments.filter(s => s.clientId === activeClient.id).sort((a,b) => new Date(safeISO(b.date)) - new Date(safeISO(a.date)));
@@ -869,6 +947,14 @@
         const handleDestroy = async (item) => { if(confirm(`🛑 ¿ELIMINAR DEFINITIVAMENTE?`)) { await logic.destroySale(item); if(clientTrash.length <= 1) setShowTrash(false); } };
         const handleResurrectFromHistory = async (h) => { try { const amount = parseFloat(h.totalAmount) || parseFloat(h.value) || parseFloat(h.amount) || 0; if (amount <= 0) return alert("⚠️ No se puede recuperar."); if (!window.confirm(`¿Deseas recuperar esta deuda?\n\nValor: $${amount.toFixed(2)}`)) return; const cleanDetail = `(Recuperado) ${h.reason || 'Papelera'}`; await logic.addSale(activeClient.id, cleanDetail, amount, new Date().toISOString()); alert("✅ Deuda recuperada."); } catch (error) { alert("Error de conexión."); } };
         
+        // NUEVO: Vaciar papelera de una sola vez
+        const handleEmptyTrash = async () => {
+            if(!window.confirm(`🛑 ¿VACIAR PAPELERA COMPLETA?\n\nSe eliminarán definitivamente ${clientTrash.length} prendas para siempre. Esta acción no se puede deshacer.`)) return;
+            for (const item of clientTrash) { await logic.destroySale(item); }
+            if(clientTrash.length > 0) setShowTrash(false);
+            alert("✅ Papelera vaciada correctamente.");
+        };
+
         const handleUpdateClient = (upd) => logic.setClients(activeClient.id, upd);
         const saveEdit = () => { handleUpdateClient({ name: editName, phone: editPhone, cedula: editCedula, province: editProvince, city: editCity, address: editAddress }); setIsEditing(false); };
         
@@ -876,6 +962,7 @@
         const handleSavePaymentEdit = async () => { if(!editingPayment) return; let targetFireId = editingPayment.fireId; if (!targetFireId) { const f = (logic.payments||[]).find(p => p.id === editingPayment.id); if(f) targetFireId = f.fireId; } if(!targetFireId) return; try { await window.fs.updateDoc(window.fs.doc(window.db, "payments", targetFireId), { amount: parseFloat(editingPayment.amount), account: editingPayment.account, date: safeISO(editingPayment.date) }); setEditingPayment(null); } catch(e) { alert(e.message); } };
         const handleDeletePayment = async () => { if (!editingPayment) return; let targetFireId = editingPayment.fireId; if (!targetFireId) { const f = (logic.payments||[]).find(p => p.id === editingPayment.id); if(f) targetFireId = f.fireId; } if (targetFireId && confirm(`¿BORRAR PAGO DE $${editingPayment.amount}?`)) { try { await window.fs.deleteDoc(window.fs.doc(window.db, "payments", targetFireId)); setEditingPayment(null); } catch (e) { alert(e.message); } } };
         const handlePayment = () => { if(!payAmount || isProcessing) return; setIsProcessing(true); logic.addPayment(activeClient.id, payAmount, 'Abono Ropa', smartDate(payDate, cycle.lastShipmentDate), payBank); setPayAmount(""); setTimeout(() => setIsProcessing(false), 1000); };
+        const handleRouteSelect = (r) => { let c = 0; if(r==='Servientrega') c=5; if(r==='Domicilio') c=3; if(r==='Ibarra') c=(cycle.totalSales>=25?0:3); handleUpdateClient({ deliveryMethod: r, shippingCost: c }); };
         const cycleStartDateStr = cycle.lastShipmentDate.toLocaleDateString() === '12/31/1969' ? 'Inicio' : new Date(safeISO(cycle.lastShipmentDate)).toLocaleDateString();
         
         const handlePartialLiquidation = async () => {
@@ -912,7 +999,6 @@
                 const groups = {}; let totalSalesShown = 0; 
                 salesToShow.forEach(s => { const k = new Date(safeISO(s.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'numeric' }); if(!groups[k]) groups[k] = { count: 0, total: 0, items: [] }; groups[k].count++; groups[k].total += s.value; groups[k].items.push(s); totalSalesShown += s.value; }); 
                 
-                // EL FILTRO MÁGICO CORREGIDO: Ignora solo los pagos que dicen "Pago Envío" y "Ajuste costo", para que la resta quede pura
                 const normalPayments = paymentsToShow.filter(p => !p.detail?.toLowerCase().includes("envío") && !p.detail?.toLowerCase().includes("ajuste costo"));
                 const totalPaymentsShown = normalPayments.reduce((acc, p) => acc + (parseFloat(p.amount)||0), 0); 
                 const finalBalance = totalSalesShown - totalPaymentsShown; 
@@ -951,11 +1037,28 @@
 
         const qrText = `ENVÍO ADELITA STORE\nID: ${activeClient.id}\nCliente: ${activeClient.name}\nCel: ${activeClient.phone || 'S/N'}\nCiudad: ${activeClient.city || 'S/N'}\nDir: ${activeClient.address || 'S/N'}`;
         const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrText)}`;
+        const posQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`ADELITA STORE\nCliente: ${activeClient.name} (${activeClient.id})\n----------------\nPrendas: ${cycle.cycleSales.length}\n----------------\nRopa: $${cycle.totalSales.toFixed(2)}\nEnvío (${activeClient.deliveryMethod || 'PEND'}): $${shippingCost.toFixed(2)}\nAbonos Ropa: -$${cycle.totalNormalPaid.toFixed(2)}\nAbonos Envío: -$${shippingPaid.toFixed(2)}\n----------------\nTOTAL SALDO: $${finalBalance.toFixed(2)}\n----------------\nGracias por su compra!\n`)}`;
 
         return (
             <div className="flex flex-col h-full bg-white relative">
                 
-                {/* --- MODAL: ETIQUETA INTELIGENTE --- */}
+                {showInvoice && (
+                    <div className="fixed inset-0 bg-slate-900/95 z-[100] p-4 flex flex-col animate-in fade-in" onClick={() => setShowInvoice(false)}>
+                        <div className="bg-white rounded-2xl p-4 w-full max-w-2xl mb-4 mx-auto flex justify-between items-center shadow-2xl no-print" onClick={e=>e.stopPropagation()}>
+                            <div>
+                                <h3 className="font-black text-slate-800">Factura Digital</h3>
+                                <p className="text-[10px] text-slate-500 uppercase font-bold">Visualización Digital</p>
+                            </div>
+                            <div className="flex bg-slate-100 p-1 rounded-lg">
+                                <button onClick={()=>setSelectedInvoiceStyle('minimalist')} className={`px-4 py-2 rounded-md text-xs font-bold transition-colors ${selectedInvoiceStyle==='minimalist'?'bg-white shadow text-indigo-600':'text-slate-400'}`}>Boutique ▬</button>
+                                <button onClick={()=>setSelectedInvoiceStyle('modern')} className={`px-4 py-2 rounded-md text-xs font-bold transition-colors ${selectedInvoiceStyle==='modern'?'bg-white shadow text-indigo-600':'text-slate-400'}`}>Modern App ▮</button>
+                            </div>
+                            <button onClick={()=>setShowInvoice(false)} className="bg-slate-200 text-slate-700 px-4 py-2 rounded-xl font-bold">✕</button>
+                        </div>
+                        <Invoice3DModal activeClient={activeClient} cycle={cycle} invoiceStyle={selectedInvoiceStyle} qrUrl={posQrUrl} />
+                    </div>
+                )}
+
                 {showLabel && (
                     <div className="fixed inset-0 bg-slate-900/95 z-[100] flex flex-col items-center p-4 overflow-y-auto animate-in fade-in" onClick={() => setShowLabel(false)}>
                         <style>{`
@@ -963,69 +1066,30 @@
                                 @page { size: ${labelMode === 'horizontal' ? 'landscape' : 'portrait'}; margin: 0; }
                                 body * { visibility: hidden !important; }
                                 .printable-label, .printable-label * { visibility: visible !important; color: black !important; }
-                                .printable-label { 
-                                    position: absolute !important; 
-                                    left: 0 !important; top: 0 !important; 
-                                    width: 100vw !important; height: 100vh !important;
-                                    margin: 0 !important; padding: 10mm !important;
-                                    box-shadow: none !important; border: none !important; border-radius: 0 !important;
-                                    page-break-after: always;
-                                    display: flex !important;
-                                }
+                                .printable-label { position: absolute !important; left: 0 !important; top: 0 !important; width: 100vw !important; height: 100vh !important; margin: 0 !important; padding: 10mm !important; box-shadow: none !important; border: none !important; border-radius: 0 !important; page-break-after: always; display: flex !important; }
                                 .no-print { display: none !important; }
                             }
                         `}</style>
-                        
                         <div className="bg-white rounded-2xl p-4 w-full max-w-2xl mb-4 flex justify-between items-center shadow-2xl no-print shrink-0" onClick={e=>e.stopPropagation()}>
-                            <div>
-                                <h3 className="font-black text-slate-800">Etiqueta de Envío</h3>
-                                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Orientación</p>
-                            </div>
-                            <div className="flex bg-slate-100 p-1 rounded-lg">
-                                <button onClick={()=>setLabelMode('horizontal')} className={`px-4 py-2 rounded-md text-xs font-bold transition-all ${labelMode==='horizontal'?'bg-white shadow text-indigo-600':'text-slate-400 hover:text-slate-600'}`}>Horizontal ▬</button>
-                                <button onClick={()=>setLabelMode('vertical')} className={`px-4 py-2 rounded-md text-xs font-bold transition-all ${labelMode==='vertical'?'bg-white shadow text-indigo-600':'text-slate-400 hover:text-slate-600'}`}>Vertical ▮</button>
-                            </div>
-                            <div className="flex gap-2">
-                                <button onClick={()=>setShowLabel(false)} className="bg-slate-200 text-slate-700 px-4 py-2 rounded-xl font-bold text-sm shadow-md active:scale-95 transition-transform">X</button>
-                                <button onClick={()=>{ window.print(); }} className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-md active:scale-95 transition-transform flex items-center gap-2"><Icon.Printer /> IMPRIMIR</button>
-                            </div>
+                            <div><h3 className="font-black text-slate-800">Etiqueta de Envío</h3><p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Orientación</p></div>
+                            <div className="flex bg-slate-100 p-1 rounded-lg"><button onClick={()=>setLabelMode('horizontal')} className={`px-4 py-2 rounded-md text-xs font-bold transition-all ${labelMode==='horizontal'?'bg-white shadow text-indigo-600':'text-slate-400 hover:text-slate-600'}`}>Horizontal ▬</button><button onClick={()=>setLabelMode('vertical')} className={`px-4 py-2 rounded-md text-xs font-bold transition-all ${labelMode==='vertical'?'bg-white shadow text-indigo-600':'text-slate-400 hover:text-slate-600'}`}>Vertical ▮</button></div>
+                            <div className="flex gap-2"><button onClick={()=>setShowLabel(false)} className="bg-slate-200 text-slate-700 px-4 py-2 rounded-xl font-bold text-sm shadow-md active:scale-95 transition-transform">✕</button><button onClick={()=>{ window.print(); }} className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-md active:scale-95 transition-transform flex items-center gap-2"><Icon.Printer /> IMPRIMIR</button></div>
                         </div>
 
                         <div className={`w-full max-w-3xl bg-white shadow-2xl printable-label flex flex-col shrink-0 mb-10 border-2 border-slate-200 p-4 md:p-8 ${labelMode === 'horizontal' ? 'aspect-[1.5/1]' : 'aspect-[1/1.5] max-w-xl'}`} onClick={e=>e.stopPropagation()}>
                             <div className="flex justify-between items-center border-b-4 print:border-b-8 border-black pb-4 mb-4 shrink-0">
-                                <div>
-                                    <h1 className={`${labelMode === 'horizontal' ? 'text-3xl md:text-5xl print:text-6xl' : 'text-2xl md:text-4xl print:text-5xl'} font-black tracking-tighter uppercase`} style={{fontFamily: "'Space Mono', monospace"}}>ADELITA STORE</h1>
-                                    <p className={`${labelMode === 'horizontal' ? 'text-sm md:text-xl print:text-2xl' : 'text-xs md:text-lg print:text-xl'} font-black text-slate-600 tracking-widest mt-1`}>ENVÍO PRIORITARIO</p>
-                                </div>
-                                <div className="text-right flex flex-col items-end">
-                                    <div className={`${labelMode === 'horizontal' ? 'text-4xl md:text-6xl print:text-7xl' : 'text-3xl md:text-5xl print:text-6xl'} font-black border-4 print:border-8 border-black px-4 py-1`}>{activeClient.id}</div>
-                                </div>
+                                <div><h1 className={`${labelMode === 'horizontal' ? 'text-3xl md:text-5xl print:text-6xl' : 'text-2xl md:text-4xl print:text-5xl'} font-black tracking-tighter uppercase`} style={{fontFamily: "'Space Mono', monospace"}}>ADELITA STORE</h1><p className={`${labelMode === 'horizontal' ? 'text-sm md:text-xl print:text-2xl' : 'text-xs md:text-lg print:text-xl'} font-black text-slate-600 tracking-widest mt-1`}>ENVÍO PRIORITARIO</p></div>
+                                <div className="text-right flex flex-col items-end"><div className={`${labelMode === 'horizontal' ? 'text-4xl md:text-6xl print:text-7xl' : 'text-3xl md:text-5xl print:text-6xl'} font-black border-4 print:border-8 border-black px-4 py-1`}>{activeClient.id}</div></div>
                             </div>
-
                             <div className={`flex-1 flex gap-6 ${labelMode === 'horizontal' ? 'flex-row' : 'flex-col-reverse'}`}>
                                 <div className={`${labelMode === 'horizontal' ? 'w-1/3 border-r-4 print:border-r-8 pr-6 flex-col justify-between' : 'w-full border-t-4 print:border-t-8 pt-4 flex-row justify-between items-center'} border-black flex`}>
-                                    <div>
-                                        <h3 className="font-black text-black uppercase tracking-widest text-sm md:text-lg print:text-xl border-b-2 border-black pb-1 mb-2">Remitente</h3>
-                                        <p className="font-bold text-xs md:text-base print:text-xl leading-tight">Adelita Store<br/>0994095056</p>
-                                        <div className="mt-4"><div className="text-center p-1 md:p-2 border-2 print:border-4 border-black font-black text-lg md:text-2xl print:text-3xl uppercase tracking-widest inline-block">{activeClient.deliveryMethod || 'ESTÁNDAR'}</div></div>
-                                    </div>
-                                    <div className={`${labelMode === 'horizontal' ? 'mt-4' : 'mt-0'}`}>
-                                        <p className="text-[8px] md:text-[10px] print:text-xs font-bold text-slate-400 text-center uppercase mb-1">Escanear para Ruta</p>
-                                        <img src={qrUrl} alt="QR Motorizado" className="w-20 h-20 md:w-32 md:h-32 print:w-40 print:h-40 border-4 border-black p-1" />
-                                    </div>
+                                    <div><h3 className="font-black text-black uppercase tracking-widest text-sm md:text-lg print:text-xl border-b-2 border-black pb-1 mb-2">Remitente</h3><p className="font-bold text-xs md:text-base print:text-xl leading-tight">Adelita Store<br/>0994095056</p><div className="mt-4"><div className="text-center p-1 md:p-2 border-2 print:border-4 border-black font-black text-lg md:text-2xl print:text-3xl uppercase tracking-widest inline-block">{activeClient.deliveryMethod || 'ESTÁNDAR'}</div></div></div>
+                                    <div className={`${labelMode === 'horizontal' ? 'mt-4' : 'mt-0'}`}><p className="text-[8px] md:text-[10px] print:text-xs font-bold text-slate-400 text-center uppercase mb-1">Escanear para Ruta</p><img src={posQrUrl} alt="QR Motorizado" className="w-20 h-20 md:w-32 md:h-32 print:w-40 print:h-40 border-4 border-black p-1" /></div>
                                 </div>
-
                                 <div className={`${labelMode === 'horizontal' ? 'w-2/3' : 'w-full flex-1'} flex flex-col justify-center`}>
-                                    <div className="text-xs md:text-sm print:text-xl font-black text-slate-400 uppercase tracking-widest mb-1">Destinatario:</div>
-                                    <h2 className={`${labelMode === 'horizontal' ? 'text-4xl md:text-5xl print:text-6xl mb-6' : 'text-3xl md:text-5xl print:text-6xl mb-4'} font-black text-black leading-none uppercase tracking-tight`}>{activeClient.name}</h2>
-                                    <div className="grid grid-cols-2 gap-4 print:gap-6 mb-4 print:mb-6">
-                                        <div className="bg-slate-50 border-2 print:border-4 border-slate-200 p-3 print:p-4 rounded-xl print:rounded-2xl"><div className="text-[10px] md:text-xs print:text-lg font-black text-slate-400 uppercase">Ciudad</div><div className="text-xl md:text-2xl print:text-4xl font-black uppercase text-indigo-700 mt-1 truncate">{activeClient.city || 'N/A'}</div></div>
-                                        <div className="bg-slate-50 border-2 print:border-4 border-slate-200 p-3 print:p-4 rounded-xl print:rounded-2xl"><div className="text-[10px] md:text-xs print:text-lg font-black text-slate-400 uppercase">Provincia</div><div className="text-xl md:text-2xl print:text-4xl font-black uppercase mt-1 truncate">{activeClient.province || 'N/A'}</div></div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4 print:gap-6 mb-4 print:mb-4">
-                                        <div><div className="text-[10px] md:text-xs print:text-lg font-black text-slate-400 uppercase">Teléfono</div><div className="text-lg md:text-xl print:text-3xl font-black mt-1">{activeClient.phone || 'N/A'}</div></div>
-                                        <div><div className="text-[10px] md:text-xs print:text-lg font-black text-slate-400 uppercase">Cédula / RUC</div><div className="text-lg md:text-xl print:text-3xl font-black mt-1">{activeClient.cedula || 'N/A'}</div></div>
-                                    </div>
+                                    <div className="text-xs md:text-sm print:text-xl font-black text-slate-400 uppercase tracking-widest mb-1">Destinatario:</div><h2 className={`${labelMode === 'horizontal' ? 'text-4xl md:text-5xl print:text-6xl mb-6' : 'text-3xl md:text-5xl print:text-6xl mb-4'} font-black text-black leading-none uppercase tracking-tight`}>{activeClient.name}</h2>
+                                    <div className="grid grid-cols-2 gap-4 print:gap-6 mb-4 print:mb-6"><div className="bg-slate-50 border-2 print:border-4 border-slate-200 p-3 print:p-4 rounded-xl print:rounded-2xl"><div className="text-[10px] md:text-xs print:text-lg font-black text-slate-400 uppercase">Ciudad</div><div className="text-xl md:text-2xl print:text-4xl font-black uppercase text-indigo-700 mt-1 truncate">{activeClient.city || 'N/A'}</div></div><div className="bg-slate-50 border-2 print:border-4 border-slate-200 p-3 print:p-4 rounded-xl print:rounded-2xl"><div className="text-[10px] md:text-xs print:text-lg font-black text-slate-400 uppercase">Provincia</div><div className="text-xl md:text-2xl print:text-4xl font-black uppercase mt-1 truncate">{activeClient.province || 'N/A'}</div></div></div>
+                                    <div className="grid grid-cols-2 gap-4 print:gap-6 mb-4 print:mb-4"><div><div className="text-[10px] md:text-xs print:text-lg font-black text-slate-400 uppercase">Teléfono</div><div className="text-lg md:text-xl print:text-3xl font-black mt-1">{activeClient.phone || 'N/A'}</div></div><div><div className="text-[10px] md:text-xs print:text-lg font-black text-slate-400 uppercase">Cédula / RUC</div><div className="text-lg md:text-xl print:text-3xl font-black mt-1">{activeClient.cedula || 'N/A'}</div></div></div>
                                     <div><div className="text-[10px] md:text-xs print:text-lg font-black text-slate-400 uppercase">Dirección Exacta</div><div className="text-sm md:text-lg print:text-2xl font-bold leading-tight mt-1 border-l-4 print:border-l-8 border-indigo-500 pl-3 py-1">{activeClient.address || 'Sin dirección registrada.'}</div></div>
                                 </div>
                             </div>
@@ -1033,16 +1097,28 @@
                     </div>
                 )}
 
-
-                {/* MODALES VIEJOS */}
                 {showRetroCut && ( <div className="fixed inset-0 bg-black/80 z-[80] flex items-center justify-center p-6 animate-in fade-in" onClick={()=>setShowRetroCut(false)}> <div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-4 shadow-2xl relative" onClick={e=>e.stopPropagation()}> <button onClick={()=>setShowRetroCut(false)} className="absolute top-4 right-4 text-slate-400 font-bold w-8 h-8 flex items-center justify-center bg-slate-100 rounded-full">✕</button> <h3 className="font-black text-slate-800 text-xl flex items-center gap-2">✂️ Corte Retroactivo</h3> <p className="text-xs text-slate-500">¿Olvidaste dar a 'Confirmar Salida' en bodega y se mezclaron las compras viejas con las nuevas?<br/><br/>Elige la fecha en la que <b>realmente</b> enviaste el paquete anterior para dividir el historial:</p> <div> <label className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Fecha del envío viejo</label> <input type="date" value={retroCutDate} onChange={e=>setRetroCutDate(e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-xl mt-1 font-bold text-slate-700 outline-none" /> </div> <button onClick={handleExecuteRetroCut} className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl shadow-lg active:scale-95 transition-all">Dividir Ciclos Ahora</button> {lastOmittedCut && ( <div className="mt-4 pt-4 border-t border-slate-100"> <p className="text-[10px] text-center text-slate-400 mb-2">¿Te equivocaste de fecha o cortaste mal?</p> <button onClick={handleUndoRetroCut} className="w-full py-3 bg-red-50 text-red-600 border border-red-200 font-bold rounded-xl active:scale-95 transition-all">↩️ Deshacer el último corte</button> </div> )} </div> </div> )}
-                {showTrash && (<div className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-4 animate-in fade-in" onClick={()=>setShowTrash(false)}><div className="bg-white w-full max-w-md rounded-3xl p-6 relative" onClick={e=>e.stopPropagation()}><h3 className="font-black text-2xl text-slate-800 mb-4 flex items-center gap-2"><Icon.Trash /> Papelera de Reciclaje</h3><div className="bg-orange-50 text-orange-800 text-xs p-3 rounded-xl mb-4 border border-orange-100">Estos ítems <b>NO suman deuda</b>. Restáuralos para cobrar o elimínalos para siempre.</div><div className="max-h-[60vh] overflow-y-auto space-y-2">{clientTrash.length===0 ? <div className="text-center text-slate-400 italic py-10">Papelera vacía 🧹</div> : clientTrash.map(item => (<div key={item.fireId} className="flex flex-col gap-2 p-3 border rounded-xl hover:bg-slate-50 bg-white shadow-sm"><div className="flex justify-between items-center"><div><div className="font-bold text-slate-700">{item.item}</div><div className="text-xs text-slate-400">Borrado: {new Date(item.deletedAt).toLocaleDateString()}</div></div><span className="font-black text-slate-400">${item.value.toFixed(2)}</span></div><div className="flex gap-2 mt-1"><button onClick={()=>handleRestore(item)} className="flex-1 bg-emerald-100 text-emerald-700 py-2 rounded-lg font-bold text-xs hover:bg-emerald-200 flex justify-center items-center gap-1"><Icon.Check /> Restaurar</button><button onClick={()=>handleDestroy(item)} className="flex-1 bg-red-100 text-red-700 py-2 rounded-lg font-bold text-xs hover:bg-red-200 flex justify-center items-center gap-1"><Icon.Trash /> Eliminar Def.</button></div></div>))}</div><button onClick={()=>setShowTrash(false)} className="mt-4 w-full py-3 bg-slate-100 text-slate-500 font-bold rounded-xl">Cerrar</button></div></div>)}
+                
+                {/* PAPELERA CON BOTÓN DE VACIAR */}
+                {showTrash && (<div className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-4 animate-in fade-in" onClick={()=>setShowTrash(false)}>
+                    <div className="bg-white w-full max-w-md rounded-3xl p-6 relative" onClick={e=>e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-black text-2xl text-slate-800 flex items-center gap-2"><Icon.Trash /> Papelera</h3>
+                            {clientTrash.length > 0 && <button onClick={handleEmptyTrash} className="bg-red-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg shadow-sm hover:bg-red-700 active:scale-95 transition-all">VACIAR TODO</button>}
+                        </div>
+                        <div className="bg-orange-50 text-orange-800 text-xs p-3 rounded-xl mb-4 border border-orange-100">Estos ítems <b>NO suman deuda</b>. Restáuralos para cobrar o elimínalos para siempre.</div>
+                        <div className="max-h-[60vh] overflow-y-auto space-y-2">
+                            {clientTrash.length===0 ? <div className="text-center text-slate-400 italic py-10">Papelera vacía 🧹</div> : clientTrash.map(item => (<div key={item.fireId} className="flex flex-col gap-2 p-3 border rounded-xl hover:bg-slate-50 bg-white shadow-sm"><div className="flex justify-between items-center"><div><div className="font-bold text-slate-700">{item.item}</div><div className="text-xs text-slate-400">Borrado: {new Date(item.deletedAt).toLocaleDateString()}</div></div><span className="font-black text-slate-400">${item.value.toFixed(2)}</span></div><div className="flex gap-2 mt-1"><button onClick={()=>handleRestore(item)} className="flex-1 bg-emerald-100 text-emerald-700 py-2 rounded-lg font-bold text-xs hover:bg-emerald-200 flex justify-center items-center gap-1"><Icon.Check /> Restaurar</button><button onClick={()=>handleDestroy(item)} className="flex-1 bg-red-100 text-red-700 py-2 rounded-lg font-bold text-xs hover:bg-red-200 flex justify-center items-center gap-1"><Icon.Trash /> Eliminar Def.</button></div></div>))}
+                        </div>
+                        <button onClick={()=>setShowTrash(false)} className="mt-4 w-full py-3 bg-slate-100 text-slate-500 font-bold rounded-xl">Cerrar</button>
+                    </div>
+                </div>)}
+
                 {showWaModal && (<div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={()=>setShowWaModal(false)}><div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]" onClick={e=>e.stopPropagation()}><div className="bg-slate-50 p-4 border-b rounded-t-3xl shrink-0"><div className="flex justify-between mb-4"><h3 className="font-black text-slate-700">Generador WhatsApp</h3><button onClick={()=>setShowWaModal(false)} className="text-slate-400 hover:text-slate-800 font-bold">✕</button></div><div className="flex p-1 bg-slate-200 rounded-xl gap-1"><button onClick={()=>setWaTab('direct')} className={`flex-1 py-2 rounded-lg text-[10px] font-black tracking-widest ${waTab==='direct'?'bg-white shadow text-slate-800':'text-slate-500'}`}>DIRECTO</button><button onClick={()=>setWaTab('summary')} className={`flex-1 py-2 rounded-lg text-[10px] font-black tracking-widest ${waTab==='summary'?'bg-white shadow text-slate-800':'text-slate-500'}`}>COMPLETO</button><button onClick={()=>setWaTab('audit')} className={`flex-1 py-2 rounded-lg text-[10px] font-black tracking-widest ${waTab==='audit'?'bg-white shadow text-indigo-600':'text-slate-500'}`}>AUDITORÍA</button></div></div><div className="flex-1 overflow-y-auto p-4 bg-white">{waTab === 'audit' && (<div className="mb-4 bg-slate-50 p-3 rounded-2xl border border-slate-100 animate-in fade-in"><label className="text-[10px] font-black text-indigo-400 uppercase mb-2 block tracking-widest">1. Seleccionar Ciclo</label><select value={auditCycleId} onChange={e => { setAuditCycleId(e.target.value); setWaSelectedDates([]); }} className="w-full p-2.5 text-xs border border-slate-200 rounded-xl mb-4 font-bold bg-white text-slate-700 outline-none focus:border-indigo-400 transition-colors"><option value="current">🟢 Ciclo Actual (Vigente)</option>{pastCycles.map(c => ( <option key={c.id} value={c.id}>📁 {c.label}</option> ))}</select><label className="text-[10px] font-black text-indigo-400 uppercase mb-2 block tracking-widest">2. Selección de Prendas</label><div className="flex gap-2 mb-3"><button onClick={()=>setWaSubTab('full')} className={`flex-1 py-2 border rounded-xl text-xs font-bold transition-all ${waSubTab==='full'?'bg-indigo-100 border-indigo-200 text-indigo-700 shadow-inner':'bg-white text-slate-500'}`}>Todo el Ciclo</button><button onClick={()=>setWaSubTab('manual')} className={`flex-1 py-2 border rounded-xl text-xs font-bold transition-all ${waSubTab==='manual'?'bg-indigo-100 border-indigo-200 text-indigo-700 shadow-inner':'bg-white text-slate-500'}`}>Elegir Lives</button></div>{waSubTab === 'manual' && (<div className="bg-white p-2 rounded-xl border border-slate-200 max-h-32 overflow-y-auto shadow-sm">{Object.entries(currentWaSalesList).map(([d,t])=>(<label key={d} className="flex gap-2 p-2 border-b border-slate-50 last:border-0 hover:bg-slate-50 cursor-pointer items-center transition-colors"><input type="checkbox" className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500" checked={waSelectedDates.includes(d)} onChange={e=>{ if(e.target.checked) setWaSelectedDates([...waSelectedDates,d]); else setWaSelectedDates(waSelectedDates.filter(x=>x!==d)) }} /><span className="text-xs font-bold text-slate-700 flex-1">Live del {d}</span><span className="text-xs text-indigo-600 font-black bg-indigo-50 px-2 py-0.5 rounded-full">${t.toFixed(2)}</span></label>))}{Object.keys(currentWaSalesList).length === 0 && <div className="text-xs text-center text-slate-400 p-4 font-bold">No hay prendas.</div>}</div>)}</div>)}{(waTab === 'summary' || waTab === 'audit') && (<div className="mb-3 flex gap-2 bg-slate-100 p-1 rounded-xl"><button onClick={() => setWaExpandItems(false)} className={`flex-1 py-2 rounded-lg text-[10px] uppercase font-black tracking-widest transition-all ${!waExpandItems ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}>Contraído (Resumen)</button><button onClick={() => setWaExpandItems(true)} className={`flex-1 py-2 rounded-lg text-[10px] uppercase font-black tracking-widest transition-all ${waExpandItems ? 'bg-white shadow text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}>Expandido (Detalle)</button></div>)}<textarea id="wa-textarea" readOnly className="w-full h-48 md:h-64 p-4 bg-slate-50 border border-slate-200 rounded-2xl text-[11px] font-mono whitespace-pre-wrap outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-50 transition-all resize-none shadow-inner text-slate-700" value={generateWaMessage()}></textarea></div><div className="p-4 border-t border-slate-100 bg-white rounded-b-3xl shrink-0"><button onClick={()=>{ const t=document.getElementById('wa-textarea'); t.select(); document.execCommand('copy'); alert("¡Mensaje Copiado! ✅"); }} className="w-full bg-slate-900 hover:bg-black active:scale-[0.98] transition-all text-white py-4 rounded-2xl font-black text-sm flex justify-center items-center gap-2 shadow-xl shadow-slate-900/20"><Icon.Copy /> COPIAR MENSAJE</button></div></div></div>)}
                 {editingPayment && (<div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-6" onClick={()=>setEditingPayment(null)}><div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-4" onClick={e=>e.stopPropagation()}><h3 className="font-bold text-center">Editar Pago</h3><select value={editingPayment.account||'pichincha'} onChange={e=>setEditingPayment({...editingPayment,account:e.target.value})} className="w-full p-3 bg-indigo-50 border rounded-xl font-bold"><option value="pichincha">Pichincha</option><option value="guayaquil">Guayaquil</option><option value="pacifico">Pacífico</option><option value="efectivo">Efectivo</option></select><div className="grid grid-cols-2 gap-3"><input type="number" value={editingPayment.amount} onChange={e=>setEditingPayment({...editingPayment,amount:e.target.value})} className="p-3 border rounded-xl" /><input type="date" value={editingPayment.date.split('T')[0]} onChange={e=>setEditingPayment({...editingPayment,date:e.target.value})} className="p-3 border rounded-xl" /></div><div className="flex gap-2"><button onClick={handleSavePaymentEdit} className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl">Guardar</button></div><button onClick={handleDeletePayment} className="w-full py-3 bg-red-100 text-red-600 font-bold rounded-xl border border-red-200 flex justify-center gap-2"><Icon.Trash /> ELIMINAR</button></div></div>)}
                 {editingSale && (<div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-6" onClick={()=>setEditingSale(null)}><div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-4" onClick={e=>e.stopPropagation()}><h3 className="font-bold text-center">Editar Venta</h3><input type="date" value={editingSale.date.split('T')[0]} onChange={e=>setEditingSale({...editingSale,date:e.target.value})} className="w-full p-3 border rounded-xl" /><input value={editingSale.item} onChange={e=>setEditingSale({...editingSale,item:e.target.value})} className="w-full p-3 border rounded-xl" /><input type="number" value={editingSale.value} onChange={e=>setEditingSale({...editingSale,value:e.target.value})} className="w-full p-3 border rounded-xl font-bold text-emerald-600" /><button onClick={handleSaveSaleEdit} className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl">Guardar</button></div></div>)}
 
                 <div className="p-4 border-b flex justify-between sticky top-0 bg-white z-10"><button onClick={onBack} className="text-slate-500 font-bold">← Atrás</button><div className={`text-xs px-3 py-1 rounded-full border font-bold ${status.color}`}>{status.label}</div></div>
-                {showInvoice && (<Invoice3DModal client={activeClient} cycle={cycle} onClose={()=>setShowInvoice(false)} />)}
                 <ReputationCard />
 
                 <div className="flex-1 overflow-y-auto p-4 landscape:grid landscape:grid-cols-2 landscape:gap-6">
@@ -1080,7 +1156,7 @@
                             <div className="flex gap-2 flex-wrap justify-end">
                                 <button onClick={()=>setShowTrash(true)} className="bg-orange-100 text-orange-700 p-2 rounded-xl flex items-center gap-1 font-bold text-[10px]"><Icon.Trash /> {clientTrash.length > 0 ? `Papelera (${clientTrash.length})` : 'Papelera'}</button>
                                 <button onClick={()=>setShowLabel(true)} className="bg-cyan-100 text-cyan-700 p-2 rounded-xl active:scale-95 transition-transform shadow-sm"><Icon.Printer /></button>
-                                <button onClick={()=>setShowInvoice(true)} className="bg-indigo-100 text-indigo-700 p-2 rounded-xl"><Icon.FileText /></button>
+                                <button onClick={()=>setShowInvoice(true)} className="bg-indigo-600 text-white p-2 rounded-xl active:scale-95 shadow-md"><Icon.FileText /></button>
                                 <button onClick={()=>setShowWaModal(true)} className="bg-emerald-100 text-emerald-700 p-2 rounded-xl"><Icon.Message /></button>
                             </div>
                         </div>
@@ -1127,7 +1203,6 @@
                                             if (shippingCost <= 0) return alert("Define el costo de la ruta primero.");
                                             if (clothingBalance < shippingPending) return alert(`El cliente solo tiene $${clothingBalance.toFixed(2)} a favor y el envío cuesta $${shippingPending.toFixed(2)}.`);
                                             const dateISO = smartDate(getToday(), cycle.lastShipmentDate); 
-                                            // Corrección: Se ignoran en WA gracias al filtro mejorado
                                             logic.addPayment(activeClient.id, -shippingPending, 'Ajuste costo logístico', dateISO, payBank); 
                                             logic.addPayment(activeClient.id, shippingPending, 'Pago Envío', dateISO, payBank);
                                             logic.addExpense(`Salida Courier (Saldo) - ${activeClient.name}`, shippingPending, dateISO, 'shipping', payBank);
@@ -1193,7 +1268,7 @@
     // --- BODEGA 3.0: ORDEN CRONOLÓGICO + GESTIÓN COURIER ---
     // --- BODEGA 4.0: CEREBRO LOGÍSTICO + COBROS INTEGRADOS ---
         // --- BODEGA 4.0: LOGÍSTICA BLINDADA + COBROS INTEGRADOS ---
-    const WarehouseView = ({ logic }) => {
+        const WarehouseView = ({ logic }) => {
         const [tab, setTab] = useState('prep'); 
         const [selectedClient, setSelectedClient] = useState(null);
         const [guide, setGuide] = useState("");
@@ -1207,9 +1282,10 @@
 
         const [shipPayAmount, setShipPayAmount] = useState("");
         const [shipPayDate, setShipPayDate] = useState(getToday());
-        const [courierBank, setCourierBank] = useState('pichincha');
+        const [courierBank, setCourierBank] = useState('pichincha'); // Banco manual para el courier
         const [isProcessing, setIsProcessing] = useState(false);
 
+        // Reseteo de bultos al abrir un cliente
         useEffect(() => {
             if (selectedClient) {
                 setBultos(1);
@@ -1249,7 +1325,7 @@
             const cycle = logic.getClientCycle(selectedClient.id); 
             const balanceAtClosing = cycle ? cycle.clothingBalance : 0; 
             
-            // CORTE DE TIEMPO EXACTO
+            // CORTE DE TIEMPO EXACTO (Arreglo del error de $88 duplicados)
             let closeDateISO;
             const todayStr = getToday();
             if (dispatchDate === todayStr) {
@@ -1427,7 +1503,6 @@
             </div>
         );
     };
-
 
     // --- LIVE VIEW 2.0: MULTI-CARGA (CARRITO RAPIDO) ---
     // --- LIVE VIEW MULTI-SOCIA ---
@@ -1886,7 +1961,7 @@
         // --- VISTA ADMINISTRADOR COMPLETA (CORREGIDA DECIMALES Y SUMAS) ---
         // --- VISTA ADMINISTRADOR 8.0 (FINAL: CON REPORTE DE SOCIAS) ---
     // --- VISTA ADMINISTRADOR 8.0 (FINAL: CON REPORTE DE SOCIAS) ---
-     const AdminView = ({ logic, onClose, onJumpToClient }) => {
+    const AdminView = ({ logic, onClose, onJumpToClient }) => {
         const [showReport, setShowReport] = useState(false); 
         
         // ESTADOS NUEVO GASTO
@@ -1921,16 +1996,16 @@
         logic.expenses.forEach(e => { const acc = (e.account || 'pichincha').toLowerCase().trim(); const val = parseFloat(e.amount) || 0; if(balances[acc] !== undefined) balances[acc] -= val; });
         const currentBalanceGlobal = balances.pichincha + balances.guayaquil + balances.pacifico + balances.efectivo;
         
-        const totalReceivable = logic.clients.reduce((acc, c) => { const cy = logic.getClientCycle(c.id); return acc + (cy.clothingBalance < -0.01 ? Math.abs(cy.clothingBalance) : 0); }, 0); // Deuda Activa Global
+        const totalReceivable = logic.clients.reduce((acc, c) => { const cy = logic.getClientCycle(c.id); return acc + (cy.clothingBalance < -0.01 ? Math.abs(cy.clothingBalance) : 0); }, 0); 
 
         // ---------------------------------------------------------
-        // 2. EXTRAER MESES DISPONIBLES Y FILTRAR (ESTADO DE RESULTADOS)
+        // 2. EXTRAER MESES DISPONIBLES Y FILTRAR
         // ---------------------------------------------------------
         const availableMonths = useMemo(() => {
             const months = new Set();
             const addMonth = (dateStr) => {
                 if(!dateStr) return;
-                const m = dateStr.substring(0, 7); // Extrae "YYYY-MM"
+                const m = dateStr.substring(0, 7); 
                 if(m && m.length === 7) months.add(m);
             };
             logic.payments.forEach(p => addMonth(safeISO(p.date)));
@@ -1951,7 +2026,7 @@
         const filteredSales = useMemo(() => logic.sales.filter(s => selectedMonth === 'all' || safeISO(s.date).startsWith(selectedMonth)), [logic.sales, selectedMonth]);
 
         // ---------------------------------------------------------
-        // 3. ESTADÍSTICAS DEL PERIODO (USAN DATOS FILTRADOS)
+        // 3. ESTADÍSTICAS DEL PERIODO (ESTADO DE RESULTADOS)
         // ---------------------------------------------------------
         const partnerStats = useMemo(() => {
             const stats = {};
@@ -1971,7 +2046,6 @@
         
         const ingresosRopa = filteredPayments.filter(p => !p.detail?.toLowerCase().includes("envío") && !p.detail?.toLowerCase().includes("transf") && !p.detail?.toLowerCase().includes("ajuste")).reduce((acc, p) => acc + (parseFloat(p.amount)||0), 0);
         const utilidadPura = ingresosRopa - expensesBusiness;
-        const totalSalesPeriod = filteredSales.reduce((acc, s) => acc + (parseFloat(s.value)||0), 0);
 
         const metrics = { totalCollected: filteredPayments.reduce((a,b)=>a+(parseFloat(b.amount)||0),0), totalExpenses: filteredExpenses.reduce((a,b)=>a+(parseFloat(b.amount)||0),0), profit: utilidadPura };
 
@@ -2132,10 +2206,9 @@
                     </div>
                 )}
 
-                {/* --- CABECERA FINANCIERA --- */}
+                {/* --- CABECERA FINANCIERA (Fondo sólido para reparar Safari iPad) --- */}
                 <div className="bg-slate-900 p-4 pb-6 rounded-b-[2rem] shadow-xl text-white z-10 shrink-0 relative">
                     
-                    {/* SELECTOR DE MES CONTABLE PARA LA CPA */}
                     <div className="absolute top-4 right-4 flex items-center gap-2 bg-slate-800 p-1.5 rounded-xl border border-slate-700 shadow-lg z-20">
                         <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest hidden md:block pl-2">Periodo:</label>
                         <select 
@@ -2144,41 +2217,30 @@
                             className="bg-slate-700 text-white text-[10px] md:text-xs font-black px-2 py-1.5 rounded-lg outline-none cursor-pointer border border-slate-600 text-center"
                         >
                             <option value="all">TODO EL HISTÓRICO</option>
-                            {availableMonths.map(m => (
-                                <option key={m} value={m}>{formatMonthName(m)}</option>
-                            ))}
+                            {availableMonths.map(m => ( <option key={m} value={m}>{formatMonthName(m)}</option> ))}
                         </select>
                     </div>
 
                     <div className="flex justify-between items-end mb-4 mt-12 md:mt-8">
-                        <div className="flex-1">
+                        <div>
                             <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1"><Icon.Chart/> Utilidad {selectedMonth !== 'all' ? 'Del Mes' : 'Total'}</div>
                             <div className="text-4xl font-black text-emerald-300">${utilidadPura.toFixed(2)}</div>
                             <div className="text-[10px] text-slate-400 mt-1">Ingresos (${ingresosRopa.toFixed(2)}) - Gastos (${expensesBusiness.toFixed(2)})</div>
                         </div>
-                        <div className="flex-1 text-right space-y-1">
+                        <div className="text-right space-y-1">
                             <div className="text-[10px] text-slate-400"><span className="text-orange-400 font-bold">Retiros:</span> -${expensesPersonal.toFixed(2)}</div>
-                            <div className="text-[10px] text-slate-400"><span className="text-blue-400 font-bold">Flujos Envío:</span> -${expensesShipping.toFixed(2)}</div>
-                            <button onClick={()=>setShowEqualize(true)} className="mt-2 text-[9px] bg-white/10 px-2 py-1 rounded font-bold hover:bg-white/20 active:scale-95 transition-all">⚖️ Igualar Caja Físicas</button>
+                            <div className="text-[10px] text-slate-400"><span className="text-blue-400 font-bold">Courier:</span> -${expensesShipping.toFixed(2)}</div>
+                            <button onClick={()=>setShowEqualize(true)} className="mt-2 text-[9px] bg-white/10 px-2 py-1 rounded font-bold hover:bg-white/20 active:scale-95 transition-all">⚖️ Igualar Caja</button>
                         </div>
                     </div>
                     
-                    {/* CAJAS BANCARIAS REALES (ESTO ES GLOBAL SIEMPRE) */}
-                    <div className="grid grid-cols-4 gap-2 text-center text-xs font-bold border-t border-white/10 pt-4">
-                        {['pichincha', 'guayaquil', 'pacifico', 'efectivo'].map(bank => (
-                            <button key={bank} onClick={()=>setAuditBank(bank)} className="bg-white/5 p-2 rounded-xl border border-white/10 hover:bg-white/20 active:scale-95 transition-all text-left flex flex-col items-center justify-center shadow-inner">
-                                <div className={`text-[9px] uppercase mb-1 ${bank==='pichincha'?'text-yellow-300':bank==='guayaquil'?'text-pink-300':bank==='pacifico'?'text-blue-300':'text-emerald-300'}`}>{bank}</div>
-                                ${balances[bank].toFixed(2)}
-                            </button>
-                        ))}
+                    <div className="grid grid-cols-4 gap-2 pt-4 border-t border-white/10">
+                        {['pichincha', 'guayaquil', 'pacifico', 'efectivo'].map(bank => ( <button key={bank} onClick={()=>setAuditBank(bank)} className="bg-white/5 p-2 rounded-xl text-center hover:bg-white/20 active:scale-95 transition-all"><div className={`text-[9px] uppercase ${bank==='pichincha'?'text-yellow-300':bank==='guayaquil'?'text-pink-300':bank==='pacifico'?'text-blue-300':'text-emerald-300'}`}>{bank}</div><div className="font-bold text-xs">${balances[bank].toFixed(2)}</div></button> ))}
                     </div>
-                    <div className="mt-3 flex justify-between items-center px-1">
-                        <div className="text-[10px] font-bold text-slate-400">Total en Cajas Físicas: ${currentBalanceGlobal.toFixed(2)}</div>
-                        <div className="text-[10px] font-bold text-rose-400">Deuda Global en Calle: ${totalReceivable.toFixed(2)}</div>
-                    </div>
+                    <div className="mt-3 flex justify-between px-1 text-[10px] text-slate-400 font-bold"><span>Total Cajas Reales: ${currentBalanceGlobal.toFixed(2)}</span><span>Deuda Global: ${totalReceivable.toFixed(2)}</span></div>
                 </div>
 
-                {/* --- CUERPO DEL ADMIN --- */}
+                {/* --- CUERPO --- */}
                 <div className="flex-1 flex flex-col landscape:flex-row overflow-hidden">
                     <div className="flex-none landscape:w-1/2 overflow-y-auto p-4 space-y-3 bg-slate-50">
                         
