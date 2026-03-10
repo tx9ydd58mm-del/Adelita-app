@@ -554,7 +554,7 @@
     
     // --- SUB-COMPONENTES VISUALES (CON SEMÁFORO EN SOCIAS v8.6) ---
     // --- SUB-COMPONENTES VISUALES (FORZADO A CONTRAÍDO v8.7) ---
-      const SalesAccordionGroup = ({ dateKey, items, onDelete, onEdit, onDeleteGroup }) => {
+    const SalesAccordionGroup = ({ dateKey, items, onDelete, onEdit, onDeleteGroup }) => {
         const [isOpen, setIsOpen] = useState(false); 
         
         const safeItems = Array.isArray(items) ? items : [];
@@ -1515,7 +1515,6 @@
         const [price, setPrice] = useState(""); 
         const [qty, setQty] = useState(1); 
         
-        // Control de Dueño
         const [currentOwner, setCurrentOwner] = useState('me'); 
         const [showNewPartner, setShowNewPartner] = useState(false);
         const [newPartnerName, setNewPartnerName] = useState("");
@@ -1537,12 +1536,7 @@
         const selectSuggestion = (client) => { setSearch(client.id); setFound(client); setSuggestions([]); setCart([]); };
 
         const handleAddPartner = () => {
-            if(newPartnerName) { 
-                logic.savePartner(newPartnerName); 
-                setCurrentOwner(newPartnerName.toUpperCase()); 
-                setShowNewPartner(false); 
-                setNewPartnerName(""); 
-            }
+            if(newPartnerName) { logic.savePartner(newPartnerName); setCurrentOwner(newPartnerName.toUpperCase()); setShowNewPartner(false); setNewPartnerName(""); }
         };
 
         const addToCart = () => {
@@ -1567,9 +1561,12 @@
             setItem(""); setPrice(""); setSearch(""); setFound(null); setSuggestions([]); setQty(1); setCart([]);
         };
 
+        // NUEVO: Cálculos en vivo para el carrito
+        const totalCartItems = cart.reduce((acc, i) => acc + i.qty, 0);
+        const totalCartValue = cart.reduce((acc, i) => acc + (i.price * i.qty), 0);
+
         return (
             <div className="h-full flex flex-col bg-[#f0f2f5]">
-                {/* CABECERA */}
                 <div className={`p-4 shadow-sm z-30 border-b border-slate-100 rounded-b-[30px] mb-2 transition-colors duration-300 ${currentOwner !== 'me' ? 'bg-purple-100' : 'bg-white'}`}>
                     <div className="flex justify-between items-center mb-4">
                         <div className="flex flex-col w-full pr-4">
@@ -1600,7 +1597,11 @@
                             </div>
                             {cart.length > 0 && (
                                 <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-3 animate-in slide-in-from-top-2">
-                                    <div className="text-[10px] font-bold text-indigo-400 uppercase mb-2 flex justify-between"><span>Items por guardar:</span><span>Total: ${cart.reduce((acc, i) => acc + (i.price * i.qty), 0).toFixed(2)}</span></div>
+                                    {/* NUEVO: Contador de prendas dentro del carrito */}
+                                    <div className="text-[10px] font-bold text-indigo-400 uppercase mb-2 flex justify-between items-center">
+                                        <span className="flex items-center gap-2">Items por guardar: <span className="bg-indigo-200 text-indigo-700 px-2 py-0.5 rounded-md font-black">{totalCartItems} prendas</span></span>
+                                        <span className="text-indigo-700 font-black text-xs">Total: ${totalCartValue.toFixed(2)}</span>
+                                    </div>
                                     <div className="flex gap-2 overflow-x-auto pb-1">{cart.map((c, i) => (<div key={i} className="flex-shrink-0 bg-white border border-indigo-100 px-3 py-2 rounded-xl shadow-sm flex items-center gap-2"><div><div className="font-bold text-xs text-slate-700">{c.qty}x {c.item} {c.owner!=='me' && <span className="text-[8px] bg-purple-100 text-purple-700 px-1 rounded">{c.owner}</span>}</div><div className="text-[10px] text-emerald-600 font-bold">${c.price.toFixed(2)} c/u</div></div><button onClick={() => removeFromCart(c.id)} className="text-red-400 hover:text-red-600 font-bold px-1">×</button></div>))}</div>
                                 </div>
                             )}
@@ -1608,7 +1609,6 @@
                     )}
                 </div>
 
-                {/* CUERPO (BOTONES) - El error estaba aquí, ahora fluye correctamente */}
                 <div className="flex-1 overflow-y-auto p-4 pt-2">
                     {msg && <div className="bg-emerald-600 text-white p-4 rounded-2xl mb-6 text-center font-bold animate-bounce shadow-xl mx-2 border-2 border-emerald-400">{msg}</div>}
                     <div className="grid grid-cols-1 landscape:grid-cols-3 gap-4 h-full">
@@ -1618,17 +1618,15 @@
                     </div>
                 </div>
 
-                {/* FOOTER */}
                 <div className="p-4 bg-white border-t border-slate-200 z-20 pb-6 md:pb-4 rounded-t-[30px] shadow-[0_-10px_20px_rgba(0,0,0,0.05)]">
                     <div className="flex gap-3">
                         <button onClick={addToCart} disabled={!found || !item || !price} className="flex-1 py-5 bg-amber-400 text-amber-900 rounded-2xl font-black text-sm md:text-lg shadow-xl disabled:opacity-50 touch-card active:scale-95 transition-all flex items-center justify-center gap-2"><Icon.List /> <span>SUMAR</span></button>
-                        <button onClick={handleFinalize} disabled={!found || (!item && cart.length === 0)} className="flex-[2] py-5 bg-slate-900 text-white rounded-2xl font-black text-sm md:text-xl shadow-2xl disabled:opacity-50 touch-card active:scale-95 transition-all flex items-center justify-center gap-3 tracking-wide"><span>{cart.length > 0 ? `GUARDAR TODO (${cart.length + (item ? 1 : 0)})` : 'CONFIRMAR VENTA'}</span><div className="bg-white/20 p-1.5 rounded-full"><Icon.Check /></div></button>
+                        <button onClick={handleFinalize} disabled={!found || (!item && cart.length === 0)} className="flex-[2] py-5 bg-slate-900 text-white rounded-2xl font-black text-sm md:text-xl shadow-2xl disabled:opacity-50 touch-card active:scale-95 transition-all flex items-center justify-center gap-3 tracking-wide"><span>{cart.length > 0 ? `GUARDAR TODO (${totalCartItems + (item ? parseInt(qty)||1 : 0)} prendas)` : 'CONFIRMAR VENTA'}</span><div className="bg-white/20 p-1.5 rounded-full"><Icon.Check /></div></button>
                     </div>
                 </div>
             </div>
         );
     };
-
 
 
     // --- VISTA CLIENTES (CON VISTA PREVIA DE CÓDIGO AUTOMÁTICO) ---
