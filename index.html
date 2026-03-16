@@ -556,20 +556,20 @@
     // --- SUB-COMPONENTES VISUALES (FORZADO A CONTRAÍDO v8.7) ---
     const SalesAccordionGroup = ({ dateKey, items, onDelete, onEdit, onDeleteGroup }) => {
         const [isOpen, setIsOpen] = useState(false); 
-        
         const safeItems = Array.isArray(items) ? items : [];
         const total = safeItems.reduce((sum, item) => sum + (Number(item.value) || 0), 0);
-        // NUEVO: Calculamos la cantidad de prendas en este grupo
         const itemsCount = safeItems.length; 
         
-        const hasExpired = safeItems.some(i => i.__status === 'expired');
-        const hasOnTime = safeItems.some(i => i.__status === 'ontime');
-        const allPaid = safeItems.every(i => i.__status === 'paid');
+        const hasPendingLate = safeItems.some(i => i.__status === 'pending_late');
+        const hasPaidLate = safeItems.some(i => i.__status === 'paid_late');
+        const hasPendingOntime = safeItems.some(i => i.__status === 'pending_ontime');
+        const allPaidOntime = safeItems.every(i => i.__status === 'paid_ontime');
 
         let groupBadge = null;
-        if (hasExpired) groupBadge = <span className="text-[9px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-black uppercase flex items-center gap-1"><Icon.Alert /> Riesgo</span>;
-        else if (hasOnTime) groupBadge = <span className="text-[9px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-black uppercase flex items-center gap-1">⏳ En Tiempo</span>;
-        else if (allPaid) groupBadge = <span className="text-[9px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase flex items-center gap-1"><Icon.Check /> Pagado</span>;
+        if (hasPendingLate) groupBadge = <span className="text-[9px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-black uppercase flex items-center gap-1 animate-pulse"><Icon.Alert /> Vencido</span>;
+        else if (hasPaidLate) groupBadge = <span className="text-[9px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-black uppercase flex items-center gap-1">Atrasado</span>;
+        else if (hasPendingOntime) groupBadge = <span className="text-[9px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-black uppercase flex items-center gap-1">⏳ 24h Gracia</span>;
+        else if (allPaidOntime) groupBadge = <span className="text-[9px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase flex items-center gap-1">🌟 Puntual</span>;
 
         return (
             <div className="mb-2 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm transition-all">
@@ -578,7 +578,6 @@
                         <div className={`w-6 h-6 rounded-full flex items-center justify-center bg-white border border-slate-200 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-indigo-500 border-indigo-200' : ''}`}><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg></div>
                         <span className="font-bold text-slate-700 text-xs uppercase flex items-center gap-2">
                             {dateKey} 
-                            {/* NUEVO: Etiqueta gris que indica el número de prendas */}
                             <span className="text-[9px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-md font-black lowercase tracking-widest">{itemsCount} prendas</span>
                         </span>
                         {groupBadge}
@@ -593,18 +592,21 @@
                     const isPartner = item.owner && item.owner !== 'me';
                     let rowBg = ""; let statusIcon = null; let priceColor = "";
 
-                    if (item.__status === 'paid') {
-                        rowBg = "bg-emerald-50/50"; priceColor = "text-emerald-700";
-                        statusIcon = <span className="text-[9px] font-black text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded uppercase">PAGADO</span>;
-                    } else if (item.__status === 'ontime') {
-                        rowBg = "bg-blue-50/30"; priceColor = "text-blue-700";
-                        statusIcon = <span className="text-[9px] font-black text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded uppercase">EN PLAZO</span>;
+                    if (item.__status === 'paid_ontime') {
+                        rowBg = "bg-emerald-50/30"; priceColor = "text-emerald-700";
+                        statusIcon = <span className="text-[8px] font-black text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded uppercase border border-emerald-200">🌟 PUNTUAL</span>;
+                    } else if (item.__status === 'paid_late') {
+                        rowBg = "bg-yellow-50/30"; priceColor = "text-yellow-700";
+                        statusIcon = <span className="text-[8px] font-black text-yellow-600 bg-yellow-100 px-1.5 py-0.5 rounded uppercase border border-yellow-200">PAGÓ ATRASADO</span>;
+                    } else if (item.__status === 'pending_ontime') {
+                        rowBg = "bg-slate-50/50"; priceColor = "text-slate-600";
+                        statusIcon = <span className="text-[8px] font-black text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded uppercase border border-slate-300">⏳ 24H GRACIA</span>;
                     } else {
                         rowBg = "bg-red-50/30 opacity-90"; priceColor = "text-red-700";
-                        statusIcon = <span className="text-[9px] font-black text-red-600 bg-red-100 px-1.5 py-0.5 rounded uppercase">VENCIDO</span>;
+                        statusIcon = <span className="text-[8px] font-black text-red-600 bg-red-100 px-1.5 py-0.5 rounded uppercase border border-red-200">🚨 VENCIDO</span>;
                     }
 
-                    const borderClass = isPartner ? "border-l-4 border-l-purple-500" : (item.__status === 'paid' ? "border-l-4 border-l-emerald-400" : (item.__status === 'ontime' ? "border-l-4 border-l-blue-400" : "border-l-4 border-l-red-400"));
+                    const borderClass = isPartner ? "border-l-4 border-l-purple-500" : (item.__status.includes('paid') ? "border-l-4 border-l-emerald-400" : (item.__status === 'pending_ontime' ? "border-l-4 border-l-slate-400" : "border-l-4 border-l-red-400"));
                     rowBg = `${rowBg} ${borderClass} hover:brightness-95`;
 
                     return (
@@ -615,7 +617,6 @@
                                     {isPartner && <span className="text-[9px] bg-purple-200 text-purple-800 px-1.5 py-0.5 rounded font-black uppercase">{item.owner}</span>}
                                     {statusIcon}
                                 </div>
-                                {item.notes && <div className="text-[10px] text-slate-400 italic">{item.notes}</div>}
                             </div>
                             <div className="flex items-center gap-3">
                                 <span className={`font-bold mr-1 ${priceColor}`}>${(Number(item.value)||0).toFixed(2)}</span>
@@ -628,127 +629,81 @@
         );
     };
 
-    const SalesListRenderer = ({ sales, shipments=[], isHistory=false, viewMode, totalPaid=0, onDeleteSale, onEditSale, onDeleteGroup }) => {
-        const GRACE_DAYS = 7; 
-
-        const processedSales = useMemo(() => {
-            let temp = Array.isArray(sales) ? [...sales] : [];
-            temp.sort((a, b) => { const dateA = new Date(safeISO(a.date)); const dateB = new Date(safeISO(b.date)); if (dateA - dateB !== 0) return dateA - dateB; return (a.id || 0) - (b.id || 0); });
-
-            let runningUsed = 0;
-            const limit = isHistory ? 99999999 : (totalPaid || 0);
-            const today = new Date();
-            
-            const marked = temp.map(item => {
-                const isCovered = (limit - runningUsed) >= (item.value - 0.01);
-                if (isCovered) {
-                    runningUsed += item.value;
-                    return { ...item, __status: 'paid' };
-                } 
+    const SalesListRenderer = ({ sales, shipments, isHistory, viewMode, totalPaid, onDeleteSale, onEditSale, onDeleteGroup, onUndoShipment }) => {
+        if (!sales || sales.length === 0) return <div className="text-center p-8 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400 font-bold text-sm">No hay prendas registradas.</div>;
+        if (viewMode === 'list') {
+            return (
+                <div className="space-y-2">
+                    {sales.map((item, idx) => (
+                        <div key={idx} className="flex justify-between items-center p-3 bg-white border border-slate-100 rounded-xl hover:shadow-md transition-shadow">
+                            <div><div className="font-bold text-slate-700 text-sm flex items-center gap-2">{item.item} {item.owner && item.owner !== 'me' && <span className="text-[9px] bg-purple-100 text-purple-700 px-1 rounded uppercase font-black">{item.owner}</span>}</div><div className="text-xs text-slate-400">{new Date(safeISO(item.date)).toLocaleDateString()}</div></div>
+                            <div className="flex items-center gap-3"><span className="font-black text-slate-800">${(Number(item.value)||0).toFixed(2)}</span><div className="flex gap-1"><button onClick={() => onEditSale && onEditSale(item)} className="text-slate-400 hover:text-indigo-500 p-1"><Icon.Edit /></button><button onClick={() => onDeleteSale(item)} className="text-slate-400 hover:text-red-500 p-1"><Icon.Trash /></button></div></div>
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+        
+        let elements = [];
+        if (isHistory && shipments && shipments.length > 0) {
+            const sortedShipments = [...shipments].sort((a,b) => new Date(safeISO(b.date)) - new Date(safeISO(a.date)));
+            let unassignedSales = [...sales];
+            sortedShipments.forEach((shipment, sIdx) => {
+                const shipmentDate = new Date(safeISO(shipment.date));
+                const salesInShipment = unassignedSales.filter(s => new Date(safeISO(s.date)) <= shipmentDate);
+                unassignedSales = unassignedSales.filter(s => new Date(safeISO(s.date)) > shipmentDate);
                 
-                const saleDate = new Date(safeISO(item.date));
-                const diffDays = Math.floor((today - saleDate) / (1000 * 60 * 60 * 24));
-                
-                if (diffDays <= GRACE_DAYS) {
-                    return { ...item, __status: 'ontime' }; 
-                } else {
-                    return { ...item, __status: 'expired' }; 
+                if (salesInShipment.length > 0) {
+                    elements.push(
+                        <div key={`ship-${shipment.id}`} className="my-6 relative">
+                            <div className="absolute inset-0 flex items-center" aria-hidden="true"><div className="w-full border-t-2 border-dashed border-indigo-200"></div></div>
+                            <div className="relative flex justify-center items-center gap-2">
+                                <span className="bg-white px-4 text-[10px] font-black text-indigo-500 uppercase tracking-widest border-2 border-indigo-100 rounded-full py-1 shadow-sm flex items-center gap-2">
+                                    <Icon.Box /> Paquete Cerrado: {shipmentDate.toLocaleDateString()}
+                                </span>
+                                {/* BOTÓN NUEVO PARA DESHACER ENVÍO (Solo en el más reciente) */}
+                                {sIdx === 0 && isHistory && ( 
+                                    <button onClick={() => onUndoShipment && onUndoShipment(shipment)} className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-3 py-1 rounded-full text-[9px] font-black uppercase shadow-sm active:scale-95 transition-all flex items-center gap-1">↩️ Reabrir Ciclo</button>
+                                )}
+                            </div>
+                        </div>
+                    );
+                    const groups = {};
+                    salesInShipment.forEach(sale => { const dateKey = new Date(safeISO(sale.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }); if(!groups[dateKey]) groups[dateKey] = []; groups[dateKey].push(sale); });
+                    Object.entries(groups).forEach(([dateKey, items]) => { elements.push(<SalesAccordionGroup key={`${shipment.id}-${dateKey}`} dateKey={dateKey} items={items} onDelete={onDeleteSale} onEdit={onEditSale} onDeleteGroup={onDeleteGroup} />); });
                 }
             });
-
-            return marked.reverse(); 
-        }, [sales, totalPaid, isHistory]);
-
-        const summary = useMemo(() => {
-            return processedSales.reduce((acc, item) => {
-                if (item.owner && item.owner !== 'me') { acc.partners += item.value; acc.partnersCount += 1; } 
-                if (item.__status === 'paid') { acc.paid += item.value; acc.paidCount += 1; } 
-                else if (item.__status === 'ontime') { acc.ontime += item.value; acc.ontimeCount += 1; } 
-                else if (item.__status === 'expired') { acc.expired += item.value; acc.expiredCount += 1; }
-                return acc;
-            }, { paid: 0, paidCount: 0, ontime: 0, ontimeCount: 0, expired: 0, expiredCount: 0, partners: 0, partnersCount: 0 });
-        }, [processedSales]);
-
-        const grandTotalValue = summary.paid + summary.ontime + summary.expired;
-        const grandTotalItems = summary.paidCount + summary.ontimeCount + summary.expiredCount;
-
-        return (
-            <div className="flex flex-col h-full">
-                {processedSales.length > 0 && (
-                    <div className="mb-3 space-y-2">
-                        <div className="bg-slate-800 text-white p-3 rounded-xl flex justify-between items-center shadow-lg">
-                            <div className="flex flex-col"><span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Valor del Pedido</span><span className="text-xl font-black tracking-tight">${grandTotalValue.toFixed(2)}</span></div>
-                            <div className="bg-white/10 border border-white/20 px-3 py-1.5 rounded-lg text-xs font-bold">🛍️ {grandTotalItems} prendas</div>
-                        </div>
-
-                        <div className="flex gap-1 text-[9px] font-black uppercase tracking-wide">
-                            <div className="flex-1 bg-emerald-50 border border-emerald-100 text-emerald-700 p-1.5 rounded-lg text-center flex flex-col justify-center">
-                                <div className="opacity-60">CUBIERTO</div><div className="text-sm">${summary.paid.toFixed(2)}</div>
-                            </div>
-                            <div className={`flex-1 border p-1.5 rounded-lg text-center flex flex-col justify-center ${summary.ontime > 0.01 ? 'bg-blue-50 border-blue-100 text-blue-600' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>
-                                <div className="opacity-60">EN PLAZO</div><div className="text-sm">${summary.ontime.toFixed(2)}</div>
-                            </div>
-                            <div className={`flex-1 border p-1.5 rounded-lg text-center flex flex-col justify-center ${summary.expired > 0.01 ? 'bg-red-50 border-red-200 text-red-600 shadow-sm' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>
-                                <div className="opacity-60">VENCIDO</div><div className="text-sm">${summary.expired.toFixed(2)}</div>
-                            </div>
-                            {summary.partners > 0 && (
-                                <div className="flex-1 bg-purple-50 border border-purple-100 text-purple-700 p-1.5 rounded-lg text-center flex flex-col justify-center">
-                                    <div className="opacity-60">SOCIAS (Incl.)</div><div className="text-sm">${summary.partners.toFixed(2)}</div>
-                                </div>
-                            )}
-                        </div>
+            if (unassignedSales.length > 0) {
+                elements.unshift(
+                    <div key="unassigned" className="mb-6 relative">
+                        <div className="absolute inset-0 flex items-center" aria-hidden="true"><div className="w-full border-t-2 border-slate-200"></div></div>
+                        <div className="relative flex justify-center"><span className="bg-white px-4 text-[10px] font-black text-slate-500 uppercase tracking-widest border border-slate-200 rounded-full py-1 shadow-sm">Prendas sin Empacar</span></div>
                     </div>
-                )}
-
-                <div className="overflow-y-auto p-2 pb-20">
-                    {(!isHistory && viewMode === 'grouped') ? (
-                        (() => {
-                            const grouped = processedSales.reduce((acc, s) => { const k = capitalizeFirst(new Date(safeISO(s.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' })); if(!acc[k]) acc[k] = []; acc[k].push(s); return acc; }, {});
-                            return Object.entries(grouped).map(([key, items], idx) => ( <SalesAccordionGroup key={idx} dateKey={key} items={items} onDelete={onDeleteSale} onEdit={onEditSale} onDeleteGroup={onDeleteGroup} /> ));
-                        })()
-                    ) : (
-                        processedSales.map((item, idx) => {
-                            const isPartner = item.owner && item.owner !== 'me';
-                            let rowBg = ""; let statusIcon = null; let priceColor = "";
-
-                            if (item.__status === 'paid') { rowBg = "bg-emerald-50/50"; priceColor = "text-emerald-700"; statusIcon = <span className="ml-2 text-[9px] font-black text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded uppercase">PAGADO</span>; } 
-                            else if (item.__status === 'ontime') { rowBg = "bg-blue-50/30"; priceColor = "text-blue-700"; statusIcon = <span className="ml-2 text-[9px] font-black text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded uppercase">EN PLAZO</span>; } 
-                            else { rowBg = "bg-red-50/30 opacity-90"; priceColor = "text-red-700"; statusIcon = <span className="ml-2 text-[9px] font-black text-red-600 bg-red-100 px-1.5 py-0.5 rounded uppercase">VENCIDO</span>; }
-
-                            const borderClass = isPartner ? "border-l-4 border-l-purple-500" : (item.__status === 'paid' ? "border-l-4 border-l-emerald-400" : (item.__status === 'ontime' ? "border-l-4 border-l-blue-400" : "border-l-4 border-l-red-400"));
-                            rowBg = `${rowBg} ${borderClass}`;
-
-                            return (
-                                <div key={idx} className={`flex justify-between items-center p-3 mb-1 text-sm ${rowBg}`}>
-                                    <div className="flex-1">
-                                        <span className="block font-bold text-slate-700">{item.item} {isPartner && <span className="ml-2 text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-black uppercase">{item.owner}</span>} {statusIcon}</span>
-                                        <span className="text-[10px] text-slate-400">📅 {new Date(safeISO(item.date)).toLocaleDateString()}</span>
-                                    </div>
-                                    <span className={`font-bold mr-3 ${priceColor}`}>${(Number(item.value)||0).toFixed(2)}</span>
-                                    <div className="flex gap-2"><button onClick={()=>onEditSale(item)} className="w-8 h-8 flex items-center justify-center text-indigo-500 bg-indigo-50 border border-indigo-100 rounded-lg active:scale-95 shadow-sm"><Icon.Edit /></button><button onClick={()=>onDeleteSale(item)} className="w-8 h-8 flex items-center justify-center text-red-500 bg-red-50 border border-red-100 rounded-lg active:scale-95 shadow-sm"><Icon.Trash /></button></div>
-                                </div>
-                            );
-                        })
-                    )}
-                    {processedSales.length === 0 && <div className="text-center p-8 text-slate-300">Historial vacío.</div>}
-                </div>
-            </div>
-        );
+                );
+                const groups = {};
+                unassignedSales.forEach(sale => { const dateKey = new Date(safeISO(sale.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }); if(!groups[dateKey]) groups[dateKey] = []; groups[dateKey].push(sale); });
+                Object.entries(groups).forEach(([dateKey, items]) => { elements.unshift(<SalesAccordionGroup key={`unassigned-${dateKey}`} dateKey={dateKey} items={items} onDelete={onDeleteSale} onEdit={onEditSale} onDeleteGroup={onDeleteGroup} />); });
+            }
+        } else {
+            const groups = {};
+            sales.forEach(sale => { const dateKey = new Date(safeISO(sale.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }); if(!groups[dateKey]) groups[dateKey] = []; groups[dateKey].push(sale); });
+            Object.entries(groups).forEach(([dateKey, items], idx) => { elements.push(<SalesAccordionGroup key={idx} dateKey={dateKey} items={items} onDelete={onDeleteSale} onEdit={onEditSale} onDeleteGroup={onDeleteGroup} />); });
+        }
+        return <div className="space-y-1">{elements}</div>;
     };
 
-    // --- NUEVA FACTURA HÍBRIDA (DISEÑO DIGITAL Y TICKET POS) ---
-     // ============================================================================
-    // 1. COMPONENTE: FACTURA HÍBRIDA (DIGITAL Y TICKET POS) REPARADA
-    // ============================================================================
-    // --- NUEVA FACTURA (DISEÑO ÚNICO: MODERN APP + IMPRESIÓN POS) ---
-    const Invoice3DModal = ({ activeClient, cycle, qrUrl }) => {
+    const Invoice3DModal = ({ activeClient, cycle, invoiceStyle, qrUrl }) => {
         const sortedSales = [...cycle.cycleSales].sort((a,b) => new Date(safeISO(b.date)) - new Date(safeISO(a.date)));
-        const shippingCost = activeClient.shippingCost || 0;
+        
+        const baseShip = Number(activeClient.shippingCost) || 0;
+        const descShip = Number(activeClient.shippingDiscount) || 0;
+        const finalShippingCost = Math.max(0, baseShip - descShip);
+        
         const shippingPaid = cycle.totalShippingPaid || 0;
         const totalSales = cycle.totalSales;
         const totalAbonado = cycle.totalNormalPaid;
         const clothingDebt = Math.abs(Math.min(0, cycle.clothingBalance));
-        const finalBalance = clothingDebt + Math.max(0, shippingCost - shippingPaid);
+        const finalBalance = clothingDebt + Math.max(0, finalShippingCost - shippingPaid);
 
         return (
             <div className="flex-1 w-full max-w-5xl mx-auto flex flex-col items-center gap-6 overflow-hidden relative" onClick={e=>e.stopPropagation()}>
@@ -761,26 +716,26 @@
                     }
                 `}</style>
                 
-                <button onClick={()=>{ window.print(); }} className="fixed bottom-6 right-6 bg-slate-950 text-white px-6 py-4 rounded-3xl font-black shadow-2xl flex items-center gap-2 z-50 no-print-digital active:scale-95 transition-all"><Icon.Printer /> IMPRIMIR TICKET</button>
+                <button onClick={()=>{ document.activeElement.blur(); setTimeout(() => window.print(), 300); }} className="fixed bottom-6 right-6 bg-slate-950 text-white px-6 py-4 rounded-3xl font-black shadow-2xl flex items-center gap-2 z-50 no-print-digital active:scale-95 transition-all"><Icon.Printer /> IMPRIMIR TICKET</button>
                 
-                {/* --- MODO IMPRESIÓN (TICKET POS - BLANCO Y NEGRO) --- */}
                 <div className="w-full max-w-sm shrink-0 bg-white p-6 print-ticket font-mono border-2 print:border-none border-slate-200 shadow-xl overflow-hidden print:overflow-visible">
                     <div className="text-center mb-6">
                         <h1 className="text-xl font-black print:text-2xl uppercase tracking-widest">ADELITA STORE</h1>
                         <p className="text-[9px] print:text-[10px] text-slate-500 font-bold uppercase mt-1 leading-tight">Digital Invoice<br/>{new Date().toLocaleString()}</p>
                     </div>
                     <div className="border-t border-b border-dashed border-slate-200 py-3 mb-6 space-y-1">
-                        <p className="text-xs print:text-[10px] leading-tight">Cliente: {activeClient.name}</p>
+                        <p className="text-xs print:text-[10px] leading-tight break-words">Cliente: {activeClient.name}</p>
                         <p className="text-xs print:text-[10px]">ID: {activeClient.id}</p>
-                        <p className="text-xs print:text-[10px]">Courier: {activeClient.deliveryMethod || 'PEND.'}</p>
+                        <p className="text-xs print:text-[10px] break-words">Courier: {activeClient.deliveryMethod || 'PEND.'}</p>
                     </div>
                     <h3 className="text-xs print:text-[10px] font-bold text-slate-400 uppercase mb-2">Prendas Adquiridas</h3>
                     <div className="space-y-1 mb-6">
-                        {sortedSales.map(s => ( <div key={s.id} className="flex justify-between text-xs print:text-[9px]"><span className="flex-1 truncate pr-2">{new Date(safeISO(s.date)).toLocaleDateString('es-ES', {day:'numeric',month:'numeric'})} ▪️ {s.item}</span><span>${s.value.toFixed(2)}</span></div> ))}
+                        {sortedSales.map(s => ( <div key={s.id} className="flex justify-between text-xs print:text-[9px]"><span className="flex-1 break-words pr-2">{new Date(safeISO(s.date)).toLocaleDateString('es-ES', {day:'numeric',month:'numeric'})} ▪️ {s.item}</span><span className="shrink-0">${s.value.toFixed(2)}</span></div> ))}
                     </div>
                     <div className="border-t border-dashed border-slate-200 pt-4 mb-4 space-y-2 text-right">
                         <div className="text-sm print:text-xs">Ropa: <span className="font-bold tracking-tight">${totalSales.toFixed(2)}</span></div>
-                        <div className="text-xs print:text-[10px]">Envío Courier: +${shippingCost.toFixed(2)}</div>
+                        <div className="text-xs print:text-[10px]">Envío Regular: ${baseShip.toFixed(2)}</div>
+                        {descShip > 0 && <div className="text-xs print:text-[10px] text-emerald-600">Descuento Envío: -${descShip.toFixed(2)}</div>}
                         <div className="text-xs print:text-[10px]">Abonos Ropa: -${totalAbonado.toFixed(2)}</div>
                         <div className="text-xs print:text-[10px]">Abonos Envío: -${shippingPaid.toFixed(2)}</div>
                     </div>
@@ -794,28 +749,36 @@
                     </div>
                 </div>
 
-                {/* --- MODO PANTALLA DIGITAL (DISEÑO ADELITA STORE APP) --- */}
                 <div className="flex-1 w-full max-w-5xl mx-auto overflow-y-auto pb-24 no-print-digital flex flex-col items-center mt-6 md:mt-0">
-                    <div className="w-full max-w-lg space-y-4 animate-in slide-in-from-bottom">
-                        <div className="bg-gradient-to-r from-pink-500 via-purple-500 to-emerald-500 p-6 rounded-3xl shadow-2xl relative overflow-hidden flex flex-col items-center">
-                            <h1 className="text-3xl font-black text-white uppercase tracking-wider flex items-center gap-2"><Icon.Tag /> Factura Digital</h1>
-                            <p className="text-sm font-black text-white/70 uppercase">Adelita Store System</p>
+                    {invoiceStyle === 'minimalist' && (
+                        <div className="bg-white p-8 md:p-12 w-full max-w-2xl rounded-2xl shadow-2xl animate-in slide-in-from-bottom border border-slate-100">
+                            <div className="text-center mb-10">
+                                <h1 className="text-5xl font-extrabold text-slate-900 uppercase tracking-tighter" style={{fontFamily: "'Playfair Display', serif"}}>Adelita</h1>
+                                <p className="text-sm font-black text-slate-500 tracking-widest mt-1">S T O R E</p>
+                            </div>
+                            <div className="flex justify-between border-b border-slate-200 pb-4 mb-6"><div className="text-slate-600 space-y-1 break-words"><strong>Invoice for:</strong> {activeClient.name} <br/>ID: {activeClient.id}</div><div className="text-right text-slate-600 space-y-1 break-words"><strong>Date:</strong> {new Date().toLocaleDateString()}<br/>Courier: {activeClient.deliveryMethod||'PEN'}</div></div>
+                            <table className="w-full text-sm mb-10"><thead className="border-b-2 border-slate-200"><tr className="text-slate-400 font-bold uppercase text-left"><th className="py-2">Prenda</th><th className="py-2 text-center">Items</th><th className="py-2 text-right">Price</th></tr></thead><tbody>{sortedSales.map(s => ( <tr key={s.id} className="border-b border-slate-100"><td className="py-3 font-bold text-slate-700 break-words">{s.item}</td><td className="py-3 text-center shrink-0">1</td><td className="py-3 text-right font-black shrink-0">${s.value.toFixed(2)}</td></tr> ))}</tbody></table>
+                            <div className="border-t border-slate-200 pt-6 space-y-3 text-right"><div className="text-slate-500">Clothing Subtotal: <span className="font-bold text-slate-800">${totalSales.toFixed(2)}</span></div><div className="text-slate-500">Shipping (Final): +${finalShippingCost.toFixed(2)}</div><div className="text-slate-500">Payments: -${totalAbonado.toFixed(2)}</div><div className="text-xl text-slate-500 pt-3 border-t">Final Balance: <span className="text-3xl font-black text-indigo-700">${finalBalance.toFixed(2)}</span></div></div>
                         </div>
-                        <div className="bg-white p-4 rounded-xl shadow border space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Cliente:</label><div className="text-xl font-bold text-slate-800 leading-tight">{activeClient.name} ({activeClient.id})</div><div className="text-[11px] font-black text-indigo-600 flex items-center gap-1">📍 {activeClient.city} / 📞 {activeClient.phone}</div></div>
-                        <div className="bg-white p-4 rounded-xl shadow space-y-2"><h3 className="text-[10px] font-black text-slate-400 uppercase mb-3 sticky top-0 bg-white">Prendas Adquiridas</h3>{sortedSales.map(s => ( <div key={s.id} className="flex gap-3 bg-slate-50 p-2 rounded-lg border items-center shadow-inner"><Icon.Box /> <div><div className="font-bold text-slate-700 text-xs">{s.item}</div><div className="text-[9px] text-slate-400">{new Date(safeISO(s.date)).toLocaleDateString()}</div></div><div className="flex-1 text-right font-black text-indigo-700">${s.value.toFixed(2)}</div></div> ))}</div>
-                        <div className="grid grid-cols-2 gap-3"><div className="bg-white p-3 rounded-xl border text-center leading-tight">Ventas: ${totalSales.toFixed(2)}</div><div className="bg-white p-3 rounded-xl border text-center leading-tight">Envío: +${shippingCost.toFixed(2)}</div><div className="bg-white p-3 rounded-xl border text-center leading-tight">Abonos Ropa: -${totalAbonado.toFixed(2)}</div><div className="bg-white p-3 rounded-xl border text-center leading-tight">Abonos Envío: -${shippingPaid.toFixed(2)}</div></div>
-                        <div className="bg-slate-900 p-6 rounded-3xl shadow-inner text-right mt-2"><label className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Saldo Final a Cobrar</label><div className="text-4xl font-black text-emerald-300">${finalBalance.toFixed(2)}</div></div>
-                    </div>
+                    )}
+                    {invoiceStyle === 'modern' && (
+                        <div className="w-full max-w-lg space-y-4 animate-in slide-in-from-bottom">
+                            <div className="bg-gradient-to-r from-pink-500 via-purple-500 to-emerald-500 p-6 rounded-3xl shadow-2xl relative overflow-hidden flex flex-col items-center">
+                                <h1 className="text-3xl font-black text-white uppercase tracking-wider flex items-center gap-2"><Icon.Tag /> Factura Digital</h1>
+                                <p className="text-sm font-black text-white/70 uppercase">Adelita Store System</p>
+                            </div>
+                            <div className="bg-white p-4 rounded-xl shadow border space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Cliente:</label><div className="text-xl font-bold text-slate-800 leading-tight break-words">{activeClient.name} ({activeClient.id})</div><div className="text-[11px] font-black text-indigo-600 flex items-center gap-1 break-words">📍 {activeClient.city} / 📞 {activeClient.phone}</div></div>
+                            <div className="bg-white p-4 rounded-xl shadow space-y-2"><h3 className="text-[10px] font-black text-slate-400 uppercase mb-3 sticky top-0 bg-white">Prendas Adquiridas</h3>{sortedSales.map(s => ( <div key={s.id} className="flex gap-3 bg-slate-50 p-2 rounded-lg border items-center shadow-inner"><Icon.Box /> <div className="flex-1 min-w-0"><div className="font-bold text-slate-700 text-xs break-words">{s.item}</div><div className="text-[9px] text-slate-400">{new Date(safeISO(s.date)).toLocaleDateString()}</div></div><div className="text-right font-black text-indigo-700 shrink-0">${s.value.toFixed(2)}</div></div> ))}</div>
+                            <div className="grid grid-cols-2 gap-3"><div className="bg-white p-3 rounded-xl border text-center leading-tight">Ventas: ${totalSales.toFixed(2)}</div><div className="bg-white p-3 rounded-xl border text-center leading-tight text-indigo-700 font-bold">Envío (Neto): +${finalShippingCost.toFixed(2)}</div><div className="bg-white p-3 rounded-xl border text-center leading-tight">Abonos Ropa: -${totalAbonado.toFixed(2)}</div><div className="bg-white p-3 rounded-xl border text-center leading-tight">Abonos Envío: -${shippingPaid.toFixed(2)}</div></div>
+                            <div className="bg-slate-900 p-6 rounded-3xl shadow-inner text-right mt-2"><label className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Saldo Final a Cobrar</label><div className="text-4xl font-black text-emerald-300">${finalBalance.toFixed(2)}</div></div>
+                        </div>
+                    )}
                 </div>
             </div>
         );
     };
 
-
-    // ============================================================================
-    // 2. COMPONENTE: PERFIL DEL CLIENTE (CON QR POS COMPLETO Y LISTA DE ÍTEMS)
-    // ============================================================================
-    const ClientDetailComponent = ({ activeClient, logic, onBack }) => {
+       const ClientDetailComponent = ({ activeClient, logic, onBack }) => {
         const [payAmount, setPayAmount] = useState("");
         const [payDate, setPayDate] = useState(getToday()); 
         const [payBank, setPayBank] = useState('pichincha');
@@ -858,15 +821,75 @@
 
         const cycle = logic.getClientCycle(activeClient.id); 
         const status = logic.getClientStatus(activeClient, cycle);
+
+        // === HERRAMIENTA RECUPERADA: ORDENAR VENTAS ===
+        const sortSales = (salesList) => { 
+            return [...salesList].sort((a, b) => { 
+                const dateA = new Date(safeISO(a.date)); 
+                const dateB = new Date(safeISO(b.date)); 
+                if (dateB - dateA !== 0) return dateB - dateA; 
+                return (b.id || 0) - (a.id || 0); 
+            }); 
+        };
+
+        // MOTOR DE PUNTUALIDAD: REGLA DE 24 HORAS
+        const rawSales = tabView === 'history' ? cycle.allSales : cycle.cycleSales;
+        const processedSales = rawSales.map(s => ({...s}));
+        const sortedForCalc = [...processedSales].sort((a,b) => new Date(safeISO(a.date)) - new Date(safeISO(b.date)));
+        
+        const sortedPayments = [...(cycle.allPayments || [])]
+            .filter(p => !p.detail?.toLowerCase().includes("envío") && !p.detail?.toLowerCase().includes("logístico") && !p.detail?.toLowerCase().includes("arrastre"))
+            .sort((a,b) => new Date(safeISO(a.date)) - new Date(safeISO(b.date)));
+        
+        let remainingPayments = sortedPayments.map(p => ({...p, unused: p.amount}));
+        let stats = { paid_ontime: 0, paid_late: 0, pending_ontime: 0, pending_late: 0 };
+        const now = new Date();
+        const GRACE_DAYS = 1; 
+
+        sortedForCalc.forEach(item => {
+            let itemDebt = item.value;
+            let lastPaymentDate = null;
+
+            for (let p of remainingPayments) {
+                if (itemDebt <= 0) break;
+                if (p.unused > 0) {
+                    const toUse = Math.min(itemDebt, p.unused);
+                    itemDebt -= toUse;
+                    p.unused -= toUse;
+                    lastPaymentDate = new Date(safeISO(p.date));
+                }
+            }
+
+            const saleDate = new Date(safeISO(item.date));
+
+            if (itemDebt < 0.01) {
+                const diffDays = Math.floor((lastPaymentDate - saleDate) / (1000 * 60 * 60 * 24));
+                if (diffDays <= GRACE_DAYS) { item.__status = 'paid_ontime'; stats.paid_ontime++; } 
+                else { item.__status = 'paid_late'; stats.paid_late++; }
+            } else {
+                const diffDays = Math.floor((now - saleDate) / (1000 * 60 * 60 * 24));
+                if (diffDays <= GRACE_DAYS) { item.__status = 'pending_ontime'; stats.pending_ontime++; } 
+                else { item.__status = 'pending_late'; stats.pending_late++; }
+            }
+        });
+
+        const lostDiscount = stats.paid_late > 0 || stats.pending_late > 0;
+        const qualifiesForDiscount = !lostDiscount && stats.paid_ontime > 0 && stats.pending_ontime === 0;
+        const isCleanAndPending = stats.paid_late === 0 && stats.pending_late === 0;
+
+        const shipBase = Number(activeClient.shippingCost) || 0;
+        const shipDiscount = Number(activeClient.shippingDiscount) || 0;
+        const finalShippingCost = Math.max(0, shipBase - shipDiscount);
+        
+        const shippingPaid = Number(cycle.totalShippingPaid) || 0; 
+        const shippingPending = Math.max(0, finalShippingCost - shippingPaid); 
+        const clothingBalance = Number(cycle.clothingBalance) || 0;
+        const clothingDebt = Math.abs(Math.min(0, clothingBalance));
+        const finalBalance = clothingDebt + shippingPending;
         
         const debtsByOwner = useMemo(() => {
             const debts = {};
-            cycle.cycleSales.forEach(s => {
-                if (s.owner && s.owner !== 'me' && !s.partnerSettled) {
-                    if (!debts[s.owner]) debts[s.owner] = 0;
-                    debts[s.owner] += s.value;
-                }
-            });
+            cycle.cycleSales.forEach(s => { if (s.owner && s.owner !== 'me' && !s.partnerSettled) { if (!debts[s.owner]) debts[s.owner] = 0; debts[s.owner] += s.value; } });
             return debts;
         }, [cycle.cycleSales]);
 
@@ -879,19 +902,9 @@
         };
 
         const clientTrash = (logic.trash || []).filter(t => t.clientId === activeClient.id).sort((a,b) => new Date(b.deletedAt) - new Date(a.deletedAt));
-        const shippingCost = Number(activeClient.shippingCost) || 0; 
-        const shippingPaid = Number(cycle.totalShippingPaid) || 0; 
-        const shippingPending = Math.max(0, shippingCost - shippingPaid); 
-        const clothingBalance = Number(cycle.clothingBalance) || 0;
-        const clothingDebt = Math.abs(Math.min(0, clothingBalance));
-        const finalBalance = clothingDebt + shippingPending;
-        
         const safeShipments = (logic.shipments && Array.isArray(logic.shipments)) ? logic.shipments : [];
         const clientShipments = safeShipments.filter(s => s.clientId === activeClient.id).sort((a,b) => new Date(safeISO(b.date)) - new Date(safeISO(a.date)));
         const lastOmittedCut = clientShipments.find(s => s.guide === "CORTE_OMITIDO");
-        const displayedSales = tabView === 'history' ? cycle.allSales : cycle.cycleSales;
-
-        const sortSales = (salesList) => { return [...salesList].sort((a, b) => { const dateA = new Date(safeISO(a.date)); const dateB = new Date(safeISO(b.date)); if (dateB - dateA !== 0) return dateB - dateA; return (b.id || 0) - (a.id || 0); }); };
 
         const pastCycles = useMemo(() => {
             return clientShipments.map((s, i) => {
@@ -939,6 +952,20 @@
             } catch(e) { alert("Error al deshacer: " + e.message); }
         };
 
+        // === HERRAMIENTA RECUPERADA: DESHACER ENVÍO ===
+        const handleUndoShipment = async (shipment) => {
+            if (!window.confirm(`⚠️ ¿Seguro que deseas ANULAR este envío y REABRIR el ciclo?\n\nLa guía se borrará y las prendas volverán al ciclo actual.`)) return;
+            try {
+                await window.fs.deleteDoc(window.fs.doc(window.db, "shipments", shipment.fireId));
+                const timeOfCut = new Date(safeISO(shipment.date)).getTime();
+                const autoSales = cycle.allSales.filter(s => s.item === "Deuda Ciclo Anterior" && Math.abs(new Date(safeISO(s.date)).getTime() - timeOfCut) < 5000);
+                for(let s of autoSales) { await window.fs.deleteDoc(window.fs.doc(window.db, "sales", s.fireId)); }
+                const autoPayments = cycle.allPayments.filter(p => p.detail === "Saldo a Favor (Arrastre)" && Math.abs(new Date(safeISO(p.date)).getTime() - timeOfCut) < 5000);
+                for(let p of autoPayments) { await window.fs.deleteDoc(window.fs.doc(window.db, "payments", p.fireId)); }
+                alert("✅ Envío anulado. El ciclo está abierto nuevamente.");
+            } catch(e) { alert("Error al anular: " + e.message); }
+        };
+
         const logCancellation = async (items, reason, totalAmount) => { try { await window.fs.addDoc(window.fs.collection(window.db, 'cancellations'), { clientId: activeClient.id, date: new Date().toISOString(), reason: reason, itemsCount: items.length, totalAmount: parseFloat(totalAmount) || 0, detail: items.map(i => i.item).join(", ") }); } catch(e) {} };
         const handleDeleteSingleSale = async (item) => { if(window.confirm(`¿Mover a papelera "${item.item}"?`)) { await logic.deleteSale(item); } };
         const handleDeleteGroup = async (items) => { if(!items || items.length === 0) return; if(window.confirm(`⚠️ ¿MOVER TODO EL LIVE (${items.length} prendas) A PAPELERA?`)) { const total = items.reduce((sum, i) => sum + (i.value||0), 0); await logCancellation(items, "Eliminó Live Completo", total); for (const item of items) { await logic.deleteSale(item); } } };
@@ -947,7 +974,6 @@
         const handleDestroy = async (item) => { if(confirm(`🛑 ¿ELIMINAR DEFINITIVAMENTE?`)) { await logic.destroySale(item); if(clientTrash.length <= 1) setShowTrash(false); } };
         const handleResurrectFromHistory = async (h) => { try { const amount = parseFloat(h.totalAmount) || parseFloat(h.value) || parseFloat(h.amount) || 0; if (amount <= 0) return alert("⚠️ No se puede recuperar."); if (!window.confirm(`¿Deseas recuperar esta deuda?\n\nValor: $${amount.toFixed(2)}`)) return; const cleanDetail = `(Recuperado) ${h.reason || 'Papelera'}`; await logic.addSale(activeClient.id, cleanDetail, amount, new Date().toISOString()); alert("✅ Deuda recuperada."); } catch (error) { alert("Error de conexión."); } };
         
-        // NUEVO: Vaciar papelera de una sola vez
         const handleEmptyTrash = async () => {
             if(!window.confirm(`🛑 ¿VACIAR PAPELERA COMPLETA?\n\nSe eliminarán definitivamente ${clientTrash.length} prendas para siempre. Esta acción no se puede deshacer.`)) return;
             for (const item of clientTrash) { await logic.destroySale(item); }
@@ -957,20 +983,22 @@
 
         const handleUpdateClient = (upd) => logic.setClients(activeClient.id, upd);
         const saveEdit = () => { handleUpdateClient({ name: editName, phone: editPhone, cedula: editCedula, province: editProvince, city: editCity, address: editAddress }); setIsEditing(false); };
-        
         const handleSaveSaleEdit = async () => { if(!editingSale) return; try{ await window.fs.updateDoc(window.fs.doc(window.db,"sales",editingSale.fireId), { item: editingSale.item, value: parseFloat(editingSale.value), date: safeISO(editingSale.date) }); setEditingSale(null); } catch(e){ alert(e.message); } };
         const handleSavePaymentEdit = async () => { if(!editingPayment) return; let targetFireId = editingPayment.fireId; if (!targetFireId) { const f = (logic.payments||[]).find(p => p.id === editingPayment.id); if(f) targetFireId = f.fireId; } if(!targetFireId) return; try { await window.fs.updateDoc(window.fs.doc(window.db, "payments", targetFireId), { amount: parseFloat(editingPayment.amount), account: editingPayment.account, date: safeISO(editingPayment.date) }); setEditingPayment(null); } catch(e) { alert(e.message); } };
         const handleDeletePayment = async () => { if (!editingPayment) return; let targetFireId = editingPayment.fireId; if (!targetFireId) { const f = (logic.payments||[]).find(p => p.id === editingPayment.id); if(f) targetFireId = f.fireId; } if (targetFireId && confirm(`¿BORRAR PAGO DE $${editingPayment.amount}?`)) { try { await window.fs.deleteDoc(window.fs.doc(window.db, "payments", targetFireId)); setEditingPayment(null); } catch (e) { alert(e.message); } } };
         const handlePayment = () => { if(!payAmount || isProcessing) return; setIsProcessing(true); logic.addPayment(activeClient.id, payAmount, 'Abono Ropa', smartDate(payDate, cycle.lastShipmentDate), payBank); setPayAmount(""); setTimeout(() => setIsProcessing(false), 1000); };
-        const handleRouteSelect = (r) => { let c = 0; if(r==='Servientrega') c=5; if(r==='Domicilio') c=3; if(r==='Ibarra') c=(cycle.totalSales>=25?0:3); handleUpdateClient({ deliveryMethod: r, shippingCost: c }); };
+        
+        const handleRouteSelect = (r) => { 
+            let c = 0; if(r==='Servientrega') c=5; if(r==='Domicilio') c=3; if(r==='Ibarra') c=(cycle.totalSales>=25?0:3); 
+            let d = 0; if (qualifiesForDiscount && c > 0) d = c / 2; 
+            handleUpdateClient({ deliveryMethod: r, shippingCost: c, shippingDiscount: d }); 
+        };
+
         const cycleStartDateStr = cycle.lastShipmentDate.toLocaleDateString() === '12/31/1969' ? 'Inicio' : new Date(safeISO(cycle.lastShipmentDate)).toLocaleDateString();
         
         const handlePartialLiquidation = async () => {
-            const GRACE_DAYS = 7; const now = new Date();
-            let temp = [...cycle.cycleSales].sort((a, b) => { const dateA = new Date(safeISO(a.date)); const dateB = new Date(safeISO(b.date)); if (dateA - dateB !== 0) return dateA - dateB; return (a.id || 0) - (b.id || 0); });
-            let runningUsed = 0; const limit = cycle.totalNormalPaid || 0; const itemsToLiquidate = [];
-            temp.forEach(item => { const isCovered = (limit - runningUsed) >= (item.value - 0.01); if (isCovered) { runningUsed += item.value; } else { const saleDate = new Date(safeISO(item.date)); const diffDays = Math.floor((now - saleDate) / (1000 * 60 * 60 * 24)); if (diffDays > GRACE_DAYS) itemsToLiquidate.push(item); } });
-            if (itemsToLiquidate.length === 0) return alert("¡Todo en orden! 🎉\n\nNo hay prendas VENCIDAS (Rojas) para liquidar.");
+            const itemsToLiquidate = sortedForCalc.filter(i => i.__status === 'pending_late');
+            if (itemsToLiquidate.length === 0) return alert("¡Todo en orden! 🎉\n\nNo hay prendas VENCIDAS para liquidar.");
             const totalValue = itemsToLiquidate.reduce((sum, i) => sum + i.value, 0);
             if (window.confirm(`⚠️ CONFIRMAR REMATE DE PRENDAS VENCIDAS\n\nValor a liquidar: $${totalValue.toFixed(2)}\n\n¿Proceder?`)) {
                 await logCancellation(itemsToLiquidate, "Liquidación Automática (Vencidas)", totalValue);
@@ -982,9 +1010,9 @@
         const generateWaMessage = () => {
             try { 
                 let salesToShow = []; let paymentsToShow = []; let isCurrent = true; let cycleTitle = "ACTUAL"; 
-                if (waTab === 'direct' || waTab === 'summary') { salesToShow = cycle.cycleSales; paymentsToShow = cycle.cyclePayments; } 
+                if (waTab === 'direct' || waTab === 'summary') { salesToShow = sortedForCalc; paymentsToShow = cycle.cyclePayments; } 
                 else if (waTab === 'audit') { 
-                    if (auditCycleId === 'current') { salesToShow = cycle.cycleSales; paymentsToShow = cycle.cyclePayments; } 
+                    if (auditCycleId === 'current') { salesToShow = sortedForCalc; paymentsToShow = cycle.cyclePayments; } 
                     else { 
                         isCurrent = false; const past = pastCycles.find(c => String(c.id) === String(auditCycleId)); 
                         if (past) { 
@@ -996,39 +1024,75 @@
                     if (waSubTab === 'manual') { salesToShow = salesToShow.filter(s => waSelectedDates.includes(new Date(safeISO(s.date)).toLocaleDateString('es-ES'))); } 
                 } 
                 salesToShow = sortSales(salesToShow).reverse(); 
+                
                 const groups = {}; let totalSalesShown = 0; 
-                salesToShow.forEach(s => { const k = new Date(safeISO(s.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'numeric' }); if(!groups[k]) groups[k] = { count: 0, total: 0, items: [] }; groups[k].count++; groups[k].total += s.value; groups[k].items.push(s); totalSalesShown += s.value; }); 
+                salesToShow.forEach(s => { 
+                    const k = new Date(safeISO(s.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'numeric' }); 
+                    if(!groups[k]) groups[k] = { count: 0, total: 0, items: [] }; 
+                    groups[k].count++; 
+                    groups[k].total += (Number(s.value) || 0); 
+                    groups[k].items.push(s); 
+                    totalSalesShown += (Number(s.value) || 0); 
+                }); 
                 
-                const normalPayments = paymentsToShow.filter(p => !p.detail?.toLowerCase().includes("envío") && !p.detail?.toLowerCase().includes("ajuste costo"));
-                const totalPaymentsShown = normalPayments.reduce((acc, p) => acc + (parseFloat(p.amount)||0), 0); 
-                const finalBalance = totalSalesShown - totalPaymentsShown; 
+                const normalPayments = paymentsToShow.filter(p => {
+                    const desc = p.detail ? String(p.detail).toLowerCase() : "";
+                    return !desc.includes("envío") && !desc.includes("ajuste costo");
+                });
                 
-                const shipPending = (isCurrent && activeClient.deliveryMethod) ? Math.max(0, shippingCost - shippingPaid) : 0; 
-                const grandTotal = Math.max(0, finalBalance + shipPending); 
+                const totalPaymentsShown = normalPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0); 
+                const finalBalanceRopa = totalSalesShown - totalPaymentsShown; 
                 
-                let msg = `Hola ${activeClient.name} 👋\n\n`; 
+                const bShip = Number(activeClient.shippingCost) || 0;
+                const dShip = Number(activeClient.shippingDiscount) || 0;
+                const fShip = Math.max(0, bShip - dShip);
+                const sPending = (isCurrent && activeClient.deliveryMethod) ? Math.max(0, fShip - shippingPaid) : 0; 
+                const grandTotal = Math.max(0, finalBalanceRopa + sPending); 
+                
+                let msg = `Hola ${activeClient.name || 'hermosa'} 👋\n\n`; 
                 if (waTab === 'direct') { msg += `*ESTADO DE CUENTA RÁPIDO*\n💰 *TOTAL A TRANSFERIR: $${grandTotal.toFixed(2)}*\n`; } 
                 else { 
                     msg += `*RESUMEN DE CUENTA ${cycleTitle}*\n\n*DETALLE DE LIVES:*\n`; 
-                    Object.entries(groups).forEach(([d, v]) => { msg += `🗓️ ${capitalizeFirst(d)}\n`; if (waExpandItems) { v.items.forEach(item => { msg += `   ▪️ ${item.item} ...... $${item.value.toFixed(2)}\n`; }); } else { msg += `   ▪️ ${v.count} prendas ...... $${v.total.toFixed(2)}\n`; } }); 
+                    Object.entries(groups).forEach(([d, v]) => { 
+                        msg += `🗓️ ${capitalizeFirst(d)}\n`; 
+                        if (waExpandItems) { 
+                            v.items.forEach(item => { msg += `   ▪️ ${item.item} ...... $${Number(item.value || 0).toFixed(2)}\n`; }); 
+                        } else { 
+                            msg += `   ▪️ ${v.count} prendas ...... $${Number(v.total || 0).toFixed(2)}\n`; 
+                        } 
+                    }); 
                     msg += `----------------------------------\nSubtotal Ropa: $${totalSalesShown.toFixed(2)}\n`; 
                     
                     if(normalPayments.length > 0) { 
                         msg += `\n*ABONOS REGISTRADOS:*\n`; 
-                        normalPayments.forEach(p => { msg += `   ✅ $${p.amount.toFixed(2)} (${new Date(safeISO(p.date)).toLocaleDateString()})\n`; }); 
+                        normalPayments.forEach(p => { msg += `   ✅ $${Number(p.amount || 0).toFixed(2)} (${new Date(safeISO(p.date)).toLocaleDateString()})\n`; }); 
                         msg += `Total Abonos: -$${totalPaymentsShown.toFixed(2)}\n`; 
                     } else { 
                         msg += `\n*ABONOS:*\n   Ninguno registrado en este periodo.\n`; 
                     } 
                     
-                    msg += `\n📊 *BALANCE DEL PERIODO:*\n   Saldo Ropa: $${finalBalance.toFixed(2)}\n`; 
-                    if (isCurrent && activeClient.deliveryMethod) { msg += shipPending > 0 ? `   Envío (${activeClient.deliveryMethod}): $${shipPending.toFixed(2)}\n` : `   Envío: PAGADO ✅\n`; } 
+                    msg += `\n📊 *BALANCE DEL PERIODO:*\n   Saldo Ropa: $${finalBalanceRopa.toFixed(2)}\n`; 
+                    
+                    if (isCurrent && activeClient.deliveryMethod) { 
+                        msg += `\n🚚 *GESTIÓN DE ENVÍO (${activeClient.deliveryMethod}):*\n`;
+                        msg += `   Costo Regular: $${bShip.toFixed(2)}\n`;
+                        if (dShip > 0) msg += `   Descuento (Pago Puntual): -$${dShip.toFixed(2)}\n`;
+                        msg += `   Total Envío: $${fShip.toFixed(2)} ${sPending > 0 ? '(Pendiente)' : '(Pagado ✅)'}\n`;
+                    } 
                     if (isCurrent) { msg += `\n💰 *TOTAL A TRANSFERIR: $${grandTotal.toFixed(2)}*\n`; } 
                 } 
-                if (grandTotal > 0.01 && isCurrent) { msg += `\n----------------------------------\n🏦 *DATOS BANCARIOS:*\nBanco Pichincha\nCuenta Ahorros\n2204226498\nBryan David Suárez\nCI: 1003300751\n\n📸 Foto del comprobante por favor.\n`; } 
+                
+                // === NUEVO TEXTO DE DESPEDIDA ===
+                if (grandTotal > 0.01 && isCurrent) { 
+                    msg += `\n----------------------------------\n🏦 *DATOS BANCARIOS:*\nBanco Pichincha\nCuenta Ahorros\n2204226498\nBryan David Suárez\nCI: 1003300751\n\n📸 Mi bella, te comparto el saldito que mantienes, por favor nos ayudes compartiendo la fotito de tu pago. ✨\n`; 
+                } 
                 else if (grandTotal <= 0 && isCurrent) { msg += `\n🎉 *¡TU CUENTA ESTÁ AL DÍA!*\n`; } 
+                
                 return msg; 
-            } catch(e) { return "Error generando mensaje."; } 
+            } catch(e) { 
+                console.error(e);
+                return "Error generando mensaje. Faltan datos en las prendas o pagos."; 
+            } 
         };
 
         const ReputationCard = () => { if (cancellationHistory.length === 0) return null; const totalCancelled = cancellationHistory.reduce((acc, curr) => acc + (Number(curr.totalAmount)||0), 0); return ( <div className={`mx-4 mt-2 transition-all duration-300 shadow-sm ${alertMinimized ? 'bg-red-500 rounded-lg p-2' : 'bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl'}`}> {alertMinimized ? ( <div className="flex justify-between items-center text-white" onClick={() => setAlertMinimized(false)}><div className="flex items-center gap-2 font-bold text-xs uppercase cursor-pointer"><Icon.Alert /> <span>¡Cuidado! Historial negativo ({cancellationHistory.length})</span></div><button className="text-white text-xs font-bold bg-white/20 px-2 py-1 rounded">VER</button></div> ) : ( <> <div className="flex justify-between items-start"><div className="flex items-center gap-2 text-red-700 font-black text-sm uppercase"><Icon.Alert /> <span>Ojo: Cliente con Antecedentes</span></div><div className="flex gap-2"><span className="bg-red-200 text-red-800 text-[10px] px-2 py-1 rounded-full font-bold">{cancellationHistory.length} Cancelaciones</span><button onClick={() => setAlertMinimized(true)} className="text-red-400 hover:text-red-600 font-bold text-xl leading-none">_</button></div></div> <div className="mt-2 text-xs text-slate-600">Ha cancelado un total de <span className="font-bold text-red-600">${totalCancelled.toFixed(2)}</span> en mercancía previamente.</div> <div className="mt-3 max-h-40 overflow-y-auto bg-white/50 rounded-lg p-1 space-y-1 border border-red-100"> {cancellationHistory.map((h, i) => ( <div key={i} className="bg-white p-2 rounded border border-red-50 text-[10px] text-slate-500 flex justify-between items-center shadow-sm"> <div className="flex-1 pr-2"> <span className="font-bold block text-red-700">{h.reason}</span> <span className="text-[9px]">{new Date(h.date).toLocaleDateString()}</span> </div> <div className="flex items-center gap-2"> <span className="font-black text-red-500">${(h.totalAmount||0).toFixed(2)}</span> <button onClick={() => handleResurrectFromHistory(h)} className="bg-emerald-500 text-white px-2 py-1 rounded text-[9px] font-bold hover:bg-emerald-600 shadow active:scale-95 transition-transform flex items-center gap-1"><Icon.Zap /> RECUPERAR</button> </div> </div> ))} </div> </> )} </div> ); };
@@ -1036,8 +1100,7 @@
         const currentWaSalesList = useMemo(() => { let list = cycle.cycleSales; if (waTab === 'audit' && auditCycleId !== 'current') { const pc = pastCycles.find(c => String(c.id) === String(auditCycleId)); if (pc) { list = cycle.allSales.filter(s => { const d = new Date(safeISO(s.date)); return d > pc.start && d <= pc.end; }); } } return list.reduce((acc,s)=>{ const d=new Date(safeISO(s.date)).toLocaleDateString('es-ES'); acc[d]=(acc[d]||0)+s.value; return acc; }, {}); }, [waTab, auditCycleId, cycle, pastCycles]);
 
         const qrText = `ENVÍO ADELITA STORE\nID: ${activeClient.id}\nCliente: ${activeClient.name}\nCel: ${activeClient.phone || 'S/N'}\nCiudad: ${activeClient.city || 'S/N'}\nDir: ${activeClient.address || 'S/N'}`;
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrText)}`;
-        const posQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`ADELITA STORE\nCliente: ${activeClient.name} (${activeClient.id})\n----------------\nPrendas: ${cycle.cycleSales.length}\n----------------\nRopa: $${cycle.totalSales.toFixed(2)}\nEnvío (${activeClient.deliveryMethod || 'PEND'}): $${shippingCost.toFixed(2)}\nAbonos Ropa: -$${cycle.totalNormalPaid.toFixed(2)}\nAbonos Envío: -$${shippingPaid.toFixed(2)}\n----------------\nTOTAL SALDO: $${finalBalance.toFixed(2)}\n----------------\nGracias por su compra!\n`)}`;
+        const posQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`ADELITA STORE\nCliente: ${activeClient.name} (${activeClient.id})\n----------------\nPrendas: ${cycle.cycleSales.length}\n----------------\nRopa: $${cycle.totalSales.toFixed(2)}\nEnvío Regular: $${shipBase.toFixed(2)}\nDescuento Envío: -$${shipDiscount.toFixed(2)}\nAbonos Ropa: -$${cycle.totalNormalPaid.toFixed(2)}\nAbonos Envío: -$${shippingPaid.toFixed(2)}\n----------------\nTOTAL SALDO: $${finalBalance.toFixed(2)}\n----------------\nGracias por su compra!\n`)}`;
 
         return (
             <div className="flex flex-col h-full bg-white relative">
@@ -1066,31 +1129,66 @@
                                 @page { size: ${labelMode === 'horizontal' ? 'landscape' : 'portrait'}; margin: 0; }
                                 body * { visibility: hidden !important; }
                                 .printable-label, .printable-label * { visibility: visible !important; color: black !important; }
-                                .printable-label { position: absolute !important; left: 0 !important; top: 0 !important; width: 100vw !important; height: 100vh !important; margin: 0 !important; padding: 10mm !important; box-shadow: none !important; border: none !important; border-radius: 0 !important; page-break-after: always; display: flex !important; }
+                                .printable-label { position: absolute !important; left: 0 !important; top: 0 !important; width: 100vw !important; height: auto !important; min-height: 100vh !important; margin: 0 !important; padding: 10mm !important; box-shadow: none !important; border: none !important; border-radius: 0 !important; page-break-after: always; display: flex !important; flex-direction: column !important; }
                                 .no-print { display: none !important; }
                             }
                         `}</style>
+                        
                         <div className="bg-white rounded-2xl p-4 w-full max-w-2xl mb-4 flex justify-between items-center shadow-2xl no-print shrink-0" onClick={e=>e.stopPropagation()}>
                             <div><h3 className="font-black text-slate-800">Etiqueta de Envío</h3><p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Orientación</p></div>
                             <div className="flex bg-slate-100 p-1 rounded-lg"><button onClick={()=>setLabelMode('horizontal')} className={`px-4 py-2 rounded-md text-xs font-bold transition-all ${labelMode==='horizontal'?'bg-white shadow text-indigo-600':'text-slate-400 hover:text-slate-600'}`}>Horizontal ▬</button><button onClick={()=>setLabelMode('vertical')} className={`px-4 py-2 rounded-md text-xs font-bold transition-all ${labelMode==='vertical'?'bg-white shadow text-indigo-600':'text-slate-400 hover:text-slate-600'}`}>Vertical ▮</button></div>
-                            <div className="flex gap-2"><button onClick={()=>setShowLabel(false)} className="bg-slate-200 text-slate-700 px-4 py-2 rounded-xl font-bold text-sm shadow-md active:scale-95 transition-transform">✕</button><button onClick={()=>{ window.print(); }} className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-md active:scale-95 transition-transform flex items-center gap-2"><Icon.Printer /> IMPRIMIR</button></div>
+                            <div className="flex gap-2">
+                                <button onClick={()=>setShowLabel(false)} className="bg-slate-200 text-slate-700 px-4 py-2 rounded-xl font-bold text-sm shadow-md active:scale-95 transition-transform">✕</button>
+                                <button onClick={()=>{ document.activeElement.blur(); setTimeout(() => window.print(), 300); }} className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-md active:scale-95 transition-transform flex items-center gap-2"><Icon.Printer /> IMPRIMIR</button>
+                            </div>
                         </div>
 
-                        <div className={`w-full max-w-3xl bg-white shadow-2xl printable-label flex flex-col shrink-0 mb-10 border-2 border-slate-200 p-4 md:p-8 ${labelMode === 'horizontal' ? 'aspect-[1.5/1]' : 'aspect-[1/1.5] max-w-xl'}`} onClick={e=>e.stopPropagation()}>
-                            <div className="flex justify-between items-center border-b-4 print:border-b-8 border-black pb-4 mb-4 shrink-0">
-                                <div><h1 className={`${labelMode === 'horizontal' ? 'text-3xl md:text-5xl print:text-6xl' : 'text-2xl md:text-4xl print:text-5xl'} font-black tracking-tighter uppercase`} style={{fontFamily: "'Space Mono', monospace"}}>ADELITA STORE</h1><p className={`${labelMode === 'horizontal' ? 'text-sm md:text-xl print:text-2xl' : 'text-xs md:text-lg print:text-xl'} font-black text-slate-600 tracking-widest mt-1`}>ENVÍO PRIORITARIO</p></div>
-                                <div className="text-right flex flex-col items-end"><div className={`${labelMode === 'horizontal' ? 'text-4xl md:text-6xl print:text-7xl' : 'text-3xl md:text-5xl print:text-6xl'} font-black border-4 print:border-8 border-black px-4 py-1`}>{activeClient.id}</div></div>
-                            </div>
-                            <div className={`flex-1 flex gap-6 ${labelMode === 'horizontal' ? 'flex-row' : 'flex-col-reverse'}`}>
-                                <div className={`${labelMode === 'horizontal' ? 'w-1/3 border-r-4 print:border-r-8 pr-6 flex-col justify-between' : 'w-full border-t-4 print:border-t-8 pt-4 flex-row justify-between items-center'} border-black flex`}>
-                                    <div><h3 className="font-black text-black uppercase tracking-widest text-sm md:text-lg print:text-xl border-b-2 border-black pb-1 mb-2">Remitente</h3><p className="font-bold text-xs md:text-base print:text-xl leading-tight">Adelita Store<br/>0994095056</p><div className="mt-4"><div className="text-center p-1 md:p-2 border-2 print:border-4 border-black font-black text-lg md:text-2xl print:text-3xl uppercase tracking-widest inline-block">{activeClient.deliveryMethod || 'ESTÁNDAR'}</div></div></div>
-                                    <div className={`${labelMode === 'horizontal' ? 'mt-4' : 'mt-0'}`}><p className="text-[8px] md:text-[10px] print:text-xs font-bold text-slate-400 text-center uppercase mb-1">Escanear para Ruta</p><img src={posQrUrl} alt="QR Motorizado" className="w-20 h-20 md:w-32 md:h-32 print:w-40 print:h-40 border-4 border-black p-1" /></div>
+                        <div className={`w-full bg-white shadow-2xl printable-label flex flex-col shrink-0 mb-10 border-2 border-slate-200 p-4 md:p-8 ${labelMode === 'horizontal' ? 'max-w-4xl' : 'max-w-xl'}`} onClick={e=>e.stopPropagation()}>
+                            <div className="flex justify-between items-start border-b-4 print:border-b-8 border-black pb-4 mb-4 shrink-0 gap-4">
+                                <div className="flex-1">
+                                    <h1 className="text-3xl md:text-5xl print:text-6xl font-black tracking-tighter uppercase leading-none" style={{fontFamily: "'Space Mono', monospace"}}>ADELITA STORE</h1>
+                                    <p className="text-sm md:text-xl print:text-2xl font-black text-slate-500 tracking-widest mt-1">ENVÍO PRIORITARIO</p>
                                 </div>
-                                <div className={`${labelMode === 'horizontal' ? 'w-2/3' : 'w-full flex-1'} flex flex-col justify-center`}>
-                                    <div className="text-xs md:text-sm print:text-xl font-black text-slate-400 uppercase tracking-widest mb-1">Destinatario:</div><h2 className={`${labelMode === 'horizontal' ? 'text-4xl md:text-5xl print:text-6xl mb-6' : 'text-3xl md:text-5xl print:text-6xl mb-4'} font-black text-black leading-none uppercase tracking-tight`}>{activeClient.name}</h2>
-                                    <div className="grid grid-cols-2 gap-4 print:gap-6 mb-4 print:mb-6"><div className="bg-slate-50 border-2 print:border-4 border-slate-200 p-3 print:p-4 rounded-xl print:rounded-2xl"><div className="text-[10px] md:text-xs print:text-lg font-black text-slate-400 uppercase">Ciudad</div><div className="text-xl md:text-2xl print:text-4xl font-black uppercase text-indigo-700 mt-1 truncate">{activeClient.city || 'N/A'}</div></div><div className="bg-slate-50 border-2 print:border-4 border-slate-200 p-3 print:p-4 rounded-xl print:rounded-2xl"><div className="text-[10px] md:text-xs print:text-lg font-black text-slate-400 uppercase">Provincia</div><div className="text-xl md:text-2xl print:text-4xl font-black uppercase mt-1 truncate">{activeClient.province || 'N/A'}</div></div></div>
-                                    <div className="grid grid-cols-2 gap-4 print:gap-6 mb-4 print:mb-4"><div><div className="text-[10px] md:text-xs print:text-lg font-black text-slate-400 uppercase">Teléfono</div><div className="text-lg md:text-xl print:text-3xl font-black mt-1">{activeClient.phone || 'N/A'}</div></div><div><div className="text-[10px] md:text-xs print:text-lg font-black text-slate-400 uppercase">Cédula / RUC</div><div className="text-lg md:text-xl print:text-3xl font-black mt-1">{activeClient.cedula || 'N/A'}</div></div></div>
-                                    <div><div className="text-[10px] md:text-xs print:text-lg font-black text-slate-400 uppercase">Dirección Exacta</div><div className="text-sm md:text-lg print:text-2xl font-bold leading-tight mt-1 border-l-4 print:border-l-8 border-indigo-500 pl-3 py-1">{activeClient.address || 'Sin dirección registrada.'}</div></div>
+                                <div className="text-right shrink-0">
+                                    <div className="text-3xl md:text-5xl print:text-6xl font-black border-4 print:border-8 border-black px-4 py-1 inline-block">{activeClient.id}</div>
+                                </div>
+                            </div>
+
+                            <div className={`flex gap-6 ${labelMode === 'horizontal' ? 'flex-row items-stretch' : 'flex-col-reverse'}`}>
+                                <div className={`${labelMode === 'horizontal' ? 'w-1/3 border-r-4 print:border-r-8 pr-6 flex flex-col' : 'w-full border-t-4 print:border-t-8 pt-4 flex flex-row items-center justify-between'} border-black shrink-0`}>
+                                    <div className="flex-1">
+                                        <h3 className="font-black text-black uppercase tracking-widest text-sm md:text-lg print:text-xl border-b-2 border-black pb-1 mb-2">Remitente</h3>
+                                        <p className="font-bold text-xs md:text-base print:text-xl leading-tight">Adelita Store<br/>0994095056</p>
+                                        <div className="mt-4"><div className="text-center p-2 border-2 print:border-4 border-black font-black text-lg md:text-xl print:text-3xl uppercase tracking-widest break-words">{activeClient.deliveryMethod || 'ESTÁNDAR'}</div></div>
+                                    </div>
+                                    <div className={`${labelMode === 'horizontal' ? 'mt-6 flex flex-col items-center' : 'ml-4 flex flex-col items-center'}`}>
+                                        <p className="text-[8px] md:text-[10px] print:text-xs font-bold text-slate-400 text-center uppercase mb-1">Escanear Ticket</p>
+                                        <img src={posQrUrl} alt="QR Motorizado" className="w-24 h-24 md:w-32 md:h-32 print:w-40 print:h-40 border-4 border-black p-1 shrink-0" />
+                                    </div>
+                                </div>
+
+                                <div className={`${labelMode === 'horizontal' ? 'w-2/3' : 'w-full'} flex flex-col justify-start`}>
+                                    <div className="text-xs md:text-sm print:text-xl font-black text-slate-400 uppercase tracking-widest mb-1">Destinatario:</div>
+                                    <h2 className="text-3xl md:text-4xl print:text-5xl font-black text-black leading-tight uppercase tracking-tight break-words mb-4">{activeClient.name}</h2>
+                                    
+                                    <div className="grid grid-cols-2 gap-4 print:gap-6 mb-4">
+                                        <div className="bg-slate-50 border-2 print:border-4 border-slate-200 p-3 print:p-4 rounded-xl">
+                                            <div className="text-[10px] md:text-xs print:text-lg font-black text-slate-400 uppercase">Ciudad</div>
+                                            <div className="text-lg md:text-2xl print:text-4xl font-black uppercase text-indigo-700 mt-1 break-words">{activeClient.city || 'N/A'}</div>
+                                        </div>
+                                        <div className="bg-slate-50 border-2 print:border-4 border-slate-200 p-3 print:p-4 rounded-xl">
+                                            <div className="text-[10px] md:text-xs print:text-lg font-black text-slate-400 uppercase">Provincia</div>
+                                            <div className="text-lg md:text-2xl print:text-4xl font-black uppercase mt-1 break-words">{activeClient.province || 'N/A'}</div>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4 print:gap-6 mb-4">
+                                        <div><div className="text-[10px] md:text-xs print:text-lg font-black text-slate-400 uppercase">Teléfono</div><div className="text-lg md:text-xl print:text-3xl font-black mt-1 break-words">{activeClient.phone || 'N/A'}</div></div>
+                                        <div><div className="text-[10px] md:text-xs print:text-lg font-black text-slate-400 uppercase">Cédula / RUC</div><div className="text-lg md:text-xl print:text-3xl font-black mt-1 break-words">{activeClient.cedula || 'N/A'}</div></div>
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="text-[10px] md:text-xs print:text-lg font-black text-slate-400 uppercase">Dirección Exacta</div>
+                                        <div className="text-sm md:text-lg print:text-2xl font-bold leading-snug mt-1 border-l-4 print:border-l-8 border-indigo-500 pl-3 py-1 break-words whitespace-pre-wrap">{activeClient.address || 'Sin dirección registrada.'}</div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1160,19 +1258,21 @@
                                 <button onClick={()=>setShowWaModal(true)} className="bg-emerald-100 text-emerald-700 p-2 rounded-xl"><Icon.Message /></button>
                             </div>
                         </div>
-                        
-                        {tabView === 'cycle' && (
-                            <div className={`p-3 rounded-2xl text-xs flex items-center gap-2 border shadow-sm ${clothingDebt > 0 ? 'bg-orange-50 text-orange-800 border-orange-100' : (cycle.cycleSales.length > 0 ? 'bg-emerald-50 text-emerald-800 border-emerald-100' : 'bg-slate-50 text-slate-500 border-slate-100')}`}>
-                                <div className="text-xl">{clothingDebt > 0 ? '⏳' : (cycle.cycleSales.length > 0 ? '📦' : '✨')}</div>
-                                <div>
-                                    {clothingDebt > 0 ? (
-                                        <><strong>Pago Pendiente.</strong> Límite: Martes 10:00 AM <br/><span className="text-[10px] opacity-80">Liquidación: Miércoles</span></>
-                                    ) : (
-                                        cycle.cycleSales.length > 0 ? <><strong>Al día.</strong> Todo pagado. <br/><span className="text-[10px] opacity-80">Envío programado: Martes 12:00 PM</span></> : "No hay prendas activas en este ciclo."
-                                    )}
-                                </div>
+
+                        {/* --- SEMÁFORO GLOBAL DE ROPA --- */}
+                        <div className="flex gap-2 mb-2">
+                            <div className="flex-1 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl p-2 text-center shadow-sm">
+                                <div className="text-[10px] font-black uppercase tracking-tight">🌟 Puntuales</div><div className="text-lg font-black">{stats.paid_ontime}</div>
                             </div>
-                        )}
+                            <div className="flex-1 bg-slate-50 text-slate-600 border border-slate-200 rounded-xl p-2 text-center shadow-sm">
+                                <div className="text-[10px] font-black uppercase tracking-tight">⏳ 24h Gracia</div><div className="text-lg font-black">{stats.pending_ontime}</div>
+                            </div>
+                            {(stats.expired > 0 || stats.paid_late > 0) && (
+                                <div className="flex-1 bg-red-50 text-red-700 border border-red-100 rounded-xl p-2 text-center shadow-sm">
+                                    <div className="text-[10px] font-black uppercase tracking-tight">🚨 Atrasadas</div><div className="text-lg font-black">{stats.expired + stats.paid_late}</div>
+                                </div>
+                            )}
+                        </div>
 
                         <div className="flex border-b mb-2"><button onClick={()=>setTabView('cycle')} className={`flex-1 py-2 text-sm font-bold ${tabView==='cycle'?'text-indigo-600 border-b-2 border-indigo-600':'text-slate-400'}`}>Ciclo Actual</button><button onClick={()=>setTabView('history')} className={`flex-1 py-2 text-sm font-bold ${tabView==='history'?'text-indigo-600 border-b-2 border-indigo-600':'text-slate-400'}`}>Historial</button></div>
                         {(tabView==='cycle'||window.innerWidth>768) && (<>
@@ -1183,35 +1283,58 @@
                                 <div className="bg-white p-2 rounded-xl border flex flex-col gap-2"><div className="flex gap-2"><select value={payBank} onChange={e=>setPayBank(e.target.value)} className="text-xs bg-slate-100 rounded-lg p-2 font-bold flex-1"><option value="pichincha">Pichincha</option><option value="guayaquil">Guayaquil</option><option value="pacifico">Pacífico</option><option value="efectivo">Efectivo</option></select><input type="date" value={payDate} onChange={e=>setPayDate(e.target.value)} className="w-28 bg-slate-100 rounded-lg text-xs p-2" /></div><div className="flex gap-2"><input type="number" value={payAmount} onChange={e=>setPayAmount(e.target.value)} className="w-full font-bold text-slate-700 px-2 outline-none" placeholder="$0.00" /><button onClick={handlePayment} disabled={isProcessing} className="bg-emerald-600 text-white rounded-lg font-bold text-xs px-4 whitespace-nowrap">+ ABONAR</button></div></div>
                             </div>
                             
+                            {/* --- CAJA DE ENVÍOS CON DESCUENTOS --- */}
                             <div className={`p-5 rounded-3xl border-2 space-y-4 ${shippingPending>0.01?'border-orange-200 bg-orange-50':'border-slate-200 bg-white'}`}>
-                                <div className="flex justify-between items-center"><h3 className="font-bold text-slate-700 flex items-center gap-2"><Icon.Box /> Gestión Envío</h3><div className="text-right text-xs"><span className={`font-black text-lg ${shippingPending>0.01?'text-red-500':'text-emerald-500'}`}>-${shippingPending.toFixed(2)}</span></div></div>
-                                <div className="bg-red-50 p-3 rounded-xl border border-red-100">
-                                    <div className="flex justify-between mb-1"><label className="text-[10px] font-bold text-red-700 uppercase">1. Define Ruta y Costo</label><span className="text-[10px] font-bold">Actual: ${shippingCost.toFixed(2)}</span></div>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <input type="text" className="w-full p-2 rounded-xl border bg-white text-xs font-bold uppercase" value={activeClient.deliveryMethod || ''} onChange={e=>logic.setClients(activeClient.id, {deliveryMethod: e.target.value.toUpperCase()})} placeholder="Courier (Ej: Tramaco)" />
-                                        <input type="number" className="w-full p-2 rounded-xl border bg-white text-xs font-bold text-red-600" value={activeClient.shippingCost || ''} onChange={e=>logic.setClients(activeClient.id, {shippingCost:parseFloat(e.target.value)})} placeholder="$0.00" />
+                                <div className="flex justify-between items-center">
+                                    <h3 className="font-bold text-slate-700 flex items-center gap-2"><Icon.Box /> Gestión Envío</h3>
+                                    <div className="text-right text-xs"><span className={`font-black text-lg ${shippingPending>0.01?'text-red-500':'text-emerald-500'}`}>-${shippingPending.toFixed(2)}</span></div>
+                                </div>
+
+                                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                                    <div className="flex justify-between items-center mb-3">
+                                        <span className="text-[10px] font-black uppercase text-slate-400">Puntualidad</span>
+                                        {isCleanAndPending ? <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded uppercase font-black tracking-widest">⏳ Faltan Pagos</span> :
+                                        (qualifiesForDiscount ? 
+                                            <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded uppercase font-black tracking-widest flex items-center gap-1">🟢 Aplica Bono 50%</span> : 
+                                            <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded uppercase font-black tracking-widest flex items-center gap-1 animate-pulse">🔴 Pierde Descuento</span>
+                                        )}
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3 mb-2">
+                                        <div>
+                                            <label className="text-[9px] font-bold text-slate-400 uppercase">Costo Regular</label>
+                                            <input type="number" className="w-full p-2 rounded-lg border bg-slate-50 text-xs font-bold text-slate-700" value={activeClient.shippingCost || ''} onChange={e=>handleUpdateClient({shippingCost: parseFloat(e.target.value)})} placeholder="$0.00" />
+                                        </div>
+                                        <div>
+                                            <label className="text-[9px] font-bold text-emerald-500 uppercase">Descuento Dado</label>
+                                            <input type="number" className="w-full p-2 rounded-lg border border-emerald-200 bg-emerald-50 text-xs font-bold text-emerald-700 focus:border-emerald-500 outline-none" value={activeClient.shippingDiscount || ''} onChange={e=>handleUpdateClient({shippingDiscount: parseFloat(e.target.value)})} placeholder="$0.00" />
+                                        </div>
+                                    </div>
+                                    <div className="mt-2 pt-2 border-t border-slate-100 flex gap-2">
+                                        <input type="text" className="w-1/2 p-2 rounded-lg border bg-slate-50 text-xs font-bold uppercase" value={activeClient.deliveryMethod || ''} onChange={e=>handleUpdateClient({deliveryMethod: e.target.value.toUpperCase()})} placeholder="Courier..." />
+                                        <div className="w-1/2 bg-slate-800 text-white rounded-lg flex items-center justify-center text-xs font-black shadow-inner">
+                                            A COBRAR: ${finalShippingCost.toFixed(2)}
+                                        </div>
                                     </div>
                                 </div>
                                 
                                 <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
-                                    <label className="text-[10px] font-bold text-emerald-700 uppercase mb-1 block">2. Extraer del Abono General</label>
+                                    <label className="text-[10px] font-bold text-emerald-700 uppercase mb-1 block">Extraer del Abono General</label>
                                     <div className="flex gap-2 items-center">
                                         <select value={payBank} onChange={e=>setPayBank(e.target.value)} className="w-20 text-[10px] bg-white border border-emerald-200 rounded-lg p-2 font-bold outline-none">
                                             <option value="pichincha">Pich</option><option value="guayaquil">Guay</option><option value="pacifico">Pac</option><option value="efectivo">Efec</option>
                                         </select>
                                         <button onClick={() => {
-                                            if (shippingCost <= 0) return alert("Define el costo de la ruta primero.");
+                                            if (finalShippingCost <= 0) return alert("El costo final de envío es cero.");
                                             if (clothingBalance < shippingPending) return alert(`El cliente solo tiene $${clothingBalance.toFixed(2)} a favor y el envío cuesta $${shippingPending.toFixed(2)}.`);
                                             const dateISO = smartDate(getToday(), cycle.lastShipmentDate); 
                                             logic.addPayment(activeClient.id, -shippingPending, 'Ajuste costo logístico', dateISO, payBank); 
                                             logic.addPayment(activeClient.id, shippingPending, 'Pago Envío', dateISO, payBank);
                                             logic.addExpense(`Salida Courier (Saldo) - ${activeClient.name}`, shippingPending, dateISO, 'shipping', payBank);
                                             alert(`✅ Extraídos $${shippingPending.toFixed(2)}.`);
-                                        }} disabled={isProcessing || shippingPending <= 0.01} className="flex-1 bg-emerald-600 text-white rounded-lg font-black text-xs py-2 px-3 disabled:opacity-50">
+                                        }} disabled={isProcessing || shippingPending <= 0.01} className="flex-1 bg-emerald-600 text-white rounded-lg font-black text-xs py-2 px-3 disabled:opacity-50 shadow">
                                             EXTRAER ${shippingPending.toFixed(2)}
                                         </button>
                                     </div>
-                                    <div className="text-[9px] text-emerald-600 mt-2 text-center leading-tight">El dinero entra en el botón "ABONAR" de arriba. Usa esto solo para extraer el costo de la guía de ese pozo.</div>
                                 </div>
                             </div>
                         </>)}
@@ -1228,12 +1351,13 @@
                                     <div className="flex bg-slate-100 p-1 rounded-lg"><button onClick={()=>setOrderViewMode('grouped')} className={`px-2 py-1 rounded-md text-[10px] ${orderViewMode==='grouped'?'bg-white shadow':''}`}>Lives</button><button onClick={()=>setOrderViewMode('list')} className={`px-2 py-1 rounded-md text-[10px] ${orderViewMode==='list'?'bg-white shadow':''}`}>Lista</button></div>
                                 </div>
                             </div>
-                            <SalesListRenderer sales={displayedSales} shipments={clientShipments} isHistory={tabView==='history'} viewMode={orderViewMode} totalPaid={cycle.totalNormalPaid} onDeleteSale={handleDeleteSingleSale} onEditSale={setEditingSale} onDeleteGroup={handleDeleteGroup} />
+                            
+                            <SalesListRenderer sales={sortedForCalc} shipments={clientShipments} isHistory={tabView==='history'} viewMode={orderViewMode} totalPaid={cycle.totalNormalPaid} onDeleteSale={handleDeleteSingleSale} onEditSale={setEditingSale} onDeleteGroup={handleDeleteGroup} onUndoShipment={handleUndoShipment} />
                             
                             {cycle.cycleSales.length > 0 && tabView === 'cycle' && ( 
                                 <div className="mt-6 border-t pt-4 space-y-3"> 
                                     <button onClick={handlePartialLiquidation} className="w-full py-4 bg-orange-500 text-white shadow-lg shadow-orange-500/30 rounded-2xl font-black text-sm flex justify-center items-center gap-3 hover:bg-orange-600 active:scale-95 transition-all"> 
-                                        <Icon.Zap /> ♻️ LIQUIDAR SOLO PRENDAS VENCIDAS
+                                        <Icon.Zap /> ♻️ LIQUIDAR PRENDAS VENCIDAS (ROJAS)
                                     </button> 
                                     <button onClick={handleWipeCycle} className="w-full py-4 bg-red-600 text-white shadow-lg shadow-red-600/30 rounded-2xl font-black text-sm flex justify-center items-center gap-3 hover:bg-red-700 active:scale-95 transition-all"> 
                                         <Icon.Trash /> 🛑 ANULAR PEDIDO COMPLETO (Renunció)
@@ -1267,8 +1391,7 @@
     
     // --- BODEGA 3.0: ORDEN CRONOLÓGICO + GESTIÓN COURIER ---
     // --- BODEGA 4.0: CEREBRO LOGÍSTICO + COBROS INTEGRADOS ---
-        // --- BODEGA 4.0: LOGÍSTICA BLINDADA + COBROS INTEGRADOS ---
-        const WarehouseView = ({ logic }) => {
+    const WarehouseView = ({ logic }) => {
         const [tab, setTab] = useState('prep'); 
         const [selectedClient, setSelectedClient] = useState(null);
         const [guide, setGuide] = useState("");
@@ -1276,16 +1399,14 @@
         
         const [cityFilter, setCityFilter] = useState('ALL');
 
-        // BULTOS Y DETALLES DE EMPAQUE
         const [bultos, setBultos] = useState(1);
         const [packingDetail, setPackingDetail] = useState("");
 
         const [shipPayAmount, setShipPayAmount] = useState("");
         const [shipPayDate, setShipPayDate] = useState(getToday());
-        const [courierBank, setCourierBank] = useState('pichincha'); // Banco manual para el courier
+        const [courierBank, setCourierBank] = useState('pichincha'); 
         const [isProcessing, setIsProcessing] = useState(false);
 
-        // Reseteo de bultos al abrir un cliente
         useEffect(() => {
             if (selectedClient) {
                 setBultos(1);
@@ -1325,18 +1446,13 @@
             const cycle = logic.getClientCycle(selectedClient.id); 
             const balanceAtClosing = cycle ? cycle.clothingBalance : 0; 
             
-            // CORTE DE TIEMPO EXACTO (Arreglo del error de $88 duplicados)
             let closeDateISO;
             const todayStr = getToday();
-            if (dispatchDate === todayStr) {
-                closeDateISO = new Date().toISOString(); 
-            } else {
-                closeDateISO = new Date(dispatchDate + 'T23:59:59').toISOString(); 
-            }
+            if (dispatchDate === todayStr) { closeDateISO = new Date().toISOString(); } 
+            else { closeDateISO = new Date(dispatchDate + 'T23:59:59').toISOString(); }
 
             const nextCycleDateISO = new Date(new Date(closeDateISO).getTime() + 1000).toISOString(); 
 
-            // GUARDAR INFO DE BULTOS DENTRO DE LA GUÍA
             const finalGuide = packingDetail ? `${guide.trim()} | ${bultos} Bulto(s) -> ${packingDetail}` : `${guide.trim()} | ${bultos} Bulto(s)`;
 
             logic.registerShipment(selectedClient.id, finalGuide, selectedClient.deliveryMethod, closeDateISO);
@@ -1347,15 +1463,12 @@
             alert("✅ Envío Procesado y Ciclo Cerrado."); setSelectedClient(null); setGuide("");
         };
 
-        const handlePayWithBalance = () => {
+        const handlePayWithBalance = (finalShippingCost, shippingPending) => {
              if (!selectedClient) return;
-             const cycle = logic.getClientCycle(selectedClient.id) || {clothingBalance:0, totalShippingPaid:0};
-             const shippingCost = selectedClient.shippingCost || 0;
-             const shippingPaid = cycle.totalShippingPaid || 0;
-             const shippingPending = Math.max(0, shippingCost - shippingPaid);
+             const cycle = logic.getClientCycle(selectedClient.id);
              
-             if (shippingCost <= 0) return alert("Define costo envío.");
-             if (cycle.clothingBalance < shippingPending) return alert("Saldo insuficiente");
+             if (finalShippingCost <= 0) return alert("Costo final de envío es 0.");
+             if (cycle.clothingBalance < shippingPending) return alert("Saldo de ropa insuficiente para cubrir el envío.");
              
              const dateISO = smartDate(getToday(), cycle.lastShipmentDate); 
              logic.addPayment(selectedClient.id, -shippingPending, 'Ajuste costo logístico', dateISO, courierBank); 
@@ -1365,12 +1478,33 @@
         };
 
         if (selectedClient) {
-            const cycle = logic.getClientCycle(selectedClient.id) || { itemsCount: 0, clothingBalance: 0, totalShippingPaid: 0, totalSales: 0 };
+            const cycle = logic.getClientCycle(selectedClient.id) || { cycleSales: [], itemsCount: 0, clothingBalance: 0, totalShippingPaid: 0, totalSales: 0 };
             const isDebt = cycle.clothingBalance < -0.01;
             const debtAmount = Math.abs(cycle.clothingBalance);
-            const shippingCost = selectedClient.shippingCost || 0;
+            
+            // LÓGICA DE SEMÁFORO (Misma de ClientDetail, 48 horas)
+            let runningPaid = cycle.totalNormalPaid || 0;
+            const PUNTUAL_DAYS = 2;
+            const now = new Date();
+            let lostPunctuality = false;
+            
+            const chronoSortedSales = [...cycle.cycleSales].sort((a,b) => new Date(safeISO(a.date)) - new Date(safeISO(b.date)));
+            
+            chronoSortedSales.forEach(item => {
+                if (runningPaid >= item.value - 0.01) { runningPaid -= item.value; } 
+                else {
+                    const diffDays = Math.floor((now - new Date(safeISO(item.date))) / (1000 * 60 * 60 * 24));
+                    if (diffDays > PUNTUAL_DAYS) { lostPunctuality = true; }
+                }
+            });
+            const qualifiesForDiscount = !lostPunctuality;
+
+            const shipBase = Number(selectedClient.shippingCost) || 0;
+            const shipDiscount = Number(selectedClient.shippingDiscount) || 0;
+            const finalShippingCost = Math.max(0, shipBase - shipDiscount);
+
             const shippingPaid = cycle.totalShippingPaid || 0;
-            const shippingPending = Math.max(0, shippingCost - shippingPaid);
+            const shippingPending = Math.max(0, finalShippingCost - shippingPaid);
 
             return (
                 <div className="h-full flex flex-col bg-slate-100 p-4">
@@ -1393,10 +1527,29 @@
                             <div className={`p-4 rounded-3xl border-2 space-y-3 ${shippingPending>0.01?'border-orange-200 bg-orange-50':'border-slate-200 bg-white'}`}>
                                 <div className="flex justify-between items-center"><h3 className="font-bold text-slate-700 flex items-center gap-2 text-sm"><Icon.Box /> Gestión Envío</h3><div className="text-right text-xs"><span className={`font-black text-lg ${shippingPending>0.01?'text-red-500':'text-emerald-500'}`}>-${shippingPending.toFixed(2)}</span></div></div>
                                 
-                                <div className="bg-white p-2 rounded-xl border border-slate-200">
-                                    <div className="flex gap-2 mb-2">
-                                        <input type="text" className="flex-1 p-2 rounded-lg border bg-slate-50 text-xs font-bold uppercase" value={selectedClient.deliveryMethod || ''} onChange={e=>logic.setClients(selectedClient.id, {deliveryMethod: e.target.value.toUpperCase()})} placeholder="Courier (Ej: Servientrega)" />
-                                        <input type="number" className="w-20 p-2 rounded-lg border bg-slate-50 text-xs font-bold text-center text-red-600" value={selectedClient.shippingCost || ''} onChange={e=>logic.setClients(selectedClient.id, {shippingCost:parseFloat(e.target.value)})} placeholder="$0.00" />
+                                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                                    <div className="flex justify-between items-center mb-3">
+                                        <span className="text-[10px] font-black uppercase text-slate-400">Beneficio Cliente</span>
+                                        {qualifiesForDiscount ? 
+                                            <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded uppercase font-black tracking-widest flex items-center gap-1">🟢 Aplica Descuento</span> : 
+                                            <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded uppercase font-black tracking-widest flex items-center gap-1 animate-pulse">🔴 Pierde Descuento</span>
+                                        }
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3 mb-2">
+                                        <div>
+                                            <label className="text-[9px] font-bold text-slate-400 uppercase">Costo Regular</label>
+                                            <input type="number" className="w-full p-2 rounded-lg border bg-slate-50 text-xs font-bold text-slate-700" value={selectedClient.shippingCost || ''} onChange={e=>logic.setClients(selectedClient.id, {shippingCost: parseFloat(e.target.value)})} placeholder="$0.00" />
+                                        </div>
+                                        <div>
+                                            <label className="text-[9px] font-bold text-emerald-500 uppercase">Descuento</label>
+                                            <input type="number" className="w-full p-2 rounded-lg border border-emerald-200 bg-emerald-50 text-xs font-bold text-emerald-700 focus:border-emerald-500 outline-none" value={selectedClient.shippingDiscount || ''} onChange={e=>logic.setClients(selectedClient.id, {shippingDiscount: parseFloat(e.target.value)})} placeholder="$0.00" />
+                                        </div>
+                                    </div>
+                                    <div className="mt-2 pt-2 border-t border-slate-100 flex gap-2">
+                                        <input type="text" className="w-1/2 p-2 rounded-lg border bg-slate-50 text-xs font-bold uppercase" value={selectedClient.deliveryMethod || ''} onChange={e=>logic.setClients(selectedClient.id, {deliveryMethod: e.target.value.toUpperCase()})} placeholder="Courier..." />
+                                        <div className="w-1/2 bg-slate-800 text-white rounded-lg flex items-center justify-center text-xs font-black shadow-inner">
+                                            A COBRAR: ${finalShippingCost.toFixed(2)}
+                                        </div>
                                     </div>
                                 </div>
                                 
@@ -1406,7 +1559,7 @@
                                         <select value={courierBank} onChange={e=>setCourierBank(e.target.value)} className="w-24 text-[10px] bg-white border border-emerald-200 rounded-lg p-2 font-bold outline-none">
                                             <option value="pichincha">Pichincha</option><option value="guayaquil">Guayaquil</option><option value="pacifico">Pacífico</option><option value="efectivo">Efectivo</option>
                                         </select>
-                                        <button onClick={handlePayWithBalance} disabled={shippingPending <= 0.01} className="flex-1 bg-emerald-600 text-white rounded-lg font-black text-xs py-3 px-4 shadow disabled:opacity-50">USAR SALDO ROPA (${cycle.clothingBalance.toFixed(2)})</button>
+                                        <button onClick={()=>handlePayWithBalance(finalShippingCost, shippingPending)} disabled={shippingPending <= 0.01} className="flex-1 bg-emerald-600 text-white rounded-lg font-black text-xs py-3 px-4 shadow disabled:opacity-50">USAR SALDO ROPA (${cycle.clothingBalance.toFixed(2)})</button>
                                     </div>
                                 </div>
                             </div>
@@ -1478,7 +1631,9 @@
                             )}
 
                             {dispatchList.filter(c => cityFilter === 'ALL' || (c.city?.trim().toUpperCase() || 'SIN CIUDAD') === cityFilter).map(c => {
-                                const isPendingShip = (c.shippingCost || 0) > (c.cycle.totalShippingPaid || 0);
+                                const baseS = Number(c.shippingCost)||0; const descS = Number(c.shippingDiscount)||0;
+                                const finalS = Math.max(0, baseS - descS);
+                                const isPendingShip = finalS > (c.cycle.totalShippingPaid || 0);
                                 return (
                                     <div key={c.id} onClick={() => setSelectedClient(c)} className={`bg-white p-4 rounded-2xl shadow-sm border-l-4 cursor-pointer hover:bg-slate-50 transition-colors flex justify-between items-center ${isPendingShip ? 'border-l-orange-400' : 'border-l-emerald-500'}`}>
                                         <div className="flex-1 pr-4">
@@ -1561,7 +1716,7 @@
             setItem(""); setPrice(""); setSearch(""); setFound(null); setSuggestions([]); setQty(1); setCart([]);
         };
 
-        // NUEVO: Cálculos en vivo para el carrito
+        // CÁLCULOS DEL CARRITO (Prendas y Dinero)
         const totalCartItems = cart.reduce((acc, i) => acc + i.qty, 0);
         const totalCartValue = cart.reduce((acc, i) => acc + (i.price * i.qty), 0);
 
@@ -1597,7 +1752,6 @@
                             </div>
                             {cart.length > 0 && (
                                 <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-3 animate-in slide-in-from-top-2">
-                                    {/* NUEVO: Contador de prendas dentro del carrito */}
                                     <div className="text-[10px] font-bold text-indigo-400 uppercase mb-2 flex justify-between items-center">
                                         <span className="flex items-center gap-2">Items por guardar: <span className="bg-indigo-200 text-indigo-700 px-2 py-0.5 rounded-md font-black">{totalCartItems} prendas</span></span>
                                         <span className="text-indigo-700 font-black text-xs">Total: ${totalCartValue.toFixed(2)}</span>
@@ -1627,10 +1781,6 @@
             </div>
         );
     };
-
-
-    // --- VISTA CLIENTES (CON VISTA PREVIA DE CÓDIGO AUTOMÁTICO) ---
-    // --- VISTA CLIENTES (DISEÑO ELEGANTE Y ANTI-DUPLICADOS BLINDADO) ---
     const ClientsView = ({ logic, jumpId, setJumpId }) => {
         const [view, setView] = useState('list'); 
         const [activeClient, setActiveClient] = useState(null); 
@@ -1642,7 +1792,7 @@
         const [newCity, setNewCity] = useState(""); const [newAddress, setNewAddress] = useState(""); 
         const [newAbono, setNewAbono] = useState(""); const [regDate, setRegDate] = useState(getToday()); const [manualId, setManualId] = useState("");
 
-        // TELETRANSPORTADOR: Escucha si llega una orden de salto
+        // TELETRANSPORTADOR
         useEffect(() => {
             if (jumpId) {
                 const targetClient = logic.clients.find(c => c.id === jumpId);
@@ -1650,7 +1800,7 @@
                     setActiveClient(targetClient);
                     setView('detail');
                 }
-                setJumpId(null); // Limpiamos la orden tras ejecutarla
+                setJumpId(null); 
             }
         }, [jumpId, logic.clients, setJumpId]);
 
@@ -1659,7 +1809,7 @@
             const existingNumbers = logic.clients.map(c => { const match = c.id.match(/\d+/); return match ? parseInt(match[0], 10) : -1; });
             const usedNumbersSet = new Set(existingNumbers);
             let nextNum = 1;
-            while (usedNumbersSet.has(nextNum)) { nextNum++; } // Busca huecos libres
+            while (usedNumbersSet.has(nextNum)) { nextNum++; } 
             const paddedNum = String(nextNum).padStart(3, '0');
             const cleanName = newName.trim().toUpperCase();
             const words = cleanName.split(/\s+/);
@@ -1804,7 +1954,6 @@
             </div>
         );
     };
-
 
 
     // --- BODEGA INTELIGENTE (VERSIÓN BLINDADA / ANTI-CRASH) ---
